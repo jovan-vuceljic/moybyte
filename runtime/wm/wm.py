@@ -40,7 +40,15 @@ from notifications import NOTES as _NOTES
 from devices import MIC as _MIC
 
 
-_VIEWPORT_BEZEL = 0         # black -- the letterbox fill around a scaled game viewport
+# The letterbox around a scaled game viewport: the theme's desktop colour
+# (`bezel`), the desk's own ground, never black.
+_BEZEL_TOKEN = "desktop"
+
+
+def bezel(ws):
+    """The colour a game's letterbox fills with: the theme's desktop."""
+    tc = getattr(ws, "theme_colors", None)
+    return tc.get(_BEZEL_TOKEN, 0) if tc is not None else 0
 _VIEWPORT_IDENTITY = (0, 0, 1)   # the degradation viewport: one canvas IS the glass
 
 
@@ -636,14 +644,15 @@ class FullscreenStackWM:
         if view is None:
             return                      # cart owns the whole canvas: nothing outside
         sx, sy, vw, vh = view
+        b = bezel(ws)
         if sy > 0:
-            sc.rect(0, 0, sc.w, sy, _VIEWPORT_BEZEL)
+            sc.rect(0, 0, sc.w, sy, b)
         if sy + vh < sc.h:
-            sc.rect(0, sy + vh, sc.w, sc.h - (sy + vh), _VIEWPORT_BEZEL)
+            sc.rect(0, sy + vh, sc.w, sc.h - (sy + vh), b)
         if sx > 0:
-            sc.rect(0, sy, sx, vh, _VIEWPORT_BEZEL)
+            sc.rect(0, sy, sx, vh, b)
         if sx + vw < sc.w:
-            sc.rect(sx + vw, sy, sc.w - (sx + vw), vh, _VIEWPORT_BEZEL)
+            sc.rect(sx + vw, sy, sc.w - (sx + vw), vh, b)
 
     def present_frame(self, cf, view):
         """Show a compiled cart's frame from its own memory (`view`, the
@@ -700,10 +709,11 @@ class FullscreenStackWM:
             self._bg_fn = getattr(sc, "blit_game", None)
         bg = self._bg_fn
         if bg is not None:
+            sc.bezel = bezel(self.ws)
             bg(gc, ox, oy, scale,
                src=self._vp_view if vp is self._vp_val else self._view_src())
             return
-        sc.cls(_VIEWPORT_BEZEL)                     # letterbox fill
+        sc.cls(bezel(self.ws))                      # letterbox fill
         gbuf = getattr(gc, "buf", None)
         sbuf = getattr(sc, "buf", None)
         if gbuf is None or sbuf is None:

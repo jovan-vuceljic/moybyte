@@ -142,7 +142,7 @@ them back on the next visit — but anything that existed *only* here is.
   headroom. The byte arithmetic that sized the store (seed carts ~820 KB, so
   ~600 KB left for a kid's own) is not its capacity: the store is littlefs on
   4 KiB blocks, a file under ~128 B inlines and every other file costs a whole
-  block, a folder two, and each seeded cart keeps its `manifest.json.bak`. The
+  block, a folder two, and each seeded cart keeps its manifest's backup (`.manifest.json.moybak`). The
   full roster's ~180 files and ~37 folders filled the 352 blocks of the
   1.375 MiB `vfs` (measured on glass 2026-10-23: the 31st cart's `mkdir` got
   ENOSPC and a kid's cart had no room), so this board's build leaves the two
@@ -406,6 +406,23 @@ are kept so a board set up elsewhere still comes up at home), the name into
 `/moy/zero.json` and the password's record into `/moy/system/password`. From
 then on the name is the mDNS label and the password is how a browser pairs.
 
+## Its Wi-Fi, from its page (2026-11-25)
+
+Once it serves, the page is where its networks are managed: the console's
+own Wi-Fi panel, the bar's glyph and the Settings row are this board's
+(`firmware/web_runner/wifi_link.py` over its sealed `/wifi`,
+`device/zero_wifi.py`; both Zeros). The page lists the saved networks by
+name only (a password never leaves the board), scans by asking and polling,
+and saves or forgets one without leaving the network it is on. Choosing
+another network MOVES the board, and the page reaches it over the one it
+leaves, so the panel asks first (Cancel, Save for a new network, Move); the
+board answers, then gives the new network 15 s, saves it first in the list
+only once it has an address, and otherwise goes back to the old one for up
+to 15 s and says why there. A move that worked leaves the page with no
+board: it says where the console went (`<name>.local` on the new network),
+its card's Open goes there, and its Wi-Fi reads "moved to" that network. A board that reaches neither network walks
+every saved one and resets into setup with none.
+
 ## The sign-in gates everything (2026-11-07)
 
 The browser sign-in is the console's (`docs/os_2026-11/system.md` §3; the
@@ -440,8 +457,9 @@ The consoles' C shell (`native/moy_sh`), its face over a stream
 (`native/moy_tty`) and the SSH server (`native/moy_ssh`), with SFTP
 (`docs/os_2026-11/system.md` sections 3 and 4). The browser is this board's
 only screen, so the browser console's Terminal on the page it serves is the
-shell's first face (`GET /term`, sealed to a browser paired with the board's
-password); SSH is the other:
+shell's first face (the live socket's terminal channel, sealed to a browser
+paired with the board's password, `native/moy_tty/README.md`); SSH is the
+other:
 
 ```bash
 ssh moybyte-zero.local            # any user name; the board's password
@@ -457,19 +475,19 @@ scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
 - **The C built-ins only**: a WASI command needs the wasm engine, which
   this board denies (board.toml says why). `zero_shell.py` is the
   door into Python: `passwd` (its `-l` and `-r` over this board's webhost),
-  `df`, `mem` and `ps`. What only a console answers (its processes, `/proc`'s
-  and `/dev`'s rows, the other role commands, `python`) says "needs the
-  console", as a console's shell does with its VM stopped; `settings` and
-  `pkg list` are the store's C.
+  `df`, `mem` and `ps`. The other role commands (`python` among them) say
+  "not served here", `settings` and `pkg list` being the store's C; what
+  only a console answers (its processes, `/proc`'s and `/dev`'s rows)
+  answers as a console's shell does with its VM stopped.
 - **No WiFi lease**: the station and the `moybyte-zero.local` name are up
   while the board serves, so the server rides them
   (`runtime/system/ssh_service.py`).
 - **No frame**: what a session must do on the VM's task (the store's files,
   the door) is served by the serve loop's `zero_shell.tail()` each turn
   (`moy_tty.tail()`), about every 10 ms.
-- **No palette**: the toolkit's colours are not in this image, so `neofetch`
-  draws plain and a full-screen app's colours reach the client as its own base
-  colours.
+- **The console's palette without the toolkit**: the shell links the palette
+  alone (`native/moy_sh/moy_sh_palette.c`, 256 bytes), so `neofetch` draws Moy
+  in colour and a full-screen app's colours reach the client as the console's.
 
 ## Local multiplayer (2026-11-24)
 
@@ -491,7 +509,14 @@ the link channel's frames between it and its ESP-NOW unchanged.
 - **Python carts play matches here as Lua carts do**: the browser's VM
   computes floats as the consoles' does (REPR_C singles), which the netplay
   doc makes part of the lockstep contract.
-- **One page at a time**: a second tab's socket is refused `busy`.
+- **One page at a time, the newest** (owner, 2026-11-25): a second signed-in
+  page's socket takes the board, and the page that held it closes 4001
+  `taken` and shows "Another browser signed in to this console, so this one
+  was disconnected" with one button that takes it back. Neither page asks by
+  itself, so two never take it from each other in turn
+  (`native/moy_net/moy_webauth.c`, `moy_wa_take`; `firmware/web_runner/worker.js`,
+  TAKEN). Sessions are several at once on every board; the live socket and
+  the web terminal are one page's.
 - What a match costs this board (internal RAM, the largest block, the
   round trip with power save and without) is on #256.
 
@@ -551,8 +576,13 @@ it listens.
 The driver is the T-Deck's (`moy_lora.c`), built for a radio that owns its
 bus: it brings SPI2 up at the open and frees it at the close, with no band-gap
 gate (there is no panel), and `gate_stats()` answers `None`. This board runs
-no apps, so the `moybyte.lora` face is not here and nothing posts events: the
-module is reached from the REPL, by owner number, and `recv` is polled.
+no apps, so the `moybyte.lora` face is not here. It relays the radio to the
+browser console it serves instead: the live socket's device channel
+(`native/moy_net/moy_live.c`'s header, `moy_live_dev.c`) serves the page's
+`lora` handles from the kernel's handle table under the page session's own
+process, whose event queue the driver posts to, so a Lua or compiled cart on
+the page (Moy Mesh) holds the radio through `moybyte.dev_*`. From the REPL
+the module is reached by owner number, and `recv` is polled:
 
 ```python
 import moy_lora as L

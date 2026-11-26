@@ -309,6 +309,16 @@ static mp_obj_t table_add_steps(mp_obj_t self_in, mp_obj_t name, mp_obj_t n) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(table_add_steps_obj, table_add_steps);
 
+static mp_obj_t table_add_key_repeats(mp_obj_t self_in, mp_obj_t ev, mp_obj_t n) {
+    mp_int_t k = mp_obj_get_int(n);
+    if (k > 0) {
+        check(moy_input_add_key_repeats(table_of(self_in)->t, (int32_t)mp_obj_get_int(ev),
+                                        (uint32_t)k));
+    }
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(table_add_key_repeats_obj, table_add_key_repeats);
+
 static mp_obj_t table_set_repeat(mp_obj_t self_in, mp_obj_t delay, mp_obj_t rate) {
     moy_input_set_repeat(table_of(self_in)->t, mp_obj_get_int(delay), mp_obj_get_int(rate));
     return mp_const_none;
@@ -725,6 +735,7 @@ static MP_DEFINE_CONST_OBJ_TYPE(
     { MP_ROM_QSTR(MP_QSTR_repeats), MP_ROM_PTR(&table_repeats_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_steps), MP_ROM_PTR(&table_steps_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_add_steps), MP_ROM_PTR(&table_add_steps_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_add_key_repeats), MP_ROM_PTR(&table_add_key_repeats_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_set_repeat), MP_ROM_PTR(&table_set_repeat_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_any_held), MP_ROM_PTR(&table_any_held_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_any_pressed), MP_ROM_PTR(&table_any_pressed_obj) }, \
@@ -1035,6 +1046,9 @@ static void source_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         } else if (attr == MP_QSTR_typing) {
             dest[0] = MP_OBJ_NEW_SMALL_INT(
                 moy_input_source_typing(table_of(MP_OBJ_FROM_PTR(o->table))->t, o->h));
+        } else if (attr == MP_QSTR_own_repeat) {
+            dest[0] = mp_obj_new_bool(
+                moy_input_own_repeat(table_of(MP_OBJ_FROM_PTR(o->table))->t, o->h));
         } else {
             dest[1] = MP_OBJ_SENTINEL;
         }
@@ -1062,6 +1076,9 @@ static void source_attr(mp_obj_t self_in, qstr attr, mp_obj_t *dest) {
         dest[0] = MP_OBJ_NULL;
     } else if (attr == MP_QSTR_typing) {
         check(moy_input_set_typing(t, o->h, dest[1] == mp_const_none ? 0 : mp_obj_get_int(dest[1])));
+        dest[0] = MP_OBJ_NULL;
+    } else if (attr == MP_QSTR_own_repeat) {
+        check(moy_input_set_own_repeat(t, o->h, mp_obj_is_true(dest[1])));
         dest[0] = MP_OBJ_NULL;
     }
 }

@@ -99,6 +99,23 @@ def test_a_shell_apps_field_types_and_mic_gives_it_back(tmp_path, app_id):
     assert not ws.input.text_mode, "focus left the field: game mode"
 
 
+@pytest.mark.parametrize("app_id", sorted(FIELDS))
+def test_a_paste_from_outside_lands_in_a_shell_apps_field(tmp_path, app_id):
+    """A paste from outside the console (a browser page's clipboard,
+    ConsoleDriver.paste) is the console's clipboard and its Paste: the
+    focused field takes the text."""
+    ws = build_ws(tmp_path)
+    drv = make_drv(ws)
+    assert ws.spine.open_app(ws.app(app_id))
+    _frames(drv)
+    read, was = FIELDS[app_id](ws)
+    _frames(drv)
+    drv.paste("pasted")
+    _frames(drv)
+    assert ws.clipboard.text() == "pasted"
+    assert read() == was + "pasted"
+
+
 def _focus_name(ws, drv):
     """Settings' Name focused and its edit opened (Enter)."""
     ws.settings_layer._want = "name"
@@ -208,6 +225,20 @@ def test_a_desk_windows_chevron_and_esc_step_its_page(tmp_path):
             ws.wm._win_back(ws.wm.windows["storybook"])
         _frames(drv)
         assert app.page == "stories" and "storybook" in ws.wm.windows, how
+
+
+@pytest.mark.parametrize("build", [build_ws, build_desktop_ws], ids=["console", "desk"])
+def test_esc_on_the_update_screen_is_its_cancel(tmp_path, build):
+    """The firmware update screen's hint names Esc its Cancel: Esc is its
+    page's back, as B, on either tier, and lands on Settings."""
+    ws = build(tmp_path)
+    drv = make_drv(ws)
+    _frames(drv)
+    ws.update_ui.open_update()
+    _frames(drv)
+    assert ws.wm.top_kind() == "update"
+    _esc(ws, drv)
+    assert ws.wm.top_kind() == "settings"
 
 
 # -- a pending edit survives every exit -----------------------------------

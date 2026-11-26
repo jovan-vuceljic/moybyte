@@ -23,6 +23,8 @@ name stay until the run reports its tasks parked: a shell wake looks every
 PARK_MS. A start before then cancels the wake and keeps both.
 
   boot(ws)                 at the console's first frame: serve if a password is set
+  start(ws)                serve now: also when a browser's claim set the
+                           password behind the VM (moy_webhost's `on_password`)
   set_password(ws, pw)     store the password's record (None: remove it), sign
                            every browser out (its key kept), and serve or
                            stop to match; False for one under MIN_PASSWORD

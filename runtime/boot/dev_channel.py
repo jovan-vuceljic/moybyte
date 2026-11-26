@@ -1786,13 +1786,14 @@ class DevChannel:
             if err.startswith("store full") and say is not None:
                 say("CAN'T ADD CART", "the store is full", "warn")
             return
-        for gone in (dst, dst + ".bak"):
-            # The stamped .bak describes the bytes it sat beside (moy_fs, #154);
-            # left behind, it would "recover" them over what just arrived.
-            try:
-                os.remove(gone)
-            except OSError:
-                pass
+        try:
+            os.remove(dst)
+        except OSError:
+            pass
+        # The store's stamped backup describes the bytes it sat beside (moy_fs,
+        # #154); left behind, it would "recover" them over what just arrived.
+        import moy_store
+        moy_store.forget_bak(dst)
         os.rename(dst + ".new", dst)
         self._pushed.add(rel.split("/")[0])
         print("moy-ok")

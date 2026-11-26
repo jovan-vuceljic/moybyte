@@ -8,6 +8,13 @@ kernel's recovery console opens the same face with no VM. This layer hands
 it the frame: the host's context and canvas, the content rect under the
 bar, and the frame's keys; the face answers what the host owes after it.
 A console with no C shell shows one line, a `uitree` page (`none_page`).
+
+THE CLIPBOARD. A mouse's drag over the log selects its cells (the face
+draws the selection); Ctrl+Shift+C, or Ctrl+C while there is a selection,
+puts its text on the console's clipboard (a browser page's follows it), and
+Ctrl+C with none is the shell's interrupt. A paste (`paste`) types its text
+whole, as a terminal sends it: a line break is Enter, and a line that waits
+holds the rest until its run ends.
 """
 
 import sys as _sys
@@ -33,12 +40,33 @@ _BROWSER_SHELL = (_sh is not None and _sys.platform == "webassembly"
                   and not hasattr(_sh, "link_want"))
 
 _HIT, _KEYS = 1, 2                      # the face's input answer
+_MODS_AT, _SHIFT = 16, 2                # a key event's modifiers (moy_input.h)
+_CTRL_C = 3
+_PASTE_FRAME = 2048                     # a paste's bytes one frame types at most
 _AGAIN, _DAMAGE = 1, 2                  # its draw answer
 _ROWS = (None, "tdeck", "pad", "touch")
 _BAR = "\0".join(_ui_draw.BAR_KEYS).encode()
 NONE = "No shell on this console."
 
 ui.state()
+
+
+def _plain(line):
+    """A log line without its SGR escapes."""
+    out = []
+    i = 0
+    n = len(line)
+    while i < n:
+        c = line[i]
+        if c == "\x1b" and i + 1 < n and line[i + 1] == "[":
+            i += 2
+            while i < n and not ("@" <= line[i] <= "~"):
+                i += 1
+            i += 1
+            continue
+        out.append(c)
+        i += 1
+    return "".join(out)
 
 
 def none_page():
@@ -69,6 +97,10 @@ class TerminalAppLayer(AppLayer):
     domain = "system"
     TITLE = "Terminal"
     UI = True
+    # Esc is a key the shell and its text apps read (vi leaves INSERT on
+    # it): the Terminal is left by its window's X, the bar's back and the
+    # system key, never by Esc.
+    ESC_LEAVES = False
 
     def __init__(self, ctx, names):
         self.ctx = ctx
@@ -77,7 +109,11 @@ class TerminalAppLayer(AppLayer):
         self._damage = ctx.damage
         self._install = ctx.install
         self._ui = ctx.ui
+        self._clip = ctx.clipboard
         self.face = None            # made at the first open
+        self._anchor = None         # where a mouse's drag over the log began
+        self._held = 0              # a key the clipboard took, still down
+        self._paste = ""            # a paste's text not typed yet
         self._none = None           # the page a console with no shell shows
         sc = self._surf.canvas()
         self.layout = TerminalLayout(sc.w, sc.h, getattr(sc, "font_scale", 1),
@@ -140,8 +176,8 @@ class TerminalAppLayer(AppLayer):
         return False
 
     def back(self):
-        """B, Esc and the bar's back while a run is parked are the run's
-        cancel, as Ctrl-C is (True: the Terminal stays); with none it is the
+        """B and the bar's back while a run is parked are the run's cancel,
+        as Ctrl-C is (True: the Terminal stays); with none it is the
         console's back out of the Terminal."""
         f = self.face
         if f is not None and f.busy():
@@ -150,6 +186,69 @@ class TerminalAppLayer(AppLayer):
             return True
         return False
 
+    def paste(self, text):
+        """A paste: its text typed whole into the shell or the app in
+        front, from this frame on (`_typing`). True: the Terminal took it."""
+        f = self.face
+        if f is None or not text:
+            return f is not None
+        self._paste += str(text).replace("\r\n", "\n").replace("\r", "\n")
+        self._typing()
+        return True
+
+    def _typing(self):
+        """A paste's next part typed: up to _PASTE_FRAME bytes, and none
+        past a line break that started a run that waits."""
+        f = self.face
+        text = self._paste
+        n = 0
+        i = 0
+        while i < len(text) and n < _PASTE_FRAME and not f.busy():
+            c = ord(text[i])
+            i += 1
+            if c == 0x0A:
+                f.key(0x0D)
+            elif c == 0x09 or c >= 0x20:
+                f.key(c)
+            n += 1
+        self._paste = text[i:]
+        if i:
+            self._damage.all()
+
+    def copy(self):
+        """The selection's text on the console's clipboard, the selection
+        gone: whether there was one."""
+        f = self.face
+        sel = f.selection() if f is not None else None
+        if sel is None:
+            return False
+        r0, c0, r1, c1 = sel
+        lines = f.lines()
+        out = []
+        for r in range(r0, r1 + 1):
+            t = _plain(lines[r]) if r < len(lines) else ""
+            out.append(t[c0 if r == r0 else 0:c1 if r == r1 else len(t)].rstrip())
+        if self._clip is not None:
+            self._clip.put_text("\n".join(out))
+        f.select(-1, 0, -1, 0)
+        self._damage.all()
+        return True
+
+    def _copy_key(self, inp, k):
+        """Ctrl+Shift+C, or Ctrl+C over a selection: the copy (True).
+        The key held after it types nothing more."""
+        if self._held:
+            if k == self._held:
+                return True
+            self._held = 0
+        if inp.typed != _CTRL_C:
+            return False
+        shift = ((getattr(inp, "key_event", 0) or 0) >> _MODS_AT) & _SHIFT
+        if not (self.copy() or shift):
+            return False
+        self._held = k
+        return True
+
     def handle_input(self, inp):
         f = self.face
         if f is None:
@@ -157,6 +256,12 @@ class TerminalAppLayer(AppLayer):
         k = getattr(inp, "last_key", 0) or 0
         if not isinstance(k, int):
             k = ord(k[0]) if k else 0
+        if self._copy_key(inp, k):
+            k = 0
+        elif inp.typed == _CTRL_C:
+            self._paste = ""
+        if self._paste:
+            self._typing()
         n = getattr(inp, "key_repeats", 0)
         r = f.input(self.layout.desk, k, n, inp.repeat_key if n else 0,
                     inp.steps("left"), inp.steps("right"), inp.steps("up"), inp.steps("down"))
@@ -168,8 +273,39 @@ class TerminalAppLayer(AppLayer):
         return True
 
     def handle_pointer(self, px, py, click):
+        if self._select(px, py, click):
+            return True
         if self._ui.point(px, py, click):
             self._damage.all()
+        return True
+
+    def _select(self, px, py, click):
+        """A mouse's press on the log and its drag select cells (True: the
+        pointer is the selection's); a press anywhere drops the one there."""
+        f = self.face
+        if f is None:
+            return False
+        if click:
+            had = f.selection() is not None
+            f.select(-1, 0, -1, 0)
+            mouse = getattr(_ui_draw.POINTER[0], "hovers", False)  # a finger's drag scrolls
+            at = _ui_draw.text_at(self._ui, "log", px, py) if mouse else None
+            self._anchor = at
+            if had:
+                self._damage.all()
+            return at is not None
+        if self._anchor is None:
+            return False
+        if not getattr(self._surf.pointer(), "down", False):
+            self._anchor = None
+            return True
+        at = _ui_draw.text_at(self._ui, "log", px, py)
+        if at is not None:
+            a = self._anchor
+            was = f.selection()
+            f.select(a[0], a[1], at[0], at[1])
+            if f.selection() != was:
+                self._damage.all()
         return True
 
     # -- the surface ----------------------------------------------------------------

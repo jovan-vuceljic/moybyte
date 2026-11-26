@@ -392,6 +392,51 @@ static void send_msg_channel_close(struct Channel *channel) {
 	TRACE(("leave send_msg_channel_close"))
 }
 
+#if DROPBEAR_MOY
+/* `msg` on the channel's stderr, where its window takes it; nothing after
+ * its EOF. */
+static void moy_channel_say(struct Channel *channel, const char *msg) {
+	unsigned int len = strlen(msg);
+	if (!channel->sent_eof && channel->transwindow >= len
+			&& channel->transmaxpacket >= len) {
+		CHECKCLEARTOWRITE();
+		buf_putbyte(ses.writepayload, SSH_MSG_CHANNEL_EXTENDED_DATA);
+		buf_putint(ses.writepayload, channel->remotechan);
+		buf_putint(ses.writepayload, SSH_EXTENDED_DATA_STDERR);
+		buf_putstring(ses.writepayload, msg, len);
+		encrypt_packet();
+		channel->transwindow -= len;
+	}
+}
+
+/* Every open channel told `msg` on its stderr and closed: a session the
+ * server ends (moy_ssh.c, THE TAKEOVER). Nothing while a key exchange holds
+ * the channels' data back. */
+void moy_channels_end(const char *msg) {
+	unsigned int i;
+	if (!ses.dataallowed) {
+		return;
+	}
+	for (i = 0; i < ses.chansize; i++) {
+		struct Channel *channel = ses.channels[i];
+		if (channel == NULL || channel->sent_close) {
+			continue;
+		}
+		moy_channel_say(channel, msg);
+		send_msg_channel_close(channel);
+	}
+}
+
+/* A command the server refuses with `msg` (moy_ssh_command's answer): `msg`
+ * on the channel's stderr, and the channel, no descriptor to read or write,
+ * sends its EOF, its session's exit status and its close at its next check
+ * (check_close). A key exchange queues the packet behind it. */
+void moy_channel_refuse(struct Channel *channel, const char *msg) {
+	moy_channel_say(channel, msg);
+	channel->readfd = channel->writefd = FD_CLOSED;
+}
+#endif
+
 /* call this when trans/eof channels are closed */
 static void send_msg_channel_eof(struct Channel *channel) {
 

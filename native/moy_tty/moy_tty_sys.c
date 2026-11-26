@@ -23,6 +23,7 @@
 #include "freertos/task.h"
 #include "freertos/idf_additions.h"
 #include "lwip/sockets.h"
+#include "lwip/sys.h"
 
 uint32_t moy_tty_ms(void) {
     return (uint32_t)moy_now_ms();
@@ -223,6 +224,12 @@ void moy_tty_tail(void) {
 static void face_task(void *arg) {
     moy_tty_state_t *t = arg;
     t->task = moy_tty_self();
+    #ifdef ESP_PLATFORM
+    // lwIP's semaphore for this task, made with the task: left to the first
+    // write of a session's socket, it is a block that lasts made in the
+    // middle of that session's.
+    sys_thread_sem_get();
+    #endif
     for (;;) {
         if (moy_tty_face_step(t)) {
             continue;

@@ -148,25 +148,6 @@ static int pump(int fd) {
     }
 }
 
-// Read all of `fd` into the stack string; answers its length.
-static size_t slurp(int fd, char **out) {
-    char buf[512];
-    char *p;
-    size_t len = 0;
-    STARTSTACKSTR(p);
-    for (;;) {
-        ssize_t n = read(fd, buf, sizeof buf);
-        if (n <= 0) {
-            break;
-        }
-        p = stnputs(buf, (size_t)n, p);
-        len += (size_t)n;
-    }
-    STACKSTRNUL(p);
-    *out = stackblock();
-    return len;
-}
-
 // Each operand opened for reading, "-" or none being stdin: fn(fd, name).
 static int each_input(char **args, int (*fn)(int fd, const char *name, void *arg), void *arg) {
     int status = 0;
@@ -256,7 +237,8 @@ static int ls_dir(const char *path, int all, int lflag, int one) {
     int n = 0, cap = 32;
     ls_ent_t *e = stalloc(cap * sizeof *e);
     while ((de = readdir(d)) != NULL) {
-        if (!all && de->d_name[0] == '.') {
+        if ((!all && de->d_name[0] == '.')
+            || moy_fs_bak_name(de->d_name, strlen(de->d_name))) {
             continue;
         }
         if (n == cap) {
@@ -562,6 +544,7 @@ struct walk {
     int (*leave)(walk_t *w, const char *path, uint64_t total, int top);
     const char *cmd;            // a failure says "cmd: path: why" and the walk goes on;
                                 // with none it stops the walk
+    int hide;                   // the store's backups (moy_fs_bak_name) are not listed
     int err;                    // what stopped it
     int status;
     char *names;                // the open folders' entries, each folder's sorted by
@@ -580,14 +563,14 @@ static int walk_grow(void *p, size_t *cap, size_t need) {
     while (c < need) {
         c *= 2;
     }
-    char *q = moy_sh_halloc(c);
+    char *q = moy_sh_palloc(c);
     if (q == NULL) {
         return ENOMEM;
     }
     if (*cap) {
         memcpy(q, *at, *cap);
     }
-    moy_sh_hfree(*at);
+    moy_sh_pfree(*at);
     *at = q;
     *cap = c;
     return 0;
@@ -610,8 +593,9 @@ static int walk_names(walk_t *w, const char *path) {
     while (r == 0 && (de = readdir(d)) != NULL) {
         const char *name = de->d_name;
         size_t k = WALK_HEAD + strlen(name) + 1, at = start;
-        if (!strcmp(name, ".") || !strcmp(name, "..") ||
-            (r = walk_grow(&w->names, &w->cap, w->len + k)) != 0) {
+        if (!strcmp(name, ".") || !strcmp(name, "..")
+            || (w->hide && moy_fs_bak_name(name, k - WALK_HEAD - 1u))
+            || (r = walk_grow(&w->names, &w->cap, w->len + k)) != 0) {
             continue;
         }
         while (at < w->len && strcmp(w->names + at + WALK_HEAD, name) < 0) {
@@ -657,8 +641,8 @@ static int walk_enter(walk_t *w, const char *path, size_t n, int top) {
 }
 
 static void walk_free(walk_t *w) {
-    moy_sh_hfree(w->names);
-    moy_sh_hfree(w->dirs);
+    moy_sh_pfree(w->names);
+    moy_sh_pfree(w->dirs);
     w->names = NULL;
     w->dirs = NULL;
     w->len = w->cap = w->depth = w->room = 0;
@@ -730,9 +714,13 @@ static void walk(walk_t *w, char *path, size_t n) {
     walk_free(w);
 }
 
+// A listed file already gone is removed: a file's remove takes its backup
+// with it (moy_fs_forget_bak), which the listing may still name, and so may
+// a remove another session made meanwhile.
 static int rm_visit(walk_t *w, const char *path, size_t n, int dir, uint64_t size, int top) {
-    (void)w, (void)n, (void)size, (void)top;
-    return dir ? 0 : moy_sh_vol_op(MOY_SH_V_REMOVE, path, NULL);
+    (void)w, (void)n, (void)size;
+    int r = dir ? 0 : moy_sh_vol_op(MOY_SH_V_REMOVE, path, NULL);
+    return r == ENOENT && !top ? 0 : r;
 }
 
 static int rm_leave(walk_t *w, const char *path, uint64_t total, int top) {
@@ -850,7 +838,8 @@ static int find_leave(walk_t *w, const char *path, uint64_t total, int top) {
 // PATH... (`.` with none) and what is under each, in order, those that pass
 // -name GLOB (the last part of the path) and -type f|d.
 static int findcmd(int argc, char **argv) {
-    find_t o = { { .visit = find_visit, .leave = find_leave, .cmd = "find" }, NULL, 0 };
+    find_t o = { { .visit = find_visit, .leave = find_leave, .cmd = "find", .hide = 1 },
+                 NULL, 0 };
     int paths = 1;
     while (paths < argc && argv[paths][0] != '-') {
         paths++;
@@ -931,7 +920,7 @@ static int du_leave(walk_t *w, const char *path, uint64_t total, int top) {
 
 // The bytes the files under each PATH (`.` with none) hold.
 static int ducmd(int argc, char **argv) {
-    du_t o = { { .visit = du_visit, .leave = du_leave, .cmd = "du" }, 0, 0 };
+    du_t o = { { .visit = du_visit, .leave = du_leave, .cmd = "du", .hide = 1 }, 0, 0 };
     int c;
     (void)argc;
     (void)argv;
@@ -1011,7 +1000,7 @@ static int headcmd(int argc, char **argv) {
 // A file's last `want` lines, read in two passes a chunk at a time and never
 // copied into the session's arena, which is 12 KB where there is no PSRAM
 // (MOY_SH_ARENA, the C3 Zero's SSH face). -1 for what does not seek (a
-// pipe), which tail_one copies whole.
+// pipe), which tail_stream reads.
 static int tail_seek(int fd, int want) {
     if (lseek(fd, 0, SEEK_END) < 0 || lseek(fd, 0, SEEK_SET) < 0) {
         return -1;
@@ -1041,32 +1030,70 @@ static int tail_seek(int fd, int want) {
     return 0;
 }
 
-static int tail_one(int fd, const char *name, void *arg) {
-    int want = *(int *)arg;
-    if (tail_seek(fd, want) == 0) {
-        return 0;
+// Where the last `want` lines of t[0, len) start, a last line with no
+// newline counting as one: len for none.
+static size_t tail_at(const char *t, size_t len, size_t want, int bytes) {
+    if (bytes) {
+        return len > want ? len - want : 0;
     }
-    char *text;
-    size_t len = slurp(fd, &text);
-    (void)name;
-    size_t at = len;
-    int seen = 0;
-    if (at > 0 && text[at - 1] == '\n') {
+    size_t at = len, seen = 0;
+    if (want == 0) {
+        return len;
+    }
+    if (at > 0 && t[at - 1] == '\n') {
         at--;
     }
-    while (at > 0) {
-        if (text[at - 1] == '\n' && ++seen == want) {
+    while (at > 0 && !(t[at - 1] == '\n' && ++seen == want)) {
+        at--;
+    }
+    return at;
+}
+
+// A stream's last `want` lines (`bytes`: bytes), which does not seek (a
+// pipe): read into the session's arena and cut back to the lines wanted each
+// time the text doubles past what the last cut kept, so it holds what it
+// prints and a read or two, never the stream.
+static void tail_stream(int fd, size_t want, int bytes) {
+    char buf[512];
+    char *p;
+    size_t kept = 0;
+    STARTSTACKSTR(p);
+    for (;;) {
+        ssize_t n = read(fd, buf, sizeof buf);
+        if (n <= 0) {
             break;
         }
-        at--;
+        p = stnputs(buf, (size_t)n, p);
+        char *t = stackblock();
+        size_t len = (size_t)(p - t);
+        if (len >= 2 * kept + sizeof buf) {
+            size_t at = tail_at(t, len, want, bytes);
+            memmove(t, t + at, len - at);
+            kept = len - at;
+            p = t + kept;
+        }
     }
-    outmem(text + at, len - at, out1);
+    char *t = stackblock();
+    size_t len = (size_t)(p - t);
+    size_t at = tail_at(t, len, want, bytes);
+    if (at < len) {
+        outmem(t + at, len - at, out1);
+    }
+}
+
+static int tail_one(int fd, const char *name, void *arg) {
+    int want = *(int *)arg;
+    (void)name;
+    if (tail_seek(fd, want) != 0) {
+        tail_stream(fd, want > 0 ? (size_t)want : 0, 0);
+    }
     return 0;
 }
 
 static int tail_bytes(int fd, const char *name, void *arg) {
     size_t want = (size_t)*(int *)arg;
     off_t end = lseek(fd, 0, SEEK_END);
+    (void)name;
     if (end >= 0) {                     // a file: its last bytes, read in place
         char buf[512];
         ssize_t n;
@@ -1076,11 +1103,7 @@ static int tail_bytes(int fd, const char *name, void *arg) {
         }
         return 0;
     }
-    char *text;
-    size_t len = slurp(fd, &text);
-    (void)name;
-    size_t at = len > want ? len - want : 0;
-    outmem(text + at, len - at, out1);
+    tail_stream(fd, want, 1);
     return 0;
 }
 
@@ -1280,7 +1303,7 @@ typedef struct {
 static void lines_open(lines_t *r, int fd) {
     r->fd = fd;
     r->at = r->n = 0;
-    r->p = moy_sh_halloc(TEXT_LINE);
+    r->p = moy_sh_palloc(TEXT_LINE);
     r->cap = TEXT_LINE;
     if (r->p == NULL) {
         r->p = r->small;
@@ -1290,7 +1313,7 @@ static void lines_open(lines_t *r, int fd) {
 
 static void lines_close(lines_t *r) {
     if (r->p != r->small) {
-        moy_sh_hfree(r->p);
+        moy_sh_pfree(r->p);
     }
 }
 
@@ -1301,10 +1324,10 @@ static void lines_add(lines_t *r, const char *p, size_t n) {
         while (cap < r->len + n && cap < TEXT_LINE_MAX) {
             cap *= 2u;
         }
-        char *more = cap > r->cap ? moy_sh_halloc(cap) : NULL;
+        char *more = cap > r->cap ? moy_sh_palloc(cap) : NULL;
         if (more != NULL) {
             memcpy(more, r->p, r->len);
-            moy_sh_hfree(r->p);
+            moy_sh_pfree(r->p);
             r->p = more;
             r->cap = cap;
         } else {
@@ -1842,9 +1865,9 @@ static int uniq_one(int fd, const char *name, void *arg) {
             uniq_emit(o, held, hlen, k);
         }
         if (held == NULL || r.len > hcap) {
-            moy_sh_hfree(held);
+            moy_sh_pfree(held);
             hcap = r.len > TEXT_LINE ? r.len : TEXT_LINE;
-            held = moy_sh_halloc(hcap);
+            held = moy_sh_palloc(hcap);
             if (held == NULL) {
                 k = 0;
                 o->status = moy_sh_fail("uniq: out of memory");
@@ -1858,7 +1881,7 @@ static int uniq_one(int fd, const char *name, void *arg) {
     if (k > 0) {
         uniq_emit(o, held, hlen, k);
     }
-    moy_sh_hfree(held);
+    moy_sh_pfree(held);
     lines_close(&r);
     return 0;
 }
@@ -1910,7 +1933,7 @@ typedef struct {
 } sort_t;
 
 static void *sort_take(sort_t *o, size_t n) {
-    void *p = o->taken + n <= o->bound ? moy_sh_halloc(n) : NULL;
+    void *p = o->taken + n <= o->bound ? moy_sh_palloc(n) : NULL;
     if (p == NULL) {
         o->full = 1;
         return NULL;
@@ -1921,7 +1944,7 @@ static void *sort_take(sort_t *o, size_t n) {
 
 static void sort_give(sort_t *o, void *p, size_t n) {
     if (p != NULL) {
-        moy_sh_hfree(p);
+        moy_sh_pfree(p);
         o->taken -= n;
     }
 }
@@ -2440,9 +2463,9 @@ static int clearcmd(int argc, char **argv) {
 int moy_net_link(uint32_t *ip);
 #pragma weak moy_net_link
 
-// The console's palette, its first sixteen the base colours (native/moy_ui's
-// generated tables): weak, NULL in an image without the toolkit (the Zero),
-// where neofetch draws plain.
+// The console's palette, its first sixteen the base colours: native/moy_ui's
+// generated tables, or moy_sh_palette.c on an image without the toolkit (the
+// Zeros). Weak: NULL in a build that links neither, where neofetch draws plain.
 #if __has_include("moy_ui_tables.h")
 #include "moy_ui_tables.h"
 #else
@@ -2452,13 +2475,14 @@ extern const uint32_t moy_theme_moy64[64];
 
 #define FETCH_ROWS 16
 #define FETCH_VALUE 64
-#define FETCH_LOGO_W 16
+#define FETCH_LOGO_W 15                 // the sprite's last column is clear
 #define FETCH_LOGO_ROWS 8
 #define FETCH_GAP 3                     // between the logo and the rows
 #define FETCH_ACCENT 14                 // the title's and the labels' base colour
 
 // Moy, the mascot: chrome.py's "moy" sprite ('.' clear, a hex digit a base
-// colour), drawn two pixels a cell with half blocks.
+// colour), drawn two pixels a cell with half blocks, its clear last column
+// left off so that he fits beside the rows on the T-Deck's 44 columns.
 static const char *const fetch_moy[16] = {
     "................", "...0000000......", "..0ddddddd0.....", ".0d66ddddd0.....",
     ".0dddddddd0.....", ".0dddddddd0000..", ".0dd77d77ddddd0.", ".0dd70d70ddddd0.",
@@ -2468,14 +2492,14 @@ static const char *const fetch_moy[16] = {
 
 // ...and his silhouette where the terminal draws no colour.
 static const char *const fetch_plain[FETCH_LOGO_ROWS] = {
-    "   .-------.    ",
-    "  /        |    ",
-    " |         '--. ",
-    " |   o   o    | ",
-    " |    ---     | ",
-    " |            | ",
-    "  '--.----.--'  ",
-    "    '-'  '-'    ",
+    "   .-------.   ",
+    "  /        |   ",
+    " |         '--.",
+    " |   o   o    |",
+    " |    ---     |",
+    " |            |",
+    "  '--.----.--' ",
+    "    '-'  '-'   ",
 };
 
 // A row's rank: the rows a short terminal leaves out go highest rank first.
@@ -2704,7 +2728,7 @@ static int neofetchcmd(int argc, char **argv) {
     moy_sh_t *s = moy_sh_cur;
     (void)argc;
     (void)argv;
-    fetch_t *f = moy_sh_halloc(sizeof *f);
+    fetch_t *f = moy_sh_palloc(sizeof *f);
     if (f == NULL) {
         return moy_sh_fail("neofetch: no memory");
     }
@@ -2808,7 +2832,7 @@ static int neofetchcmd(int argc, char **argv) {
         fetch_logo(colour, line);
         out1c('\n');
     }
-    moy_sh_hfree(f);
+    moy_sh_pfree(f);
     return 0;
 }
 

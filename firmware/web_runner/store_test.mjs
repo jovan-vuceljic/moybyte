@@ -157,11 +157,11 @@ for (const sync of [true, false]) {
     // Nothing that escapes the store, and nothing crash-safety leaves behind.
     const bad = await store.applyOps(s, [
         { p: "../escape.py", t: "x" },
-        { p: "a.moy/main.py.bak", t: "x" },
+        { p: "a.moy/.main.py.moybak", t: "x" },
         { p: "a.moy/main.py.tmp", t: "x" },
         { p: "system.json", t: "x" },
     ]);
-    ok("traversal, .bak/.tmp and top-level files are all refused (" + label + ")",
+    ok("traversal, a store backup, a .tmp and top-level files are all refused (" + label + ")",
        bad.applied === 0 && bad.errors.length === 4, JSON.stringify(bad.errors));
 
     // ...but THE JOURNAL LANDS (2026-08-25). In mode 1 this store is of record,
@@ -474,7 +474,8 @@ ok("the wire refuses a journal, the local store keeps it",
    && !store.skipLocal("journal") && !store.skipLocal("journal.jsonl"));
 ok("both still refuse thumbs and the crash-safety artifacts",
    store.skipName("thumbs") && store.skipLocal("thumbs")
-   && store.skipName("x.bak") && store.skipLocal("x.bak")
+   && store.skipName(".x.moybak") && store.skipLocal(".x.moybak")
+   && !store.skipName("x.bak") && !store.skipLocal("x.bak")
    && store.skipName("x.tmp") && store.skipLocal("x.tmp"));
 
 // ---- a compiled cart's written files (moy-spec SPEC.md 16.12) -----------------

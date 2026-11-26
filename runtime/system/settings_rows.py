@@ -33,8 +33,8 @@ CHANNELS = ("stable", "beta")
 IDLE = tuple((key, say(text)) for key, _rung, text, _d in IDLE_ROWS)
 STEP_WORDS = tuple(str(t) for t in IDLE_STEPS)
 
-# the rows a board adds, by the row key `_settings_rows()` names them with
-CAPS = ("bluetooth", "layout_theme", "crash", "usb_drive", "webhost", "update", "ota_channel",
+# the rows a console adds or lacks, by the row key `_settings_rows()` names them with
+CAPS = ("wifi", "brightness", "bluetooth", "layout_theme", "crash", "usb_drive", "webhost", "update", "ota_channel",
         "update_c6", "idle_dim", "idle_blank")
 
 s = ui.state(
@@ -43,6 +43,11 @@ s = ui.state(
     sizes=ui.model(key="v", v="", word=""),
     font_scale=ui.row_of("sizes"),
     has_sizes=False,
+    zooms=ui.model(key="v", v="", word=""),
+    zoom=ui.row_of("zooms"),
+    has_zoom=False,
+    kept_carts="",
+    has_kept_carts=False,
     layouts=ui.model(key="v", v="", word=""),
     layout_theme=ui.row_of("layouts"),
     home_style=ui.enum(*HOMES, init="theme"),
@@ -146,6 +151,19 @@ def rows_poll():
         _model("sizes", tuple((("v", str(f)), ("word", _SIZES[f])) for f in offered))
         s.has_sizes = len(offered) > 1
     s.font_scale = _SCALE_WORD.get(look.font_scale, "1")
+    # UI SIZE, a zoomed glass's (the browser page's, `Appearance.zoom_glass`):
+    # Auto, then each percent of the CSS pixel the page's screen offers.
+    s.has_zoom = look.zoom is not None
+    if s.has_zoom:
+        if kept.get("zooms") is not look.zooms:
+            kept["zooms"] = look.zooms
+            _model("zooms", tuple((("v", str(z)), ("word", "%d%%" % z if z else "Auto"))
+                                  for z in look.zooms))
+        s.zoom = str(look.zoom)
+    # Where the browser page keeps the carts (`Workstation.page`'s word).
+    page = getattr(ws, "page", None)
+    s.kept_carts = page.kept if page is not None else ""
+    s.has_kept_carts = bool(s.kept_carts)
     if s.has_layout_theme:
         pick = look.layout_theme()
         if kept.get("lgen", -1) != look.layout_gen or kept.get("lpick", ()) != pick:
@@ -223,6 +241,10 @@ def font_set():
     look.set_font_scale(int(s.font_scale))
 
 
+def zoom_set():
+    uitree_app.env().ws.look.set_zoom(int(s.zoom))
+
+
 def layout_set():
     look = uitree_app.env().ws.look
     keys = [r.v for r in s.layouts]
@@ -289,6 +311,7 @@ for _key, _label, _does in (
         ("log", "System log", _page("log"))):
     ui.action(_key, say(_label) if _label.isupper() else _label, _does, hint="Open")
 ui.hook("font_set", font_set)
+ui.hook("zoom_set", zoom_set)
 ui.hook("layout_set", layout_set)
 ui.hook("home_set", home_set)
 ui.hook("channel_set", channel_set)
@@ -312,9 +335,12 @@ def _toggle_row(name, label):
 def rows_page():
     with ui.page(""):
         with ui.group("General"):
-            ui.link("wifi", "{wifi_word}")
+            ui.link("wifi", "{wifi_word}", shown="has_wifi")
             ui.link("bluetooth", "{bt_word}", shown="has_bluetooth")
             ui.link("appearance", "{theme_title}")
+            ui.info("Carts", "{kept_carts}", shown="has_kept_carts")
+            ui.seg("UI size", "zoom", text="{.word}", look="cycle", on="zoom_set",
+                   shown="has_zoom")
             ui.seg("Text size", "font_scale", text="{.word}", look="cycle", on="font_set",
                    shown="has_sizes")
             ui.seg("Layout", "layout_theme", text="{.word}", look="cycle", on="layout_set",
@@ -323,7 +349,7 @@ def rows_page():
             ui.slider("Volume", "volume", LEVELS["volume"][0], LEVELS["volume"][1], look="steps",
                       icon="{volume?:mute}", on="volume_set")
             ui.slider("Brightness", "brightness", LEVELS["brightness"][0], LEVELS["brightness"][1],
-                      look="steps", on="brightness_set")
+                      look="steps", on="brightness_set", shown="has_brightness")
             ui.link("tz", "{tz_place}")
             ui.field("Name", "name", NAME_MAX, commit=True, hint="{name_hint}", on="name_done",
                      changed="name_set", shown="can_type")

@@ -357,7 +357,7 @@ from editor_app import EditorApp
 # projects onto, and the MEMOIZED visible/draw stack (rebuilt only on push/pop
 # or overlay-gate change -- a static top-of-stack allocates no per-frame list).
 # ws._composite_game/game_xy/_viewport stay one-line forwards (tested surface).
-from wm import FullscreenStackWM
+from wm import FullscreenStackWM, bezel as _wm_bezel
 
 # The unified multiplayer input router (#65): PlayerRouter maps input SOURCES to
 # player SLOTS behind btn(name, player)/players(). Slot 0 is the local console
@@ -576,6 +576,9 @@ class Workstation:
     pf_home = None                 # the home frame's split, under perf_capture (home_band)
     # A soft keyboard the board offers beside its inputs (the browser page's).
     soft_keyboard = False
+    # A panel light Brightness sets: False where there is none to set (the
+    # browser page), and the Brightness rows are not offered.
+    panel_light = True
     no_keyboard_text = NO_KEYBOARD_TEXT
 
     def __init__(self, comp, canvas, input, carts=None, sys_canvas=None,
@@ -635,6 +638,8 @@ class Workstation:
         # The glass's own canvas, and the half-size surface a `render.scale: 2`
         # desk theme draws on instead (`set_render_scale`); None at 1.
         self.glass = sys_canvas
+        self.glass_moving = False       # a resize in progress (`resize_glass`)
+        self._desk_held = False         # console mode a glass with no desk room holds
         self.render_scale = 1
         self._half = None
         self.chrome_floor = chrome_scale_floor(_panel.w, _panel.h,
@@ -748,8 +753,10 @@ class Workstation:
         # The system clipboard (#132): the one buffer every editor writes
         # through (the code tab, a cart's editor handle), so copy in one app
         # pastes in another; the code tab's lane over a grant of its own.
-        # Console-side end-to-end -- works identically over the web
-        # transport, never touches a host OS clipboard (parity trap).
+        # Console-side end-to-end: the console reads no host's clipboard. A
+        # browser page meets it at its edge (firmware/web_runner/web_boot.py's
+        # `_paste` and `_clip_out`): the page's paste lands here, and a copy
+        # here goes on the browser's clipboard.
         self.clipboard = _moy_app.Clipboard(
             self.app_abi, self.app_abi.grant("editor", ("clipboard",)))
         # The console's Paste into an app's focused field reads it here, so
@@ -839,6 +846,11 @@ class Workstation:
         self.cart_keep = None
         self.cart_pick = None
         self.cart_home = None
+        # `page`, the browser page around the console
+        # (firmware/web_runner/page_link.PageLink): what its rows ask the
+        # browser for (full screen, a file, a download) and the page's word
+        # back. None everywhere else.
+        self.page = None
         # `cart_board`, on a page a console that answers /official serves:
         # that console asked to install or remove carts in its own store
         # (firmware/web_runner/carts_link.BoardCarts), None everywhere else.
@@ -1410,8 +1422,14 @@ class Workstation:
         if _layout_base.class_of(self.panel_diagonal_in, self.panel_wh[0], self.panel_wh[1],
                                  self.look.effective_font_scale()) != self.metric_class:
             return True
-        return (self.windowed_wm is not None
-                and self.desk_fits() != bool(getattr(self.wm, "has_desk", False)))
+        if self.windowed_wm is None:
+            return False
+        if self.look.zoom is not None:
+            fits = self.desk_fits()
+            return (not getattr(self.wm, "has_desk", False)
+                    or (not fits and self.wm.mode != "console")
+                    or (fits and self._desk_held))
+        return self.desk_fits() != bool(getattr(self.wm, "has_desk", False))
 
     def place_tier(self):
         """Stand the tier the font scale in force asks for: its metric class
@@ -1427,9 +1445,12 @@ class Workstation:
         opens again on its Text size row."""
         self.frame_state.tier_due = False
         wm = self.wm
-        desk = self.windowed_wm is not None and self.desk_fits()
+        zoomed = self.look.zoom is not None
+        desk = self.windowed_wm is not None and (zoomed or self.desk_fits())
         if desk == bool(getattr(wm, "has_desk", False)):
             self.place_metric_class()
+            if zoomed and desk:
+                self._hold_desk()
             return
         sl = self.settings_layer
         settings = wm.stack.has(sl.id)
@@ -1459,10 +1480,79 @@ class Workstation:
             self.home.open_desk()
         self.launcher.set_items(self.home.launcher_view_items())
         self.relayout()
+        if zoomed and desk:
+            self._hold_desk()
         self.mark_dirty()
         if settings:
             self.open_settings()
             sl.focus_row("font_scale")
+
+    def _hold_desk(self):
+        """A zoomed glass (the page's, `Appearance.zoom`) stands the
+        windowed tier at any size: where the desk has no room
+        (`desk_fits`) it is held in console mode, its windows parked and
+        their processes running, and room again gives back the desk that
+        the glass took -- never one the user left for console mode."""
+        wm = self.wm
+        if not self.desk_fits():
+            if wm.mode != "console":
+                wm.enter_console()
+                self._desk_held = True
+        elif self._desk_held:
+            self._desk_held = False
+            if wm.mode == "console":
+                wm.leave_console()
+
+    def resize_glass(self, w, h, diagonal_in=None):
+        """The glass at `w` x `h` pixels from now on, live: a glass that is a
+        window (the browser page's; a board's never resizes), at least the
+        handheld's smallest room. One operation over the one canvas class
+        (`DeviceCanvas.resize`): the glass (a render scale's half surface
+        made again over it), the panel's facts that the metric class, the
+        floors and the tier read (`diagonal_in`: its declared glass, None
+        the handheld's, which declares none), the
+        pointer's bounds, the layouts (`relayout`), the WM's windows
+        (`fit_glass`: kept and clamped) and the tier (`place_tier`). What
+        runs keeps running. False where the size did not move."""
+        glass = self.glass
+        mw, mh = _layout_base.HANDHELD_MIN_WH
+        w, h = max(mw, int(w)), max(mh, int(h))
+        if glass is None or (glass.w, glass.h) == (w, h):
+            return False
+        self.glass_moving = True
+        try:
+            n = self.render_scale
+            if n != 1:
+                self.set_render_scale(1)
+            glass.resize(w, h)
+            self.panel_wh = (w, h)
+            self.panel_diagonal_in = diagonal_in
+            _layout_base.place_desk_glass(_layout_base.class_of(
+                self.panel_diagonal_in, w, h) == _layout_base.DESK)
+            self.chrome_floor = chrome_scale_floor(w, h, self.panel_diagonal_in)
+            self.chrome_scales = chrome_scale_choices(
+                w // _layout_base.CLASSES[self.metric_class]["unit"], self.chrome_floor)
+            self.look._scales = None
+            p = self.pointer
+            if p is not None:
+                p.w, p.h = w, h
+                p.x, p.y = min(p.x, w - 1), min(p.y, h - 1)
+            bl = getattr(self, "bar_layer", None)
+            if bl is not None:
+                bl.invalidate()
+            self.place_metric_class()
+            self.relayout()
+            fit = getattr(self.wm, "fit_glass", None)
+            if fit is not None:
+                fit()
+            if n != 1:
+                self.set_render_scale(n)
+            self.place_tier()
+        finally:
+            self.glass_moving = False
+        self.frame_state.dirty = True
+        self.mark_dirty()
+        return True
 
     def set_render_scale(self, n):
         """Draw the shell on a surface 1/`n` of the glass, doubled onto it at
@@ -3738,7 +3828,7 @@ class Workstation:
                 # composite_game bails and console mode showed the LIBRARY
                 # behind the game (owner, 2026-07-31). Painting it here, before
                 # the bracket opens, is the same pixels in the right order.
-                self.sys_canvas.cls(0)      # _VIEWPORT_BEZEL: black
+                self.sys_canvas.cls(_wm_bezel(self))      # the letterbox (wm.bezel)
                 _gc = self.run.canvas       # a draw above may have opened a run
                 _view(_ox, _oy, _sc, _gc.w, _gc.h)
                 _game_open = True

@@ -172,6 +172,12 @@ typedef struct {
 } moy_store_lock_stats_t;
 void moy_store_lock_stats(moy_store_lock_stats_t *out, int reset);
 
+// A boot's temporary files (the shell's pipe spills, moy_sh_sys.c) live while
+// their maker holds them, and a reset leaves them. True for the first caller
+// of a boot only, which removes the leftovers before any such file is open,
+// so no boot pays to look for them.
+bool moy_vol_tmp_first(void);
+
 // THE VOLUME TABLE: the volumes a task other than the VM's resolves a path
 // through, each a mount point and the instance under it, longest match first.
 // Only an instance whose sectors never enter the VM is listed: the kernel's
@@ -228,6 +234,19 @@ int moy_vol_rename(const moy_vol_t *v, const char *src, const char *dst);
 // `src` over `dst`: the medium's own atomic rename where it has one (littlefs,
 // POSIX), and on FAT the rename after `dst` is removed.
 int moy_vol_replace(const moy_vol_t *v, const char *src, const char *dst);
+// The bytes the volume of the folder `dir` has free for new blocks, where
+// its medium counts them from its own records: 0 and *bytes on littlefs (a
+// walk of its metadata, lfs2_fs_size, the count its statvfs answers with;
+// never fewer than none) and on a host's POSIX, MOY_ENODEV
+// on FAT, whose count is a scan of the card's whole table, and on a board's
+// POSIX, whose libc has no statvfs.
+int moy_vol_room(const moy_vol_t *v, const char *dir, uint64_t *bytes);
+
+// How many changes the volumes took since start: a written file closed, a
+// folder made, a name removed, renamed or replaced. A reader that kept the
+// last count knows something changed (a Zero's live socket tells its page
+// so, native/moy_net/moy_live.c).
+uint32_t moy_vol_changes(void);
 
 // A working folder. moy_vol_enter makes `dir` the place a relative name
 // starts; moy_vol_here_name gives the name to open a file of it by, and

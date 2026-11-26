@@ -268,7 +268,7 @@ def _board_folder(trial, stamp):
                            "app_guard": {"broken": ["local.x"]},
                            "wallpaper_guard": {"open": "moybyte.w"}}, root)
     for name, text in (("webkeys", "moy-webkeys 1 " + "ab" * 16 + "\n"),
-                       ("webkeys.bak", "#moyfs1 1 1\nx"),
+                       (".webkeys.moybak", "#moyfs1 1 1\nx"),
                        ("ssh_host_key", "key"), ("password", "$moy2$x"),
                        ("authorized_keys", "ssh-ed25519 AAAA kid")):
         with open(trial + "/system/" + name, "w") as f:
@@ -287,7 +287,7 @@ def test_another_boards_folder_drops_exactly_the_device_rows(trial):
     moy_seed.sweep_store(root, ROSTER, board=ME)
     after = _tree(trial)
     gone = {k for k in before if k not in after}
-    assert gone == {"system/webkeys", "system/webkeys.bak", "system/ssh_host_key"}
+    assert gone == {"system/webkeys", "system/.webkeys.moybak", "system/ssh_host_key"}
     rows = moy_carts.load_system(root)
     assert rows == {"theme": "night", "volume": 4}
     assert after[moy_seed.BOARD_STAMP_NAME] == b"moyboard %s\n" % ME.encode()
@@ -386,7 +386,9 @@ def test_the_export_and_the_stamp_run_on_the_boards_vm(trial):
               .replace("@ME@", repr(ME)))
     out = subprocess.run([exe, "-c", script], capture_output=True, text=True, timeout=120)
     assert out.returncode == 0, out.stdout + out.stderr
+    # 19: the trial's `<name>.bak` files, an older store's backups, travel as
+    # the files they now are (moy_fs.h's THE BACKUP IS THE STORE'S)
     assert out.stdout.split("\n")[:4] == [
-        "archive /files/Backups/moybyte-backup.zip 16", "dropped True",
+        "archive /files/Backups/moybyte-backup.zip 19", "dropped True",
         "rows ['theme', 'volume']", "again False"]
     assert not os.path.exists(trial + "/system/ssh_host_key")

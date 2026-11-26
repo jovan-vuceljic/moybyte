@@ -516,10 +516,20 @@ def _item_h(it, fs, desk=False):
 
 class _Console(_Rows):
     """A page with the console's group: Volume and Brightness as Settings'
-    levels (`SettingsLayer.set_level`), then Wi-Fi or the battery's line."""
+    levels (`SettingsLayer.set_level`), then Wi-Fi or the battery's line;
+    Brightness where there is a panel light (`ws.panel_light`), Wi-Fi where
+    there is a radio."""
+
+    def rows(self):
+        """The console group's rows: Volume, Brightness and Wi-Fi as there
+        are a light and a radio."""
+        ws = self.ws
+        return 1 + bool(ws.panel_light) + (ws.wifi is not None)
 
     def poll(self, s):
         ws = self.ws
+        s.light = bool(ws.panel_light)
+        s.radio = ws.wifi is not None
         sl = ws.settings_layer
         cur, lo, hi = sl.level("volume")
         s.vol, s.vlo, s.vhi = cur, lo, hi
@@ -570,7 +580,7 @@ class ControlCenter(_Console):
         fs = self.ws.layout.fs
         grp = _ui_draw.metrics("group")
         cap, gap = grp[3] * fs, grp[5] * fs
-        y = 2 * _pad(self.ws) + _rows_h(3, fs)
+        y = 2 * _pad(self.ws) + _rows_h(self.rows(), fs)
         first = None
         for it in _ITEMS.shown:
             y += gap + cap + _item_h(it, fs)
@@ -609,7 +619,8 @@ class PowerRows(_Console):
 
     def size(self):
         fs = self.ws.layout.fs
-        return (300 * fs, 2 * _pad(self.ws) + _rows_h(3, fs, True) + _foot(fs))
+        n = 2 + bool(self.ws.panel_light)       # the battery's line, Volume, Brightness
+        return (300 * fs, 2 * _pad(self.ws) + _rows_h(n, fs, True) + _foot(fs))
 
 
 class StatusMenu(_Rows):
@@ -638,11 +649,13 @@ class StatusMenu(_Rows):
 
 
 def component_for(ws, widget):
-    """The component a bar widget opens (§8's table, fixed per widget)."""
+    """The component a bar widget opens (§8's table, fixed per widget); none
+    for the wifi widget of a console with no radio (a browser page no
+    Zero serves)."""
     if widget == "clock":
         return MonthView(ws)
     if widget == "wifi":
-        return WifiPanel(ws)
+        return WifiPanel(ws) if ws.wifi is not None else None
     if widget == "battery":
         return PowerRows(ws) if _desk() else ControlCenter(ws)
     if widget == "status":

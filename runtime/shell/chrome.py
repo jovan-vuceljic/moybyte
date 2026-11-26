@@ -165,8 +165,8 @@ _CURSOR_ACCEL = 2
 
 # (_BASE_W/_BASE_H -- the T-Deck's canvas, every layout's default size -- come
 # from the layout_base leaf above; console.py still imports them back from here.)
-# (The letterbox/bezel fill _VIEWPORT_BEZEL (#39) moved to wm.py with the viewport
-# composite it belongs to -- FullscreenStackWM.composite_game is its only user.)
+# (The letterbox's colour, `bezel`, lives in wm.py with the viewport composite
+# it belongs to.)
 
 # The tap-target floor (#203): the smallest a bar icon may be ON GLASS, whatever
 # the font scale. A CONFIGURATION number, not a measurement -- deliberately under
@@ -205,8 +205,9 @@ def chrome_scale_floor(w, h, diagonal_in=None):
                    would have to change before it is worth re-proposing.
       Browser      its two arrangements are those boards': the desk declares
                    the P4's glass at the P4's density
-                   (`layout_base.desk_diagonal_in`), the 320x240 handheld
-                   declares none, as the T-Deck. The host simulator's desk
+                   (`layout_base.desk_diagonal_in`); a glass below the
+                   desk's room, the 320x240 handheld's among them, declares
+                   none, as the T-Deck. The host simulator's desk
                    declares the same.
 
     A floor of 3 is not reachable by any panel in the lineup; a board that

@@ -13,7 +13,17 @@
      is input (pointer, virtual pad, keyboard, soft-keyboard summon), the
      AudioWorklet PCM ring, and layout. build.sh concatenates this with
      page_tail.js (the worker transport + loader) into dist/index.html. -->
-<meta name=viewport content="width=device-width,initial-scale=1">
+<meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<!-- The home-screen app (tools/web_app.py writes the manifest and the icons
+     beside the page): an iPhone's Safari has no element full screen, and the
+     page saved to its Home Screen opens with no browser bars. -->
+<link rel=manifest href="manifest.webmanifest">
+<link rel=apple-touch-icon href="icon-180.png">
+<meta name=apple-mobile-web-app-capable content=yes>
+<meta name=mobile-web-app-capable content=yes>
+<meta name=apple-mobile-web-app-status-bar-style content=black-translucent>
+<meta name=apple-mobile-web-app-title content=Moybyte>
+<meta name=theme-color content="#0b0f1a">
 <link rel=icon href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAhUlEQVR42mNgGAW4wX8y8dB3ANig5rI5ZGFqOGTAHIBi8aHDx1HwyHPAgEfBcHAAydl0cDrg/8cXKJiQOCVRNLgdgC6PS3z4OYDaeOg5gJDDaB4FA+4AQgUM3dLAgDtg5OaCEeUAFIfUqQZTFZPSUBncDsCVHalh8aBxAKGuGbXUDw4HAAAJtsp8ecvLrQAAAABJRU5ErkJggg=="><title>Moybyte</title><style>
 html,body{margin:0;height:100%;background:#0b0f1a;color:#c2c3c7;
 font:14px ui-monospace,Menlo,Consolas,monospace;display:flex;flex-direction:column;
@@ -21,12 +31,16 @@ align-items:center}
 /* html is a centring flex column, which would size body to its widest child's
    min-content (the nowrap title) and push the document wider than the viewport. */
 body{width:100%}
-h1{font-size:14px;color:#fff1e8;margin:8px;max-width:calc(100% - 16px);white-space:nowrap;
-overflow:hidden;text-overflow:ellipsis}#s{color:#ffec27}
-/* Small phones (e.g. iPhone 13 mini): the full title used to wrap to two rows and
-   steal canvas height -- drop the "device" suffix + the backtick hint (meaningless
-   without a physical keyboard) on coarse pointers; nowrap+ellipsis backstops the rest. */
-@media (pointer:coarse){h1 .dv,h1 small{display:none}}
+/* The safe area (viewport-fit=cover: a home-screen app runs under the notch
+   and the home bar): the body keeps out of the insets, and room() reads them
+   back from its padding. The --sa-* are the insets, a test's to set. */
+:root{--sa-t:env(safe-area-inset-top,0px);--sa-r:env(safe-area-inset-right,0px);
+--sa-b:env(safe-area-inset-bottom,0px);--sa-l:env(safe-area-inset-left,0px)}
+body{box-sizing:border-box;padding:var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l)}
+/* Full screen on an iPhone or iPad (html.iosfs, fsMark): the browser lays its
+   exit strip and Close over the top of the page, so the top inset is at
+   least that strip. */
+html.iosfs{--sa-t:max(env(safe-area-inset-top,0px),50px)}
 /* Long-press guard: HOLDING a control (a d-pad direction, A/B)
    used to start the OS text-selection -- iOS magnifier/blue highlight, Android context
    menu -- because plain user-select isn't enough there: iOS wants the -webkit- prefix +
@@ -37,11 +51,18 @@ overflow:hidden;text-overflow:ellipsis}#s{color:#ffec27}
 @media (pointer:coarse){body{-webkit-user-select:none;user-select:none;
 -webkit-touch-callout:none}
 #kbin,#crash{-webkit-user-select:text;user-select:text}}
+/* The page never zooms: no pinch, no double tap (iOS Safari zooms on a
+   double tap of A or B); the play surfaces -- the canvas, the controls and
+   everything in them -- take every touch as the console's, with no
+   selection, callout or tap flash on any pointer. */
+html{touch-action:pan-x pan-y}
+canvas,#ctl,#ctl *{touch-action:none;-webkit-user-select:none;user-select:none;
+-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 /* Presentation scale: the OS renders at its DESIGN resolution (320x240 /
    1024x600); fit() uses the whole available viewport while the browser keeps
    nearest-neighbour sampling. Desktop users have real keyboard/pointer input,
    so the touch controls do not consume a permanent 120px-tall band there. */
-canvas{image-rendering:pixelated;background:#000;border:1px solid #1d2b53;border-radius:6px;
+canvas{image-rendering:pixelated;background:#000;border:0;
 width:min(96vw,112vh);height:auto;max-width:100%;touch-action:none;cursor:crosshair}
 /* Control sizes scale with the viewport (min(px, vw)): full desktop-tablet size when the
    width allows, proportionally smaller on narrow phones -- adding the ⌨ button made the
@@ -78,71 +99,32 @@ background:#7e2553;border:2px solid #c2c3c7;margin-left:min(18px,2vw)}#bb{backgr
    the page in on focus. */
 #kbin{position:fixed;top:0;left:0;width:1px;height:1px;padding:0;margin:0;border:0;
 opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:transparent}
-@media (hover:hover) and (pointer:fine){#ctl{display:none}}
-/* Persistence row (#193): where the carts are being kept, plus the .moy escape
-   hatch. Hidden until the worker reports a mode, and hidden for good on a
-   board-served page -- there the console owns the store and a browser-local
-   export/import would only invite the crossover the two modes exist to avoid. */
-#pz{display:none;align-items:center;gap:8px;margin:0 0 6px;max-width:96vw;
-flex-wrap:wrap;justify-content:center;font-size:12px;color:#5f6f9f}
-#pz select,#pz button,#pz .fb{font:12px ui-monospace,Menlo,Consolas,monospace;
-color:#c2c3c7;background:#1d2b53;border:1px solid #29366f;border-radius:4px;padding:3px 7px}
-#pz button,#pz .fb{cursor:pointer}
-#pz .fb:hover,#pz button:hover{border-color:#5f6f9f}
-#pzs.warn{color:#ffa300}
+/* The controls are a touch screen's: a mouse (pointer:fine) or no pointer at
+   all (a keyboard alone, a headless browser) has no use for them. */
+@media (pointer:fine),(pointer:none){#ctl{display:none}}
+/* A touch phone in landscape (html.phl, room()): the canvas full height and
+   centred, the stick in the left margin and A/B in the right one,
+   sized to it (padPlace), the keyboard summon and the burger small in the
+   bottom corners: the top ones are where a browser puts its own chrome (an
+   iPhone's full screen strip and its Close). #ctl covers the viewport but
+   takes no taps itself. */
+html.phl body{justify-content:center}
+html.phl #ctl{position:fixed;left:var(--sa-l);top:var(--sa-t);right:var(--sa-r);bottom:var(--sa-b);
+width:auto;height:auto;padding:0;display:block;pointer-events:none;z-index:2}
+html.phl #mid{display:contents}
+html.phl #ab{position:absolute;right:var(--abx);top:var(--aby);width:var(--abw);
+height:calc(var(--bb)*2 + 8px);display:block;pointer-events:none}
+html.phl #joy{position:absolute;left:var(--jx);top:var(--jy)}
+html.phl .b{position:absolute;margin:0;pointer-events:auto}
+html.phl #joy{pointer-events:auto}
+html.phl #ba{right:0;top:0}html.phl #bb{left:0;bottom:0}
+html.phl #kb{left:6px;bottom:6px}html.phl #bh{right:6px;bottom:6px}
 /* The crash itself, ON the page: a phone has no devtools to "see". Above the
    play splash (z-index 20), which a console that crashed while booting has
    left standing. */
 #crash{display:none;position:relative;z-index:21;max-width:96vw;margin:0 auto 6px;
 white-space:pre-wrap;word-break:break-word;text-align:left;font-size:11px;
 color:#ff004d;background:#0b0f1a}
-/* THE LINK SURFACE, and there is exactly one of it. A board stops answering
-   for two very different reasons -- an update or a wasm-mode hand-back (which
-   the person just asked for, and which comes back) versus vanishing (which in
-   BOARD MODE means unsynced work lives only in this tab) -- and the whole
-   point of the panel is which one it says. Two panels would race each other
-   and one would win at the wrong moment, so the reason is a parameter, not a
-   second element. In the page's own flow beside #p8 and never OVERLAYING the
-   canvas: in board mode the console keeps running perfectly well without the
-   board, and a modal over it would be a bigger claim than the news. */
-#lnk{display:none;max-width:min(560px,94vw);margin:8px 0 0;padding:10px 12px;
-border-radius:6px;background:#1d2b53;border:1px solid #29366f;text-align:left;
-font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7}
-#lnk.bad{border-color:#ff004d}
-#lnk p{margin:0 0 4px}
-#lnk p.head{color:#fff1e8}
-/* PICO-8 import report (#194). An import that silently ran WRONG is the worst
-   outcome, so what a cart used and what did not come across is shown as prose
-   rather than left to a black screen -- and it sits UNDER the canvas, never
-   over it, because the cart is already running behind this card. */
-#p8{display:none;max-width:min(560px,94vw);margin:8px 0 0;padding:10px 12px;
-border-radius:6px;background:#1d2b53;border:1px solid #29366f;text-align:left;
-font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7}
-#p8.bad{border-color:#ff004d}
-#p8 p{margin:0 0 4px}
-#p8 p.head{color:#fff1e8}
-#p8 .act{margin-top:8px;display:flex;gap:8px}
-#p8 button{font:12px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
-background:#29366f;border:1px solid #5f6f9f;border-radius:4px;padding:4px 9px;
-cursor:pointer}
-#p8 button:hover{background:#3d4a8a}
-/* Get Carts' file question (#124): a file a cart needs that this page can
-   read neither from its mirror nor from its archive's hosts is the player's
-   own copy instead. The console asks; the CHOICE has to be a real control in
-   the page, because a browser opens its file dialog only from a click on
-   one -- never from a tap the console relays a frame later. Under the canvas
-   like #p8, never over it: the console's own screen says what is being asked
-   and keeps its CANCEL. */
-#pk{display:none;max-width:min(560px,94vw);margin:8px 0 0;padding:10px 12px;
-border-radius:6px;background:#1d2b53;border:1px solid #ffec27;text-align:left;
-font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7}
-#pk p{margin:0 0 4px}
-#pk p.head{color:#fff1e8}
-#pk .act{margin-top:8px;display:flex;gap:8px;align-items:center}
-#pk button,#pk .fb{font:12px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
-background:#29366f;border:1px solid #5f6f9f;border-radius:4px;padding:4px 9px;
-cursor:pointer}
-#pk .fb{background:#7e2553;color:#fff1e8}
 /* Pairing prompt: a board's whole store is behind its sign-in, so a browser
    it has not paired yet has to ask (worker.js, THE SIGN-IN). IN THE PAGE and
    never window.prompt --
@@ -164,26 +146,32 @@ border:1px solid #5f6f9f;border-radius:4px}
 font:14px ui-monospace,Menlo,Consolas,monospace;color:#fff1e8;background:#7e2553;
 border:1px solid #c2c3c7}
 #pinb:hover{background:#a03068}
-/* Debug HUD (#41): toggled with the ` key; lightweight live stream stats. */
+/* The card while a password is set or a pairing runs: what it does, and a
+   turning ring, never a prompt (the board's curve takes seconds on a C3). */
+#pin.busy #pinm::before{content:"";display:inline-block;width:9px;height:9px;
+margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color:transparent;
+border-radius:50%;animation:pinspin .8s linear infinite}
+@keyframes pinspin{to{transform:rotate(360deg)}}
+/* The loading card: what the boot is doing until the console's first frame
+   (ldSay, ldDone), on the console's screen (ldPlace: the canvas's middle in
+   every layout), under the play splash (20), which stands until a tap. */
+#ld{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:19;display:flex;
+align-items:center;gap:10px;font:14px ui-monospace,Menlo,Consolas,monospace;color:#c2c3c7;
+pointer-events:none;white-space:nowrap;overflow:hidden}
+#ld i{width:12px;height:12px;border:2px solid #ffa300;border-right-color:transparent;
+border-radius:50%;animation:pinspin .8s linear infinite}
+/* Debug HUD (#41): toggled with the ` key, or on from the load with ?hud=1. */
 #hud{position:fixed;top:6px;left:6px;z-index:9;display:none;padding:6px 8px;border-radius:5px;
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
-white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}</style></head><body>
+white-space:pre;pointer-events:none}</style></head><body>
 <div id=hud></div>
-<h1>Moybyte <span id=s>starting...</span> <small style="color:#5f6f9f">(press ` for stats)</small> <a id=tier href="?handheld=1" style="color:#5f6f9f;font-size:11px;text-decoration:none;border-bottom:1px dotted #5f6f9f">small screen?</a> <a id=pod href="#" style="display:none;color:#00e436;font-size:11px;text-decoration:none;border-bottom:1px dotted #00e436">play on device</a></h1>
+<div id=ld><i></i><span id=ldt>Loading the console</span></div>
+<span id=s hidden>starting...</span>
 <pre id=crash></pre>
-<div id=pz><span id=pzs></span>
-<select id=pzc title="cart to export"></select>
-<button id=pze>export .moy</button>
-<label class=fb>import .moy / .p8 / .mp3<input id=pzi type=file accept=".zip,.moy,.p8,.png,.mp3" style="display:none"></label></div>
-<div id=p8><div id=p8t></div><div class=act><button id=p8e>open in editor</button>
-<button id=p8x>close</button></div></div>
-<div id=lnk><p class=head id=lnkh></p><p id=lnkb></p></div>
-<div id=pk><p class=head id=pkh></p><p id=pkb></p><div class=act>
-<label class=fb>choose <span id=pkn></span><input id=pki type=file style="display:none"></label>
-<button id=pkx>cancel</button></div></div>
+<input id=pick type=file hidden>
 <canvas id=cv width=320 height=240 tabindex=0></canvas>
 <input id=kbin type=text autocapitalize=off autocomplete=off autocorrect=off spellcheck=false>
-<div id=pin><div class=card><h2>pair this browser</h2>
+<div id=pin><div class=card><h2 id=pinh>pair this browser</h2>
 <p id=pinp>Scan the code on the console's WEB CONSOLE screen, or type the
 console's password.</p>
 <span id=pinm></span>
@@ -200,7 +188,9 @@ var W=320,H=240,ready=false,assCart=undefined,img=null,rgba=null;
 // null = undeclared -> show every control, today's behaviour). applyInputHint() gates the
 // virtual gamepad (#ctl) on "buttons" and the soft-keyboard summon (#kb) on "keyboard".
 var INPUT=null,padWanted=true,kbWanted=true;
-var HUD={on:false,fps:0,kb:0,el:document.getElementById("hud"),last:0};
+var HUD={on:/[?&]hud=1/.test(location.search),fps:0,kb:0,el:document.getElementById("hud"),last:0,
+drawn:0,w:"",pc:{n:0,ms:0,max:0,t:0},pcs:""};
+if(HUD.on)HUD.el.style.display="block";
 // Periodic perf LOG: one console.log line every PERF_MS. recv = frames the page
 // actually presented, render = the smoothed rAF rate, then the two halves of the
 // present (565->RGBA conversion and the putImageData upload) as mean/worst. The
@@ -242,7 +232,9 @@ PERF.mb=0;PERF.sb=0;PERF.mu=0;PERF.su=0;PERF.sn=0;}
 // before the second). A chunk the console marks `fresh` starts a stream
 // after a silence, so the dry run and the wait before it are no underrun
 // and no lull.
-var AUDIO_RATE=22050,actx=null,audioOut=null,audioBlocked=false;
+// ?audio=0 makes no context: the console then has no sink and sends no samples.
+var AUDIO_RATE=22050,actx=null,audioOut=null,audioBlocked=false,
+AUDIO_OFF=/[?&]audio=0/.test(location.search),SINK="none";
 var SS={got:0,played:0,under:0,dry:0,gap:0,dup:0,over:0,lull:0,lullAt:0,low:-1},
 schedNext=-1,schedEnd=0,schedGot=-1;
 var AW_SRC="class MoyPCM extends AudioWorkletProcessor{"+
@@ -264,7 +256,7 @@ var AW_SRC="class MoyPCM extends AudioWorkletProcessor{"+
 "if(++this.k>=4){this.k=0;if(this.q)this.q.postMessage(s);}return true;}}"+
 "registerProcessor('moy-pcm',MoyPCM);";
 function audioInit(){var AC=window.AudioContext||window.webkitAudioContext;
-if(!AC||actx)return;try{actx=new AC();}catch(e){actx=null;return;}
+if(AUDIO_OFF||!AC||actx)return;try{actx=new AC();}catch(e){actx=null;return;}
 AUDIO_RATE=actx.sampleRate;audioOut=actx.createGain();audioOut.connect(actx.destination);}
 audioInit();
 // The worker's sink, said once: a worklet's port, or this page.
@@ -276,9 +268,9 @@ actx.audioWorklet.addModule(u).then(function(){
 var node=new AudioWorkletNode(actx,"moy-pcm",{numberOfInputs:0,outputChannelCount:[1]});
 node.connect(audioOut);var ch=new MessageChannel();
 node.port.postMessage({port:ch.port1},[ch.port1]);
-w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);
-}).catch(function(){w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
-w.postMessage({t:"sink",rate:rate});}
+w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);SINK="worklet";
+}).catch(function(){SINK="page";w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
+SINK="page";w.postMessage({t:"sink",rate:rate});}
 function ensureAudio(){if(!actx){audioInit();if(actx&&WORKER)audioSink(WORKER);}
 if(actx&&actx.state==="suspended")actx.resume();}
 // The page's sink: the samples it has played are those it got less those
@@ -305,36 +297,115 @@ for(var i=0;i<n;i++)f[i]=a[i]/32768;
 var src=actx.createBufferSource();src.buffer=buf;src.connect(audioOut);src.start(t);
 schedNext=t+n/AUDIO_RATE;SS.got+=n;}
 var fitSent=-1;
+// THE GLASS. The console's canvas is the page's room in device pixels over a
+// whole number N (`n`), shown at exactly N device pixels a canvas pixel, so
+// it stays crisp, and it follows the room live (a resize, a rotation, a
+// devicePixelRatio change) through the console's `glass` event
+// (Workstation.resize_glass), with no reload. Settings' UI size is N as a
+// percent of the CSS pixel (100% = N of one CSS pixel); the page offers only
+// the percents that land on whole device pixels and leave the canvas the
+// handheld's 320x240, and keeps the choice per browser (localStorage). Auto:
+// the largest N whose canvas holds the desk's 1024x600. Where the room does
+// not (or ?handheld=1), the handheld: a pointer's window takes the largest N
+// whose canvas still holds 320x240, so it fills the room to under N device
+// pixels; a touch phone the PHONE RULE: landscape, a canvas 240 tall at the
+// room's aspect, portrait the 320x240 console, each scaled to the room as
+// fit() always did (fractional, which a phone's devicePixelRatio hides). The
+// console lays a glass without the desk's room out in the handheld's class
+// (web_boot.glass_in).
+// GLASS.live: the console zooms (its first frame names `zoom`); a one-cart
+// page's fixed 320x240 does not, and keeps fit()'s scaling.
+var GLASS={live:false,n:0,w:0,h:0,zoom:-1,zooms:"",due:0},UIKEY="moy.uisize",
+HANDHELD=/[?&]handheld=1/.test(location.search);
+function uiPick(){try{var v=localStorage.getItem(UIKEY);return v?(+v||0):0;}catch(e){return 0;}}
+function uiKeep(z){try{localStorage.setItem(UIKEY,String(z));}catch(e){}}
+// A touch phone held sideways: the pads go in the canvas's side margins, each
+// at least PAD_MIN wide and at most PAD_MAX, where a 4:3 game leaves them more.
+var TOUCH=window.matchMedia?matchMedia("(pointer:coarse)"):null,
+PAD_MIN=104,PAD_MAX=180,SB=36;
+function padPlace(iw,ih,m){var c=document.getElementById("ctl").style,top=SB+12;
+var j=Math.floor(Math.min(m-16,ih-2*top,160)),b=Math.floor(Math.min((m-16)*0.58,(ih-top-16)/2,84));
+var hab=2*b+8,mid=ih*0.55;
+function at(h){return Math.round(Math.max(top,Math.min(mid-h/2,ih-12-SB-h)));}
+c.setProperty("--joy",j+"px");c.setProperty("--bb",b+"px");c.setProperty("--sb",SB+"px");
+c.setProperty("--jx",Math.round((m-j)/2)+"px");c.setProperty("--jy",at(j)+"px");
+c.setProperty("--abx","8px");c.setProperty("--abw",Math.round(m-16)+"px");
+c.setProperty("--aby",at(hab)+"px");}
+function insets(){var c=getComputedStyle(document.body);
+return [parseFloat(c.paddingTop)||0,parseFloat(c.paddingRight)||0,
+parseFloat(c.paddingBottom)||0,parseFloat(c.paddingLeft)||0];}
+function room(){var vv=window.visualViewport,sa=insets();
+var iw=(vv?vv.width:window.innerWidth)-sa[1]-sa[3],ih=(vv?vv.height:window.innerHeight)-sa[0]-sa[2];
+var phl=!!TOUCH&&TOUCH.matches&&iw>ih&&(HANDHELD||iw<1024||ih<600);
+if(document.documentElement.classList.contains("phl")!==phl){
+document.documentElement.classList.toggle("phl",phl);
+if(!phl)document.getElementById("ctl").removeAttribute("style");}
+if(phl){var m=Math.max(PAD_MIN,Math.min(PAD_MAX,Math.floor((iw-ih*4/3)/2)));
+padPlace(iw,ih,m);return [Math.max(32,Math.floor(iw-2*m)),Math.max(32,Math.floor(ih)),0];}
+var used=0;
+for(var k=document.body.firstElementChild;k;k=k.nextElementSibling){
+if(k===cv||k.tagName==="SCRIPT"||k.tagName==="INPUT")continue;
+var cs=getComputedStyle(k);
+if(cs.display==="none"||cs.position==="fixed"||cs.position==="absolute")continue;
+used+=k.offsetHeight+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}
+return [Math.max(32,Math.floor(iw)),Math.max(32,Math.floor(ih-used)),used];}
+function glassPlan(){var r=room(),dpr=window.devicePixelRatio||1;
+var dw=Math.floor(r[0]*dpr),dh=Math.floor(r[1]*dpr),offers=[],byPct={},most=1;
+for(var n=1;n<=32;n++){var p=Math.round(n/dpr*100);if(Math.floor(dw/n)<320||Math.floor(dh/n)<240||p>400)break;
+most=n;if(!byPct[p]){byPct[p]=n;offers.push(p);}}
+var z=uiPick(),pl;
+if(z&&byPct[z])pl={n:byPct[z],w:Math.floor(dw/byPct[z]),h:Math.floor(dh/byPct[z])};
+else{z=0;
+if(window.innerWidth<1024||window.innerHeight<600){
+if(TOUCH&&TOUCH.matches)pl=r[0]*3>=r[1]*4?{n:0,w:Math.round(240*r[0]/r[1]),h:240}:{n:0,w:320,h:240};
+else pl={n:most,w:Math.floor(dw/most),h:Math.floor(dh/most)};}
+else{var best=1;for(var i=0;i<offers.length;i++){var m=byPct[offers[i]];
+if(Math.floor(dw/m)>=1024&&Math.floor(dh/m)>=600&&m>best)best=m;}
+pl={n:best,w:Math.floor(dw/best),h:Math.floor(dh/best)};}}
+pl.zoom=z;pl.zooms=[0].concat(offers).join(",");return pl;}
+// The console's boot query: its glass, UI size and the sizes it offers. An
+// address that names its ?size= keeps that glass, fixed, scaled to the room.
+function glassSearch(){var pl=glassPlan(),q=location.search;GLASS.n=pl.n;
+if(/[?&]size=/.test(q))return q;
+return q+(q?"&":"?")+"size="+pl.w+"x"+pl.h+"&zoom="+pl.zoom+"&zooms="+pl.zooms;}
+function glassCheck(){if(!GLASS.live||!WORKER)return;var pl=glassPlan();GLASS.n=pl.n;
+if(pl.w!==W||pl.h!==H||pl.zoom!==GLASS.zoom||pl.zooms!==GLASS.zooms){
+GLASS.zoom=pl.zoom;GLASS.zooms=pl.zooms;
+send({type:"glass",w:pl.w,h:pl.h,zoom:pl.zoom,zooms:pl.zooms.split(",").map(Number)});}fit();}
+function glassSoon(){clearTimeout(GLASS.due);GLASS.due=setTimeout(glassCheck,120);}
+window.addEventListener("resize",glassSoon);
+if(window.visualViewport)window.visualViewport.addEventListener("resize",glassSoon);
+(function dprWatch(){if(!window.matchMedia)return;
+var m=matchMedia("(resolution: "+(window.devicePixelRatio||1)+"dppx)");
+var f=function(){m.removeEventListener("change",f);glassSoon();dprWatch();};
+m.addEventListener("change",f);})();
+// A frame's `zoom`: the console's UI size, which Settings may have moved.
+function glassFrame(f){if(f.zoom===undefined)return;
+var first=!GLASS.live;GLASS.live=true;
+if(f.zoom!==uiPick()&&!first)uiKeep(f.zoom);
+if(first){var pl=glassPlan();GLASS.zoom=pl.zoom;GLASS.zooms=pl.zooms;}
+glassCheck();}
 function fit(){/* Fill the available viewport without the old integer-scale
 cliff (e.g. 1.95x used to collapse all the way to 1x on an ultrawide). Sized off
 the VISUAL viewport when the browser has one: iOS collapses it for the soft
 keyboard WITHOUT firing window.resize on close, which is how the canvas used to
 stick tiny after typing + PLAY (owner report 2026-07-23). */
 /* The height left for the canvas is the viewport minus everything else the page
-lays out above and below it -- title, persistence row, link/import/pick cards,
-control bar, with their margins -- measured, so a row that wraps or a card that
-appears is accounted for and the document never outgrows the viewport (the
+lays out above and below it -- a crash's text, the touch control bar, with
+their margins -- measured, so what appears is accounted for and the document never outgrows the viewport (the
 embedded Try-it stage showed a scrollbar and a cut-off console). */
-var vv=window.visualViewport;
-var iw=vv?vv.width:window.innerWidth,ih=vv?vv.height:window.innerHeight;
-var used=2;/* the canvas's own 1px borders */
-for(var k=document.body.firstElementChild;k;k=k.nextElementSibling){
-if(k===cv||k.tagName==="SCRIPT"||k.tagName==="INPUT")continue;
-var cs=getComputedStyle(k);
-if(cs.display==="none"||cs.position==="fixed"||cs.position==="absolute")continue;
-used+=k.offsetHeight+(parseFloat(cs.marginTop)||0)+(parseFloat(cs.marginBottom)||0);}
+var rm=room(),used=rm[2];
 /* Framed (the project site's Try-it stage), the host page is told how much
 height the page needs besides the canvas, so it can size the frame to hold the
 console at its full width. */
 if(window.parent!==window&&used!==fitSent){fitSent=used;
 try{window.parent.postMessage({moyChrome:used+1},"*");}catch(e){}}
-var rw=Math.max(32,iw-16);
-var rh=Math.max(32,ih-used-1);
+var rw=rm[0],rh=rm[1];
 // While the soft keyboard is up (#42) the viewport HEIGHT collapses (and the
 // gamepad block still counts against it), which used to shrink the canvas to a
 // stamp -- so size by width alone then; a phone is width-limited anyway.
 var ae=document.activeElement;if(ae&&ae.id==="kbin")rh=1e9;
-var s=Math.min(rw/W,rh/H);
+var s=GLASS.live&&GLASS.n?GLASS.n/(window.devicePixelRatio||1):Math.min(rw/W,rh/H);
 cv.style.width=Math.round(W*s)+"px";cv.style.height=Math.round(H*s)+"px";
 // Below one device pixel a canvas pixel, nearest-neighbour sampling DROPS
 // whole columns and rows: a glyph loses its strokes ("Storybook" read
@@ -393,8 +464,16 @@ for(var i=0;i<n;i++)rgba32[i]=L[src[i]];
 var t1=PT();cx.putImageData(img,0,0);var t2=PT();
 if(t1-t0>PERF.mb)PERF.mb=t1-t0;if(t2-t1>PERF.mu)PERF.mu=t2-t1;
 PERF.sb+=t1-t0;PERF.su+=t2-t1;PERF.sn++;
-if(firstBlit){firstBlit=false;if(window.parent!==window)
+if(firstBlit){firstBlit=false;ldDone();if(window.parent!==window)
 try{window.parent.postMessage({moyLive:true},"*");}catch(e){}}}
+// The loading card's words, and its end: the console live, its first frame
+// or a crash.
+function ldSay(s){var t=document.getElementById("ldt");if(t)t.textContent=s;window.__moyLoading=s;}
+function ldDone(){var l=document.getElementById("ld");if(l)l.remove();}
+function ldPlace(){var l=document.getElementById("ld");if(!l)return;var r=cv.getBoundingClientRect();
+l.style.left=(r.left+r.width/2)+"px";l.style.top=(r.top+r.height/2)+"px";
+l.style.maxWidth=Math.max(120,r.width-16)+"px";requestAnimationFrame(ldPlace);}
+requestAnimationFrame(ldPlace);
 var q=[];function send(e){q.push(e);}
 function xy(cX,cY){var r=cv.getBoundingClientRect();var x=Math.floor((cX-r.left)/r.width*W),
 y=Math.floor((cY-r.top)/r.height*H);return{x:Math.max(0,Math.min(W-1,x)),y:Math.max(0,Math.min(H-1,y))};}
@@ -458,8 +537,19 @@ wb("ba","a");wb("bb","b");
 document.getElementById("bh").addEventListener("pointerdown",function(e){send({type:"super"});e.preventDefault();});
 // Android long-press fires contextmenu even with pointerdown preventDefault'd -- swallow it
 // on the play surfaces (canvas + control bar) only, so desktop right-click elsewhere is normal.
-document.addEventListener("contextmenu",function(e){var t=e.target;
-if(t===cv||(t.closest&&t.closest("#ctl")))e.preventDefault();});
+function onPlay(t){return t===cv||!!(t&&t.closest&&t.closest("#ctl"));}
+document.addEventListener("contextmenu",function(e){if(onPlay(e.target))e.preventDefault();});
+document.addEventListener("selectstart",function(e){if(onPlay(e.target))e.preventDefault();});
+// iOS Safari zooms on a pinch (it ignores user-scalable=no) and on a double
+// tap that touch-action does not always stop: the pinch is refused page-wide,
+// and a second touchend within 350 ms on a play surface is the console's.
+// The keyboard summon (#kb) answers a click, which a refused touchend would
+// swallow, so it keeps its own.
+document.addEventListener("gesturestart",function(e){e.preventDefault();});
+var lastTouch=0;
+document.addEventListener("touchend",function(e){var t=e.target,now=Date.now();
+if(onPlay(t)&&!(t.closest&&t.closest("#kb"))&&now-lastTouch<350&&e.cancelable)e.preventDefault();
+lastTouch=now;},{passive:false});
 var pH={};
 // The desk keyboard: each key goes to the console as its code and the
 // modifiers held with it (runtime/host/moy_input.py's key events), and what a key
@@ -467,11 +557,95 @@ var pH={};
 // the simulator (runtime/run/host_api.py's DESK_KEYS): the arrows and Enter on
 // every surface, the letters only while a game owns the keys. The modifiers
 // go as a level too, so Super acts on its release when nothing came between
-// (the console's tap). On a Mac Cmd is Ctrl.
+// (the console's tap). On a Mac Cmd is Ctrl. A held key's repeats are the
+// browser's own (`rep`), never timed by the console, so a keyup a busy page
+// delivers late repeats nothing. The page keeps the keys it holds (kHeld, by
+// physical key: the code each went down as); when it loses the keyboard (the
+// window's blur, the tab hidden, the canvas's blur) every one goes up, and the
+// modifiers with them (`lost`: Super's release then is no tap), so no key
+// stays held behind a keyup the browser never delivers.
 // Kept for the browser: what it never delivers (Ctrl+W/T/N, Ctrl+Tab and
 // their Shift twins), and what this page leaves to it (reload, the address
 // bar, the developer tools). The console's key from the page is also a tap on
 // the burger button (the `super` event) and Esc during play.
+// THE CONSOLE KEY'S FALLBACK. The OS takes Super before a page sees it
+// (GNOME's overview, Windows' Start; the page gets at most its keydown, then
+// a blur), so a lone Alt tap is the page's Super too, the `super` event: Alt
+// down and up with no other key, button or modifier between, as Super's tap
+// is. No OS acts on a bare Alt, the browser's menu focus on one is the
+// page's to keep (both its events are prevented), and no cart or the
+// Terminal reads Alt alone (theirs are chords); AltGr is "AltGraph", never
+// a tap. The console's hints name it on this page (moy_ui_parts.c's
+// ACT_KEYS). In fullscreen the page also asks for Super and Esc with the
+// Keyboard Lock API (Chromium's, live only in a fullscreen the page asked
+// for, which the system menu's Full screen asks for: F11 is the console's
+// full key): Super then reaches the console whole, Esc the Terminal, and
+// Alt+Tab the console's window walk (`ConsoleInput._alt_tab`) on Windows,
+// ChromeOS and Linux (where Wayland's compositor asks its user first);
+// holding Esc ends the fullscreen. On a Mac Cmd is Ctrl and the OS keeps
+// Cmd+Tab, so there Esc, Alt and Tab. Whether the page is full screen is
+// the console's to know too (its row's words).
+var altTap=false;
+// Full screen, prefixed or not (an iPhone's browsers have only webkit's).
+function fsOn(){var d=document;return d.fullscreenElement||d.webkitFullscreenElement||null;}
+function fsCan(){var e=document.documentElement;return !!(e.requestFullscreen||e.webkitRequestFullscreen);}
+var IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+function fsMark(){var on=IOS&&!!fsOn();
+if(document.documentElement.classList.contains("iosfs")!==on){
+document.documentElement.classList.toggle("iosfs",on);glassSoon();fit();}}
+function kLock(){var k=navigator.keyboard,on=!!fsOn();fsMark();
+send({type:"page",fs:on});if(!k||!k.lock)return;
+var lock=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
+if(on){k.lock(lock).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
+else{k.unlock();window.__moyLocked=0;}}
+document.addEventListener("fullscreenchange",kLock);
+document.addEventListener("webkitfullscreenchange",kLock);
+// Whether the page runs as a home-screen app, and the host it was opened
+// at: the console's Add to Home Screen row and card read them.
+function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
+(matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));}
+send({type:"page",fs:false,canfs:fsCan(),ios:IOS,app:asApp(),
+host:location.hostname});
+// THE ASKS (page_link.py): what the console's rows ask of the browser. A
+// download, Play on the console and going to where the console moved go at once. A browser grants full screen
+// and its file chooser only inside a user's gesture, so those are done at
+// once while the gesture that chose the row is still active
+// (navigator.userActivation), else armed: the console says to tap, and the
+// next pointerup or keydown's handler does it; Esc drops it. An iPhone's or
+// an iPad's Safari opens a file chooser only from inside a tap's own handler,
+// whatever userActivation says, and a touch's pointerup is not one there: it
+// arms every file ask and does it in the next touchend.
+var ASKED=null,PICK=document.getElementById("pick"),PICKED=null;
+function askLive(a){if(IOS&&a.do!=="fullscreen")return false;
+var u=navigator.userActivation;return !u||u.isActive;}
+function asks(list){for(var i=0;i<list.length;i++){var a=list[i];
+if(a.do==="save"){if(WORKER)WORKER.postMessage({t:"export",cart:a.cart});}
+else if(a.do==="pod"){if(WORKER)WORKER.postMessage({t:"pod",cart:a.cart});}
+else if(a.do==="go"){if(/^https?:\/\//.test(a.url||"")){window.__moyWent=a.url;location.assign(a.url);}}
+else if(askLive(a))askDo(a);else askArm(a);}}
+function askArm(a){ASKED=a;window.__moyAsked=a.do;
+send({type:"page",say:[a.do==="fullscreen"?"Tap to go full screen":"Tap to choose a file",
+"Esc: never mind","ok"]});}
+function askDo(a){window.__moyAsked=null;var d=document;
+if(a.do==="fullscreen"){var e=d.documentElement,r;
+if(!a.on){var x=d.exitFullscreen||d.webkitExitFullscreen;
+if(fsOn()&&x){r=x.call(d);if(r&&r.catch)r.catch(function(){});}return;}
+var rq=e.requestFullscreen||e.webkitRequestFullscreen;if(!rq)return;r=rq.call(e);
+if(r&&r.then)r.then(function(){cv.focus();},function(){askArm(a);});else cv.focus();}
+else if(a.do==="open")pickFile(".moy,.zip,.p8,.png,.mp3",pzImport,null);
+else if(a.do==="pick")pickFile("",pkSend,pkCancel);}
+function pickFile(accept,got,none){PICK.accept=accept;PICK.value="";PICKED=[got,none];PICK.click();}
+PICK.addEventListener("change",function(){var p=PICKED;PICKED=null;
+if(p&&PICK.files&&PICK.files[0])p[0](PICK.files[0]);else if(p&&p[1])p[1]();PICK.value="";});
+PICK.addEventListener("cancel",function(){var p=PICKED;PICKED=null;if(p&&p[1])p[1]();});
+function askFire(e){if(!ASKED)return;
+if(IOS&&e.type==="pointerup"&&e.pointerType==="touch"&&ASKED.do!=="fullscreen")return;
+var a=ASKED;ASKED=null;
+if(e.type==="keydown"&&e.key==="Escape"){window.__moyAsked=null;if(a.do==="pick")pkCancel();return;}
+askDo(a);}
+window.addEventListener("pointerup",askFire,true);window.addEventListener("keydown",askFire,true);
+window.addEventListener("touchend",askFire,true);
+cv.addEventListener("pointerdown",function(){altTap=false;});
 var MAC=/Mac|iP(hone|ad|od)/.test(navigator.platform||""),MODK={Control:1,Shift:2,Alt:4,Meta:8,OS:8};
 var KC={Enter:13,Backspace:8,Tab:9,Delete:127,ArrowLeft:272,ArrowRight:273,ArrowUp:274,ArrowDown:275};
 // AltGr (a layout's third level: @ on a German Q) is Ctrl+Alt to a browser,
@@ -483,6 +657,9 @@ if(k in KC)return KC[k];var f=/^F([1-9]|1[0-2])$/.exec(k);return f?256+(+f[1]):n
 function kept(e,c){var l=e.key.toLowerCase();if(c==261||c==268)return true;
 return (e.ctrlKey||e.metaKey)&&(l=="r"||l=="l"||(e.shiftKey&&(l=="i"||l=="j")));}
 cv.addEventListener("keydown",function(e){
+if(e.key=="Alt"){if(!e.repeat)altTap=!(e.ctrlKey||e.shiftKey||e.metaKey);
+send({type:"mods",mods:kmods(e)});e.preventDefault();return;}
+altTap=false;
 if(e.key=="Escape"){
 // The console routes Esc (ConsoleDriver.escape): over a fullscreen game it is
 // the console's key -- the pause menu, the p8-web-player expectation -- since a
@@ -491,10 +668,35 @@ if(e.key=="Escape"){
 send({type:"esc"});e.preventDefault();return;}
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
 var c=kcode(e);if(c===null||kept(e,c))return;
-if(!e.repeat)send({type:"kd",code:c,mods:kmods(e)});e.preventDefault();});
+// Ctrl/Cmd+V is the browser's: its paste event follows with the clipboard's
+// text, or, where none comes, the console's own Paste.
+if((c==118||c==86)&&(kmods(e)&1)&&!e.altKey){if(!e.repeat){pasteOwed=true;
+setTimeout(function(){if(pasteOwed){pasteOwed=false;send({type:"paste"});}},0);}return;}
+if(e.repeat)send({type:"kd",code:c,mods:kmods(e),rep:1});
+else{kHeld[e.code||e.key]=c;send({type:"kd",code:c,mods:kmods(e)});}
+e.preventDefault();});
+// THE CLIPBOARD. A paste over the canvas goes to the console whole (the
+// surface with the keys types it: the Terminal, a field, an editor), the
+// console's clipboard holding it; a copy in the console comes back as the
+// worker's `clip` and goes on the browser's clipboard where the browser
+// lets a page write it (navigator.clipboard).
+var pasteOwed=false,PASTE_MAX=262144;
+document.addEventListener("paste",function(e){var a=document.activeElement;
+if(a&&a!==cv&&a!==document.body)return;
+var t=e.clipboardData?e.clipboardData.getData("text/plain"):"";pasteOwed=false;e.preventDefault();
+send(t?{type:"paste",text:t.slice(0,PASTE_MAX)}:{type:"paste"});});
+function clipOut(t){window.__moyClip=t;
+try{navigator.clipboard.writeText(t).then(function(){window.__moyClipped=t;},function(){});}catch(e){}}
 cv.addEventListener("keyup",function(e){
+if(e.key=="Alt"){var t=altTap;altTap=false;send({type:"mods",mods:kmods(e)});
+if(t)send({type:"super"});e.preventDefault();return;}
 if(e.key in MODK){send({type:"mods",mods:kmods(e)});return;}
-var c=kcode(e);if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});
+var c=kcode(e);delete kHeld[e.code||e.key];if(c!==null)send({type:"ku",code:c,mods:kmods(e)});});
+var kHeld={};
+function kLost(){for(var p in kHeld)send({type:"ku",code:kHeld[p],mods:0});
+kHeld={};altTap=false;send({type:"mods",mods:0,lost:1});}
+window.addEventListener("blur",kLost);cv.addEventListener("blur",kLost);
+document.addEventListener("visibilitychange",function(){if(document.hidden)kLost();});
 // Soft keyboard (#42 Thread 2): #kb (in the bottom bar's middle cluster, beside the burger)
 // focuses the hidden #kbin so a touch device's on-screen keyboard opens; it never appears on
 // desktop (#ctl is media-query hidden there) and #kbin's events are entirely separate from
@@ -554,6 +756,8 @@ function pv(){return[(pH.ArrowRight?1:0)-(pH.ArrowLeft?1:0),(pH.ArrowDown?1:0)-(
 // needed is gone with it.
 function df(f,fb){
 if(f.cart!==assCart){assCart=f.cart;getA().catch(function(){});}
+if(f.w&&(f.w!==W||f.h!==H)){W=f.w;H=f.h;alloc();}
+glassFrame(f);
 // The EFFECTIVE input hint rides every frame (the cart's manifest hint while it
 // owns the keyboard, null on any system surface), so the keyboard summon comes
 // back the moment PLAY exits to the Editor.
@@ -562,10 +766,17 @@ if(JSON.stringify(fi)!==JSON.stringify(INPUT)){INPUT=fi;applyInputHint();}
 if(fb)blit(fb);
 if(f.pcm)audioWanted();
 var t=(window.performance&&performance.now)?performance.now():Date.now();if(HUD.last){var inst=1000/Math.max(1,t-HUD.last);
-HUD.fps=HUD.fps?HUD.fps+(inst-HUD.fps)*0.2:inst;}HUD.last=t;if(HUD.on)drawHud();
+HUD.fps=HUD.fps?HUD.fps+(inst-HUD.fps)*0.2:inst;}HUD.last=t;if(HUD.on&&t-HUD.drawn>=500){HUD.drawn=t;drawHud();}
 if(!ok){ok=true;sEl.textContent="live";sEl.style.color="#00e436";}}
+// Three lines: the page's presented rate, the worker's last report (wperf),
+// and the sound: its sink, whether the page is a secure context (a worklet
+// needs one), and the page sink's calls a second and cost mean/worst.
 function drawHud(){
-HUD.el.innerHTML="fps <b>"+HUD.fps.toFixed(1)+"</b>   "+HUD.kb.toFixed(0)+" KB/f";}
+HUD.el.textContent="page "+HUD.fps.toFixed(1)+" fps  "+HUD.kb.toFixed(0)+" KB/f\n"+HUD.w
++"\nsound "+(AUDIO_OFF?"off":SINK)+(window.isSecureContext?" https":" http")+HUD.pcs;}
+function hudPcm(ms){var p=HUD.pc,t=PT();p.n++;p.ms+=ms;if(ms>p.max)p.max=ms;
+if(!p.t)p.t=t;else if(t-p.t>=2000){HUD.pcs=" "+(p.n*1000/(t-p.t)).toFixed(0)+"/s "
++(p.ms/p.n).toFixed(2)+"/"+p.max.toFixed(1)+" ms";p.n=0;p.ms=0;p.max=0;p.t=t;}}
 window.addEventListener("keydown",function(e){if(e.key==="`"||e.key==="~"){HUD.on=!HUD.on;
 HUD.el.style.display=HUD.on?"block":"none";if(HUD.on)drawHud();e.preventDefault();}});
 document.addEventListener("pointerdown",ensureAudio);

@@ -7,10 +7,11 @@ given: REPEAT_DELAY_MS of level, then one every REPEAT_RATE_MS, a slow frame
 owing every period it spanned. The counts sit beside the frame (`repeats`,
 `steps`, `rep_word`, `key_repeats`) and never in a press edge, a key event
 or `last_key`, so a cart's btn/btnp/key/keyp read what they read without
-them. Every head reaches the same table: the host's keyboard and the
-browser's (one ConsoleDriver, the page forwarding no OS autorepeat), the
-T-Deck's matrix (its typing level, executed here over a fake bus), a BLE
-keyboard's held key.
+them. Every head reaches the same table: the host's keyboard (ConsoleDriver),
+the T-Deck's matrix (its typing level, executed here over a fake bus), a BLE
+keyboard's held key. The browser's keyboard repeats its own keys: its source
+is `own_repeat`, the table times none of them, and each repeat the page
+forwards is one count at the next merge, so a key let go late repeats nothing.
 """
 
 import re
@@ -205,6 +206,33 @@ def test_added_steps_are_this_frames_counts():
     assert t.repeats("up") == 255, "saturated in its byte"
 
 
+def test_an_own_repeat_source_is_owed_nothing_and_its_producer_adds_its_repeats():
+    t, s = _table()
+    assert not s.own_repeat
+    s.own_repeat = True
+    assert s.own_repeat
+    t.begin_frame(1000)
+    s.set_button("down", True)
+    s.typing = ord("j")
+    t.begin_frame(1010)
+    t.begin_frame(1010 + 3 * DELAY)             # held across a long frame
+    assert t.repeats("down") == 0 and t.key_repeats == 0, "the table times none"
+    t.add_steps("down", 1)
+    t.add_key_repeats(ord("j"), 2)
+    assert t.steps("down") == 1 and t.key_repeats == 2 and t.repeat_key == ord("j")
+    t.add_key_repeats(ord("k"), 1)
+    assert (t.key_repeats, t.repeat_key) == (1, ord("k")), "another key's count replaces"
+    t.add_key_repeats(ord("j") | mi.CTRL << mi.MODS_AT, 1)
+    t.add_key_repeats(mi.KEY_LEFT, 1)
+    assert (t.key_repeats, t.repeat_key) == (1, ord("k")), "a chord and an arrow add none"
+    now = 1010 + 3 * DELAY
+    s.own_repeat = False                        # the table's again: the delay starts
+    t.begin_frame(now + 10)
+    assert t.repeats("down") == 0 and t.key_repeats == 0
+    t.begin_frame(now + 10 + DELAY)
+    assert t.repeats("down") == 1 and t.key_repeats == 1
+
+
 def test_board_toml_input_overrides_become_compile_definitions(tmp_path):
     from tools import board_config
     d = tmp_path / "b"
@@ -283,31 +311,48 @@ def _trace(ws, drv, down, up, frames=60):
     return out
 
 
-def test_the_browsers_keyboard_repeats_as_the_hosts(tmp_path):
+def test_the_browsers_keyboard_repeats_only_as_the_browser_does(tmp_path):
+    """The page's driver (own_repeat) times no held key: a key whose up
+    comes over a second late repeats nothing, where the host's keyboard, the
+    table's to repeat, steps and types at the table's rate. Each repeat the
+    browser forwards (`kd` with `rep`) is one count at the next merge, the
+    held button's step and the typed key's, as the table counts its own."""
     host_ws, host = _ws(tmp_path / "h")
-    web_ws, web = _ws(tmp_path / "w")
+    web_ws = host_app.build_workstation(str(tmp_path / "w" / "carts"))
+    web = host_app.ConsoleDriver(web_ws, own_repeat=True)
+    for _ in range(3):
+        web.frame(1 / 30)
 
-    def kd(code):
-        return lambda: (web_input.apply_events(
-            [{"type": "kd", "code": code, "mods": 0}], web.input, web.pointer,
-            on_key_down=web.key_down, on_key_up=web.key_up))
-
-    def ku(code):
+    def send(t, code, rep=False):
+        ev = {"type": t, "code": code, "mods": 0}
+        if rep:
+            ev["rep"] = 1
         return lambda: web_input.apply_events(
-            [{"type": "ku", "code": code, "mods": 0}], web.input, web.pointer,
-            on_key_down=web.key_down, on_key_up=web.key_up)
+            [ev], web.input, web.pointer, on_key_down=web.key_down, on_key_up=web.key_up)
 
-    a = _trace(host_ws, host, lambda: host.key_down(mi.KEY_DOWN),
-               lambda: host.key_up(mi.KEY_DOWN))
-    b = _trace(web_ws, web, kd(mi.KEY_DOWN), ku(mi.KEY_DOWN))
-    assert a == b
-    steps = [s for s, _n, _k in a]
-    assert steps[0] == 1 and sum(steps) > 6, "an arrow held steps at the table's rate"
-    c = _trace(host_ws, host, lambda: host.key_down(ord("j")), lambda: host.key_up(ord("j")))
-    d = _trace(web_ws, web, kd(ord("j")), ku(ord("j")))
-    assert c == d
-    assert sum(n for _s, n, _k in c) > 6 and {k for _s, n, k in c if n} == {ord("j")}
-    assert not any(n for _s, n, _k in c[-8:]), "the key's release ends its repeat"
+    for code in (mi.KEY_DOWN, ord("j")):
+        a = _trace(host_ws, host, lambda: host.key_down(code), lambda: host.key_up(code))
+        b = _trace(web_ws, web, send("kd", code), send("ku", code))
+        assert a[0] == b[0] and sum(s + n for s, n, _k in a[1:]) > 6, a
+        assert not any(s or n for s, n, _k in b[1:]), "a late up repeats nothing: %s" % b
+    send("kd", ord("j"))()
+    web.frame(1 / 30)
+    got = []
+    for f in range(20):
+        if f % 2:
+            send("kd", ord("j"), rep=True)()
+        web.frame(1 / 30)
+        i = web_ws.input
+        got.append((i.key_repeats, i.repeat_key if i.key_repeats else 0))
+    send("ku", ord("j"))()
+    assert got == [(0, 0), (1, ord("j"))] * 10, "one count per browser repeat"
+    send("kd", mi.KEY_DOWN)()
+    web.frame(1 / 30)
+    send("kd", mi.KEY_DOWN, rep=True)()
+    send("kd", mi.KEY_DOWN, rep=True)()
+    web.frame(1 / 30)
+    assert web_ws.input.steps("down") == 2 and web_ws.input.held("down")
+    send("ku", mi.KEY_DOWN)()
 
 
 @pytest.mark.parametrize("code", [mi.KEY_DOWN, mi.KEY_RIGHT])
@@ -343,12 +388,46 @@ def test_a_held_arrow_steps_the_code_caret_at_the_tables_repeat(tmp_path, code):
     assert gaps and all(RATE - 17 <= g <= RATE + 17 for g in gaps), moved
 
 
-def test_the_page_forwards_no_os_autorepeat():
-    """The table repeats on every head alike, so the page sends a key's
-    down once, whatever the OS repeats."""
+def test_the_page_forwards_the_browsers_repeat_to_a_driver_that_times_none():
+    """The browser's repeat is the page's only one: each OS repeat goes as
+    a `kd` with `rep`, to the driver whose keyboard source is own_repeat."""
     page = (ROOT / "firmware" / "web_runner" / "page_core.html").read_text()
-    sends = re.findall(r'[^;]*send\(\{type:"kd"[^;]*', page)
-    assert sends and all("if(!e.repeat)send" in s for s in sends), sends
+    assert 'if(e.repeat)send({type:"kd",code:c,mods:kmods(e),rep:1});' in page
+    boot = (ROOT / "firmware" / "web_runner" / "web_boot.py").read_text()
+    assert "ConsoleDriver(ws, own_repeat=True)" in boot
+
+
+def test_a_page_that_loses_the_keyboard_lets_every_key_go(tmp_path):
+    """The page's keys go up when it loses the keyboard (blur, hidden):
+    what each held lets go, and the modifiers with them, Super's release
+    then no tap."""
+    page = (ROOT / "firmware" / "web_runner" / "page_core.html").read_text()
+    for wired in ('window.addEventListener("blur",kLost)', 'cv.addEventListener("blur",kLost)',
+                  'if(document.hidden)kLost()', 'send({type:"mods",mods:0,lost:1})'):
+        assert wired in page, wired
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    drv = host_app.ConsoleDriver(ws, own_repeat=True)
+    taps = []
+    drv.system_key = lambda: taps.append(1)
+    send = lambda *evs: web_input.apply_events(  # noqa: E731
+        list(evs), drv.input, drv.pointer, on_key_down=drv.key_down,
+        on_key_up=drv.key_up, on_mods=drv.set_mods)
+    send({"type": "kd", "code": mi.KEY_DOWN, "mods": 0},
+         {"type": "kd", "code": ord("j"), "mods": 0},
+         {"type": "mods", "mods": mi.SHIFT})
+    drv.frame(1 / 30)
+    assert drv.input.held("down") and drv.input.source("local").typing
+    send({"type": "ku", "code": mi.KEY_DOWN, "mods": 0}, {"type": "ku", "code": ord("j"), "mods": 0},
+         {"type": "mods", "mods": 0, "lost": 1})
+    drv.frame(1 / 30)
+    assert not drv.input.held("down") and not drv.input.source("local").typing
+    assert drv.input.source("local").mods == 0
+    send({"type": "mods", "mods": mi.SUPER})
+    send({"type": "mods", "mods": 0, "lost": 1})
+    assert taps == [], "Super let go by a lost keyboard is no tap"
+    send({"type": "mods", "mods": mi.SUPER})
+    send({"type": "mods", "mods": 0})
+    assert taps == [1], "...and its own release still is"
 
 
 # -- carts: what they read is what they read -------------------------------------

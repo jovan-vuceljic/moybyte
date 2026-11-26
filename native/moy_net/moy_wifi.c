@@ -9,6 +9,7 @@
 #include "moy_net.h"
 #include "moy_lease.h"
 #include "moy_link.h"
+#include "moy_ota.h"
 
 #if defined(MOY_NET_WIFI) && MOY_NET_WIFI
 
@@ -691,6 +692,7 @@ void moy_wifi_book(uint32_t mask) {
             moy_wifi_on();
         }
     } else if (mask == 0u) {
+        moy_httpc_pool_flush();         // moy_ota.h's THE POOL: no kept connection outlives the leases
         if (s_st.on && !kept_up()) {
             moy_wifi_off();
         }

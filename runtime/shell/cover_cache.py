@@ -1,6 +1,7 @@
 # Map (grep -n a name to jump there):
 #   _CoverImage                a decoded cover in RGB565
 #   _CoverJob                  a resumable decode of one cover
+#   CoverPictures              an app engine's handle on the covers (image.cart)
 #   CoverCache                 the cover and icon caches, budgets and warmers
 #   CoverCache.cover_for       a cart's cover at a reduction
 #   CoverCache.tinted          a cover dimmed, made from its BASE
@@ -177,6 +178,33 @@ class _CoverJob:
         except Exception:  # noqa: BLE001 -- corrupt cover -> no cover
             self.img = None
             self.done = True
+
+
+class CoverPictures:
+    """What an app's picture engine draws a cart's cover from
+    (`image.cart`): this cache's pictures by the cart's store path, and
+    nothing else of the shell (an app's context carries it as `covers`)."""
+
+    def __init__(self, cache):
+        self._cache = cache
+        self._carts = {}         # path -> the cart the cache is asked for
+
+    def picture(self, path, side):
+        """The cart's cover decoded for a card `side` across (its BASE, or
+        its HALF at 64 or less): the picture, None for a cart with none,
+        False while its build is in flight (ask again)."""
+        cart = self._carts.get(path)
+        if cart is None:
+            cart = self._carts[path] = {"path": path}
+        cache = self._cache
+        img = cache.cover_for(cart, BASE if side > SIDE // 2 else HALF)
+        if img is None and not cache.none_for(cart):
+            return False
+        return img
+
+    def gen(self):
+        """Moves whenever what `picture` answers may have."""
+        return self._cache.gen
 
 
 class CoverCache:

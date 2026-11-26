@@ -26,8 +26,11 @@ void moy_ssh_log(int priority, const char *msg);
 void moy_ssh_exit_jump(int code);
 
 // The session channel's command: `cmd` (NULL: the interactive shell), with a
-// terminal (`pty`) or not. Answers 0 and the channel's descriptor, or -1.
-int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t *pid);
+// terminal (`pty`) or not. Answers 0 and the channel's descriptor, or -1
+// with *says what the client is told on its stderr, or NULL where a channel
+// failure is the answer.
+int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t *pid,
+                    const char **says);
 // A command that has finished since the last call: 1 with its id and exit
 // status, 0 when none.
 int moy_ssh_reap(pid_t *pid, int *status);

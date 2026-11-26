@@ -10,7 +10,7 @@
 //   chrome_newer_text(missing): the panels' words (#143)
 //   chrome_strip_band(cw, bar_h,
 //   light), chrome_strip_cell(kind, rect, cs, dy, s|None, across)
-//   chrome_notice(title, sub, ok, until_ms),
+//   chrome_notice(title, sub, icon, until_ms),
 //   chrome_toast_arm(head, name, icon, secret, until_ms),
 //   chrome_note(head, name, icon, until_ms): the banners a run the kernel
 //   drives shows over its frames
@@ -138,7 +138,7 @@ MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(moy_chrome_cell_obj, 6, 6, ch_cell);
 
 static mp_obj_t ch_notice(size_t n, const mp_obj_t *a) {
     (void)n;
-    moy_chrome_notice(s_of(a[0]), s_of(a[1]), mp_obj_is_true(a[2]),
+    moy_chrome_notice(s_of(a[0]), s_of(a[1]), s_of(a[2]),
                       (uint32_t)mp_obj_get_int_truncated(a[3]));
     return mp_const_none;
 }

@@ -10,16 +10,16 @@ $ # reader reads what came before it
 $ l=y; while [ ${#l} -lt 1023 ]; do l=$l$l; done; l=${l%?}
 $ yes() { while :; do echo $l; done; }
 $ yes | head -n 1 | wc -c; echo status=$?
-pipe: stream over 1024 KB; write it to a file
+pipe: no room to hold 4101 KB
 1024
 status=0
 $ yes 2>&1 | wc -c
-pipe: stream over 1024 KB; write it to a file
-1048576
+pipe: no room to hold 4101 KB
+4198400
 $ yes 2>/dev/null | wc -l
-1024
+4100
 $ { yes; echo never; } | grep -c never
-pipe: stream over 1024 KB; write it to a file
+pipe: no room to hold 4101 KB
 0
 $ echo after
 after

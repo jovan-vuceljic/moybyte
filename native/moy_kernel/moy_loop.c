@@ -102,6 +102,7 @@ static struct {
     uint32_t health_loops;
     // counts
     uint32_t up_frame[MOY_UPC_CLASSES], up_last[MOY_UPC_CLASSES], up_total[MOY_UPC_CLASSES];
+    uint32_t svc_total[MOY_SVC_BITS];
     moy_idle_t idle;
     heavy_t *heavy;
     struct {
@@ -441,6 +442,7 @@ void moy_loop_init(const moy_loop_ops_t *ops, int fps_cap) {
     memset(L.up_frame, 0, sizeof(L.up_frame));
     memset(L.up_last, 0, sizeof(L.up_last));
     memset(L.up_total, 0, sizeof(L.up_total));
+    memset(L.svc_total, 0, sizeof(L.svc_total));
     if (!L.inited) {
         moy_devch_init();
         bool can_dim = L.ops->backlight != NULL;
@@ -582,6 +584,10 @@ void moy_loop_upcalls(uint32_t frame[MOY_UPC_CLASSES], uint32_t total[MOY_UPC_CL
             total[i] = L.up_total[i];
         }
     }
+}
+
+void moy_loop_service_counts(uint32_t out[MOY_SVC_BITS]) {
+    memcpy(out, L.svc_total, sizeof(L.svc_total));
 }
 
 uint32_t moy_loop_frame_at(void) {
@@ -973,6 +979,9 @@ int moy_loop_step(void) {
         }
         if (svc) {
             L.once = 0;
+            for (int b = 0; b < MOY_SVC_BITS; b++) {
+                L.svc_total[b] += (svc >> b) & 1u;
+            }
             int r = moy_loop_service(svc);
             if (L.end) {
                 return take_end();

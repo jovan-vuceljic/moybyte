@@ -354,6 +354,7 @@ static const char *files_root(void) {
 
 typedef struct {
     moy_sh_t *s;
+    int absent;
     int argc;
     char **argv;
     int r;
@@ -363,7 +364,7 @@ static void store_role_here(void *arg) {
     store_role_t *c = arg;
     char store[MOY_SH_STORE_PATH];
     snprintf(store, sizeof store, "%s%s", files_root(), moy_sh_board_store(c->s));
-    c->r = moy_sh_store_role(c->s, store, c->argc, c->argv);
+    c->r = moy_sh_store_role(c->s, store, c->absent, c->argc, c->argv);
 }
 
 // -- the role commands served in C ------------------------------------------------
@@ -741,8 +742,11 @@ static int b_role(void *ctx, moy_sh_t *s, int argc, char **argv) {
     }
     int32_t r = door_int("role", n, all);
     b_free(NULL, all);
-    if (r == DOOR_NEEDS_VM) {
-        store_role_t c = { s, argc, argv, MOY_SH_NOT_FOUND };
+    if (r == DOOR_NEEDS_VM || r == DOOR_ABSENT) {
+        // the store's commands in C (moy_sh_board.h, WITH NO VM): with the
+        // VM stopped, or where the door does not serve the command (ABSENT:
+        // on the Zero every one but passwd, device/zero_shell.py)
+        store_role_t c = { s, r == DOOR_ABSENT, argc, argv, MOY_SH_NOT_FOUND };
         moy_sh_hop(s, store_role_here, &c);
         return c.r != MOY_SH_NOT_FOUND ? c.r : code_of(r);
     }
@@ -783,29 +787,28 @@ static void text_release(void *p, size_t n) {
 // What a virtual file's text grows in: the caller frees it with b_free.
 static const moy_htab_mem_t TEXT_MEM = { text_alloc, text_release };
 
-// The log's lines of process `name` (NULL: every one), or of `pid` (>= 0).
-static void log_text(moy_sb_t *t, const char *name, int pid) {
+// The log's lines of process `name` (NULL: every one) written to `fd` a line
+// at a time, so the log takes no more than a line of memory to show.
+static void log_write(moy_sh_t *s, int fd, const char *name) {
     moy_log_cursor_t c = { 0, 0 };
     moy_log_rec_t r;
-    char text[512], head[96];
+    char text[512], line[640];
     while (moy_log_read(&c, &r, text, sizeof text)) {
         const char *who = moy_log_name(r.pid);
-        if ((pid >= 0 && (uint32_t)pid != r.pid) || (name != NULL && strstr(who, name) == NULL)) {
+        if (name != NULL && strstr(who, name) == NULL) {
             continue;
         }
         size_t len = r.len < sizeof text ? r.len : sizeof text;
-        int k = snprintf(head, sizeof head, "%lu.%03lu %s %s/%lu ",
-                         (unsigned long)(r.t_us / 1000000u),
-                         (unsigned long)(r.t_us / 1000u % 1000u), moy_log_level_name(r.level),
-                         who, (unsigned long)r.pid);
         for (size_t i = 0; i < len;) {
             size_t j = i;
             while (j < len && text[j] != '\n') {
                 j++;
             }
-            moy_sb_put(t, head, (size_t)k);
-            moy_sb_put(t, text + i, j - i);
-            moy_sb_put(t, "\n", 1);
+            int k = snprintf(line, sizeof line, "%lu.%03lu %s %s/%lu %.*s\n",
+                             (unsigned long)(r.t_us / 1000000u),
+                             (unsigned long)(r.t_us / 1000u % 1000u), moy_log_level_name(r.level),
+                             who, (unsigned long)r.pid, (int)(j - i), text + i);
+            moy_sh_fd_write(s, fd, line, k < (int)sizeof line ? (size_t)k : sizeof line - 1u);
             i = j + 1;
         }
     }
@@ -1093,12 +1096,7 @@ static void b_sleep(void *ctx, int ms) {
 static int b_log(void *ctx, moy_sh_t *s, int fd, const char *name, int follow) {
     (void)ctx;
     (void)follow;
-    moy_sb_t t = moy_sb_grown(&TEXT_MEM);
-    log_text(&t, name, -1);
-    if (t.p != NULL) {
-        moy_sh_fd_write(s, fd, t.p, t.n);
-        b_free(NULL, t.p);
-    }
+    log_write(s, fd, name);
     return 0;
 }
 
@@ -1568,8 +1566,8 @@ static int serial_app(void *ctx, moy_sh_t *s, int argc, char **argv) {
         return f->app != NULL ? 1 : MOY_SH_NOT_FOUND;
     }
     int status;
-    f->app = moy_sh_app_open(s, MOY_SH_SERIAL_COLS, MOY_SH_SERIAL_ROWS, 1, serial_run, f,
-                             argc, argv, &status);
+    f->app = moy_sh_app_open(s, MOY_SH_SERIAL_COLS, MOY_SH_SERIAL_ROWS, 1, serial_run, NULL,
+                             f, argc, argv, &status);
     return status;
 }
 

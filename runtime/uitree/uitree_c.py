@@ -931,7 +931,8 @@ class CEngine(Engine):
             import uitree_pics
             cv = self.cv
             pics = self.pics = uitree_pics.PicEngine(self, self.files, getattr(cv, "swapped565", False),
-                                                     uitree_pics.budget_for(cv.w, cv.h))
+                                                     uitree_pics.budget_for(cv.w, cv.h),
+                                                     getattr(self, "covers", None))
         if r[8] & 2:
             if wh is None or wh[0] != r[10] or wh[1] != r[11]:
                 wh = self._pic_wh[node] = (r[10], r[11])

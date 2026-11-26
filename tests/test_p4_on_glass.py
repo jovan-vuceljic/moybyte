@@ -681,6 +681,10 @@ def test_the_cart_store_is_the_card_when_one_mounted(board):
     on_glass.cart_store_follows_the_card(board)
 
 
+def test_a_card_transfer_takes_no_memory_of_its_own(board):
+    on_glass.sd_card_io_allocates_nothing(board, on_glass.SD_PSRAM, saves=False)
+
+
 def test_the_web_console_add_on_fits_this_image(board):
     on_glass.web_console_add_on_fits_the_image(board)
 

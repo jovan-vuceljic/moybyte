@@ -86,7 +86,7 @@ One body, three consumers, so the two sides cannot disagree about the wire:
     batch speaks for (`parse_batch`) is the same C's rule.
   * `_skip` -- the ONE predicate for what never crosses the wire
     (moy_store_skip, native/moy_store/moy_fs.c), shared by the pull walker
-    and the push sweep. journal/ + thumbs/ + .bak stay home in BOTH directions: the pull
+    and the push sweep. journal/ + thumbs/ + the store's backups stay home in BOTH directions: the pull
     decision (2026-08-22, "the browser gets carts, not their history") and
     its mirror -- a pushed journal line could only replay browser-era ops
     onto a board that has its own log. `skip_keep_journal` is the SITE-MODE
@@ -266,26 +266,6 @@ def b64(data):
     return out.strip()
 
 
-# What never crosses the wire, in either direction. journal/ is the durable
-# undo history (each side keeps its own); thumbs/ is a regenerable per-size
-# cache; .bak/.tmp are moy_fs's crash-safety artifacts (and .tmp is also this
-# module's own chunk-assembly staging, which a sweep must never re-ship).
-SKIP_DIRS = ("thumbs", "__pycache__", "journal")
-SKIP_FILES = ("journal.jsonl",)
-SKIP_SUFFIXES = (".bak", ".tmp")
-
-
-# The SITE-MODE store's skip list: the same rule minus the journal. In mode 1
-# the browser's OPFS is the store of record, so its undo history has to travel
-# with it or die at the next reload -- which is #193's "with its undo history",
-# and the whole of what the relaxation buys. thumbs/ stays out (a regenerable
-# per-size cache), and .bak/.tmp stay out because they are moy_fs's crash-safety
-# artifacts and this module's own chunk staging: re-shipping a .tmp would hand
-# the store a half-written file under a name the next sweep would then re-read.
-SITE_SKIP_DIRS = ("thumbs", "__pycache__")
-SITE_SKIP_FILES = ()
-
-
 # The predicate is the store's (moy_pack.c's moy_store_skip, which the
 # archive takes too).
 from moy_store import skip as _native_skip
@@ -304,12 +284,7 @@ def skip_keep_journal(name):
     watcher built the batch. What this changes is only which files a browser
     sweeps out of its own VFS and into its own OPFS.
     """
-    if name in SITE_SKIP_DIRS or name in SITE_SKIP_FILES:
-        return True
-    for suf in SKIP_SUFFIXES:
-        if name.endswith(suf):
-            return True
-    return False
+    return _native_skip(name, True)
 
 
 # ---------------------------------------------------------------------------
@@ -1001,7 +976,9 @@ def merge_system(rows, text, carts_root):
 class SystemReceiver:
     """A board's apply for system batches (the C parks them for the VM): a
     `system/settings` goes through `merge_system`, a document sent in parts is held here until its
-    `pub` (a part 0 starts it again). A delete, a binary op and any other file
+    `pub` (a part 0 starts it again), from one batch to the next and no
+    longer: the parts of a document the batch in hand does not go on with
+    are dropped, so a page that left mid-document leaves nothing held. A delete, a binary op and any other file
     are refused: a page cannot take a console's documents away."""
 
     def __init__(self):
@@ -1012,12 +989,17 @@ class SystemReceiver:
         applied = 0
         errors = []
         changed = []
+        going = []
         for i, op in enumerate(ops if isinstance(ops, list) else ()):
             why = self._one(op, rows, carts_root, changed)
             if why is None:
                 applied += 1
+                if isinstance(op, dict) and "part" in op:
+                    going.append(op.get("p"))
             elif len(errors) < 8:
                 errors.append((i, why))
+        for p in [p for p in self._parts if p not in going]:
+            del self._parts[p]
         return applied, errors, changed
 
     def _one(self, op, rows, carts_root, changed):

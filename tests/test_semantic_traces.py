@@ -1763,7 +1763,7 @@ print("DRIVER_DONE")
 LINKS_TRACE = """\
 parse 9 carts
 apply 7 5:bad path,6:bad path 1
-rows hop.moy/big.lua=10 hop.moy/main.py=24 hop.moy/main.py.bak=46 hop.moy/manifest.json=16 hop.moy/manifest.json.bak=38
+rows hop.moy/.main.py.moybak=46 hop.moy/.manifest.json.moybak=38 hop.moy/big.lua=10 hop.moy/main.py=24 hop.moy/manifest.json=16
 refuse (None, None) (None, None) (None, None)
 files files 1
 boot ota_1 ota_1 ('ok', '0.8 -> 0.9')
@@ -2547,7 +2547,7 @@ locked False False
 find None local.trace_cart.moy Trace Cart
 free True
 engine tuple True None 2
-choices custom dark classic None True
+choices custom dark None None True
 change 0 0
 changed custom grey flat
 chrome True

@@ -12,8 +12,11 @@ One store per boot, chosen before anything is written: the card when it
 mounts, the internal flash when it does not. A card that is absent, will not
 construct, has a filesystem the build cannot read, or mounts but cannot be
 seeded all end the same way -- one line on the serial port saying which, and
-the console boots on the internal store. Nothing here formats, erases or
-writes to a card; the only writes are the store's own.
+the console boots on the internal store. A card that mounts but whose store
+fails, and one whose filesystem this build cannot read, are also said on the
+desk (the boot's `card_trouble`, `Notices.card_trouble`); an empty slot is
+not. Nothing here formats, erases or writes to a card; the only writes are
+the store's own.
 """
 
 SD_MOUNT = "/sd"
@@ -22,18 +25,22 @@ SD_MOUNT = "/sd"
 # host attaches, so its printed line can be dropped unheard.
 #   py __import__("card_store").STATUS
 STATUS = "not attempted"
+# Why the last mount failed, in `_why`'s words ("" when it did not).
+WHY = ""
+NO_FILESYSTEM = "card has no filesystem this build reads"
 
 
 def mount(make_card, mount_point=SD_MOUNT, tag="SD", say=print):
     """Mount the card `make_card()` returns at `mount_point`. True when it is
     mounted; False, with the reason in STATUS and on `say`, when it is not."""
-    global STATUS
+    global STATUS, WHY
+    WHY = ""
     try:
         card = make_card()
     except Exception as exc:  # noqa: BLE001 -- no slot, no card, a dead bus
         STATUS = "no card interface: %r" % (exc,)
-        say("%s: %s (%r) -- carts on internal flash"
-            % (tag, _why(exc, "no card interface"), exc))
+        WHY = _why(exc, "no card interface")
+        say("%s: %s (%r) -- carts on internal flash" % (tag, WHY, exc))
         return False
     try:
         _vfs_mount(card, mount_point)
@@ -45,7 +52,8 @@ def mount(make_card, mount_point=SD_MOUNT, tag="SD", say=print):
             card.deinit()
         except Exception:  # noqa: BLE001
             pass
-        say("%s: %s (%r) -- carts on internal flash" % (tag, _why(exc), exc))
+        WHY = _why(exc)
+        say("%s: %s (%r) -- carts on internal flash" % (tag, WHY, exc))
         return False
     STATUS = "mounted"
     say("%s: card mounted at %s" % (tag, mount_point))
@@ -62,7 +70,7 @@ def _why(exc, otherwise="card unreadable"):
     if code == 16 or (isinstance(code, str) and "card_init" in code):
         return "no card answered"
     if code == 19:
-        return "card has no filesystem this build reads"
+        return NO_FILESYSTEM
     return otherwise
 
 
@@ -79,11 +87,17 @@ def carts_loader(make_card, seed_carts, card_root, flash_root, ota_dir,
     """A `build_desktop(load_carts=...)` hook: the cart store on the card when
     it mounts, on `flash_root` when it does not or cannot be seeded.
 
+    A card whose filesystem this build cannot read is the boot's
+    `card_trouble` "format"; one that mounts and whose store then fails,
+    `load_carts`' "errors".
+
     The OTA directory stays on the internal flash either way: it holds a
     copied image and a pending marker, which belong to the device, not to a
     card that can be pulled out."""
     def _load(boot, store):
         ok = mount(make_card, mount_point, tag, say=boot.say)
+        if WHY == NO_FILESYSTEM:
+            boot.card_trouble = "format"
         carts, root = boot.load_carts(
             store, seed_carts,
             root=card_root if ok else flash_root,

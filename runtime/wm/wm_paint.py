@@ -28,7 +28,7 @@ no state of its own: the windows, stamps and rings it reads are the WM's,
 made in `WindowedWM.__init__`.
 """
 
-from wm import FullscreenStackWM, _VIEWPORT_BEZEL
+from wm import FullscreenStackWM, bezel
 from wm_parts import _Win, _overlap, _grow, _set_rect, MODE_MARK, _SHOWN
 from wm_chrome import _SHADOW
 from widgets import _Blit, _ticks_ms
@@ -598,9 +598,15 @@ class WindowPaint:
             self._bezel_key = bkey
             self._bezel_paints = 0
         self._bezel_frame = drawn
+        ws = self.ws
+        if ws.sysmenu.open or ws.pause.open or ws.confirm.open or ws.about \
+                or self.popover_takes_keys():
+            # A card over the game washes the frame each frame: the bezel is
+            # painted under it each frame, or the wash compounds on it.
+            self._bezel_paints = 0
         if self._bezel_paints < self.retained_n():
             self._bezel_paints += 1
-            sc.cls(_VIEWPORT_BEZEL)    # letterbox fill
+            sc.cls(bezel(self.ws))    # letterbox fill
 
     # -- what a frame keys its retained pixels on ------------------------------
 

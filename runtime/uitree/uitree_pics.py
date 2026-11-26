@@ -12,6 +12,13 @@ once. The cache keeps decoded pixels under `budget` bytes, the least
 recently drawn let go first ("redraw on exposure": it is owed again the
 next time a card shows it).
 
+A cart's cover (`image.cart(path)`) is the shell's cover cache's
+(`covers`, runtime/shell/cover_cache.py's CoverPictures): the engine neither decodes nor
+copies it, and counts none of it in its budget. It holds the cache's
+picture and draws its pixels while the cache keeps them; one the cache let
+go (its pixels None) is asked for again, and a build still in flight stays
+owed, a slice of it each idle step.
+
 What this host layer cannot show: a decode off the frame's thread (here it
 is the frame's own time), a cache shared across apps, and a budget the
 engine sets per board.
@@ -44,8 +51,12 @@ def _let_go(got):
 
 
 class PicEngine:
-    def __init__(self, app, files, swapped, budget):
+    def __init__(self, app, files, swapped, budget, covers=None):
         self.app, self.files, self.swapped, self.budget = app, files, swapped, budget
+        self.covers = covers                       # the cover cache's pictures, for image.cart
+        self.carts = {}                            # (pic, w, h) -> ("cart", the cache's picture, 0)
+        self.cart_none = {}                        # a cart pic -> the cache's gen when it had no cover
+        self.cart_gen = {}                         # a cart pic -> the pictures taken for it
         self.cache = collections.OrderedDict()     # (pic, w, h) -> (draw kind, pixels, bytes)
         self.used = 0
         self.failed = {}                           # (pic, gen) -> why
@@ -62,6 +73,13 @@ class PicEngine:
     def peek(self, pic, w, h):
         k = (pic, w, h)
         self.seen.add(k)
+        if pic.kind == "cart":
+            got = self.carts.get(k)
+            if got is not None and got[1].pix is not None:
+                return got
+            if self.cart_none.get(pic) != self._covers_gen() and k not in self.owed:
+                self.owed.append(k)
+            return None
         got = self.cache.get(k)
         if got is not None:
             self.cache[k] = self.cache.pop(k)       # the most recent last
@@ -74,6 +92,11 @@ class PicEngine:
         """none, loading, failed or shown: what the card shows."""
         if pic is None:
             return "none"
+        if pic.kind == "cart":
+            got = self.carts.get((pic, w, h))
+            if got is not None and got[1].pix is not None:
+                return "shown"
+            return "failed" if self.cart_none.get(pic) == self._covers_gen() else "loading"
         if (pic, w, h) in self.cache:
             return "shown"
         if (pic, self.gen_of(pic)) in self.failed:
@@ -95,7 +118,11 @@ class PicEngine:
         """A picture held (`peek`'s) over (x, y, w, h); a cover's corners
         rounded to `r` (the theme's stepped corners where it steps them)."""
         kind, pix, _n = got
-        if kind == "cover":
+        if kind == "cart":
+            if pix.pix is not None:
+                cv.cover(pix.pix, pix.w, 0, 0, pix.w, pix.h, x, y, w, h, r,
+                         bool(r) and bool(_ui_draw.depth()[4]))
+        elif kind == "cover":
             side = pix[0]
             cv.cover(pix[1], side, 0, 0, side, side, x, y, w, h, r,
                      bool(r) and bool(_ui_draw.depth()[4]))
@@ -128,6 +155,8 @@ class PicEngine:
             return False
         pic, w, h = k = owed[0]
         self.owed.remove(k)
+        if pic.kind == "cart":
+            return self._cart_step(k)
         try:
             got = self._decode(pic, w, h)
         except MemoryError:
@@ -180,9 +209,33 @@ class PicEngine:
             held = True
         return held
 
+    def _covers_gen(self):
+        return self.covers.gen() if self.covers is not None else 0
+
+    def _cart_step(self, k):
+        """A slice of cart cover `k`'s build in the cover cache: True once
+        it holds the picture, which the page draws again to show; a build
+        still in flight stays owed, and a cart with none is not asked again
+        until the cache changes."""
+        pic, w, h = k
+        img = self.covers.picture(pic.key, max(w, h)) if self.covers is not None else None
+        if img:
+            self.carts[k] = ("cart", img, 0)
+            self.cart_gen[pic] = self.cart_gen.get(pic, 0) + 1
+            return True
+        if img is None:
+            self.cart_none[pic] = self._covers_gen()     # asked again once the cache changes
+            self.stats["failed"] += 1
+            _tr(self.app, "%r has no cover" % (pic,))
+            return False                                # its card shows its icon as it did
+        self.owed.append(k)
+        return False
+
     def gen_of(self, pic):
         """What moves with the picture's pixels: an app's own picture's puts,
-        a store file's changes."""
+        a store file's changes, a cart cover's pictures taken from the cache."""
+        if pic.kind == "cart":
+            return self.cart_gen.get(pic, 0)
         if pic.kind == "own":
             return S.pictures.gen_of(self.app, pic.key)
         return S.pictures.store_gen.get(pic.key, 0)

@@ -14,9 +14,10 @@ What it holds: an address typed by hand is normalised, a bad one refused,
 one the list has updated rather than added twice, and a console nobody
 reached says so with its address to open by hand; the setup by cable names
 the console, joins it, saves it under the board's id over the entry its
-address already had, asks for the console's password, and opening it hands
-the password over the link: the board takes it by its claim, the console
-pairs and signs in, and the list shows it reached and the pack it named.
+address already had, asks for the console's password, names its terminal
+(ssh, with that password), and opening it hands the password over the link:
+the board takes it by its claim, the console pairs and signs in, and the
+list shows it reached and the pack it named.
 A join the board refuses opens the setup's "Board log" on the board's own
 lines, which never show the Wi-Fi password.
 
@@ -188,6 +189,7 @@ def test_my_consoles_sets_a_board_up_by_cable_and_adds_one_by_hand(tmp_path):
             _js("SAVED", kept),
             _js("ASKED", "window.__improv"),
             _js("PWSTORED", "JSON.stringify(localStorage).includes(%s)" % json.dumps(PASSWORD)),
+            _js("SSH", "document.querySelector('#setup .ssh').textContent"),
             {"note": "opened, the console takes its first password over the link and signs in"},
             {"press": "#setup button"},
             {"tab": board},
@@ -214,6 +216,7 @@ def test_my_consoles_sets_a_board_up_by_cable_and_adds_one_by_hand(tmp_path):
         assert _tagged(js, "ASKED")[:2] == [2, 3] and 6 in _tagged(js, "ASKED") \
             and _tagged(js, "ASKED")[-1] == 1, tail
         assert _tagged(js, "PWSTORED") is False, "the password reached the site's storage"
+        assert _tagged(js, "SSH").startswith("Its terminal: ssh %s, with that password" % addr), tail
         assert (host.tree / "sd" / "moybyte" / "system" / "password").read_text().startswith("$moy2$"), tail
         reached = _tagged(js, "REACHED")
         assert reached.startswith("reached ") and body.hex()[:12] in reached, tail

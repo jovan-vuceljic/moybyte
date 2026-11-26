@@ -313,6 +313,21 @@ class _Pick:
 # -- ws.cart_board: the carts a board that answers /official installs ----------
 
 POLL_MS = 400                   # how often a request in hand asks where it stands
+# ...where the board's live socket says when its answer changed (its hints,
+# native/moy_net/moy_live.c): asked on the hint, and this often at most
+# without one, in case one was lost with a socket.
+PUSHED_POLL_MS = 5000
+_PUSH = {"on": False, "hints": 0}
+
+
+def pushed(on):
+    """Whether the page's live socket brings the board's hints."""
+    _PUSH["on"] = bool(on)
+
+
+def hint():
+    """The board said its /official answer changed: a request in hand asks now."""
+    _PUSH["hints"] += 1
 POLL_LOST = 25                  # unanswered asks in a row before the board is lost
 LOST = "The console isn't answering."
 
@@ -335,6 +350,13 @@ class BoardCarts:
         self.link = link
         self.root = root
         self.locked = False             # the board has a password: its last check said
+        self.room = None                # (bytes, block) free in its store: its last check said
+
+    def free(self):
+        """The board's store's free space as its last check said, (bytes,
+        block), else None: what About shows on a page whose carts are the
+        board's."""
+        return tuple(self.room) if self.room else None
 
     def check(self):
         """The carts of the shelves this console reads (`BoardCheck`): the
@@ -539,6 +561,7 @@ class BoardCheck:
         if not self._found and self._unreached:
             return self._end(_ci.UNREACHABLE)
         sh = self._shelves
+        self.board.room = sh.get("free") or self.board.room
         self.doc = {"carts": self._found, "free": sh.get("free"),
                     "unreached": self._unreached, "locked": sh.get("locked") is True}
         self._found = None
@@ -608,6 +631,8 @@ class BoardAsk:
         self.finished = False
         self.dropping = False
         self._at = None
+        self._hints = _PUSH["hints"]
+        self._was_post = False
         self._lost = 0
         self._refold = None
         self._refused = None
@@ -687,15 +712,20 @@ class BoardAsk:
             return self._end(kept)
         a = self._answer
         if a is None:
-            if self._at is not None and _ticks_diff(_ticks_ms(), self._at) < POLL_MS:
-                return True
+            if self._at is not None:
+                # a POST's answer is followed by a GET on the clock: what it
+                # asked may have changed the board's answer at once
+                gap = PUSHED_POLL_MS if _PUSH["on"] and not self._was_post else POLL_MS
+                if _ticks_diff(_ticks_ms(), self._at) < gap and self._hints == _PUSH["hints"]:
+                    return True
+            self._hints = _PUSH["hints"]
             self._answer = self.board.ask()
             self._posting = False
             return True
         if not (a.ended or a.error is not None):
             return True
         self._answer = None
-        posted = self._posting
+        posted = self._was_post = self._posting
         status, doc = _read_answer(a)
         self._at = _ticks_ms()
         if self.dropping and posted:

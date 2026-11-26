@@ -171,11 +171,11 @@ def test_paths_from_the_network_are_shape_checked(tmp_path):
 
 
 def test_the_skip_set_is_refused_as_a_path_too(tmp_path):
-    """A client asking to write journal/, a .bak or a .tmp is malformed by
+    """A client asking to write journal/, a store backup or a .tmp is malformed by
     definition -- those never cross the wire in either direction, and .tmp is
     also the receiver's own chunk staging."""
     for bad in ("hop.moy/journal/journal.jsonl", "hop.moy/journal.jsonl",
-                "hop.moy/main.py.bak", "hop.moy/main.py.tmp",
+                "hop.moy/.main.py.moybak", "hop.moy/main.py.tmp",
                 "hop.moy/thumbs/wp.mct"):
         assert _refused(tmp_path, bad), bad
 
@@ -327,7 +327,7 @@ def test_watcher_skips_what_never_crosses(tmp_path):
     w = StoreWatcher(str(root))
     (root / "hop.moy" / "journal").mkdir()
     (root / "hop.moy" / "journal" / "journal.jsonl").write_text("{}\n")
-    (root / "hop.moy" / "main.py.bak").write_text("old")
+    (root / "hop.moy" / ".main.py.moybak").write_text("old")
     (root / "loose.txt").write_text("top-level system state")
     w.sweep()
     assert w.take() is None
@@ -349,7 +349,7 @@ def test_a_site_mode_watcher_sweeps_the_journal_and_a_board_one_never_does(
     (root / "hop.moy" / "journal" / "journal.jsonl").write_text('{"seq": 1}\n')
     (root / "hop.moy" / "journal" / "s").mkdir()
     (root / "hop.moy" / "journal" / "s" / "0001-main.py").write_text("x = 1\n")
-    (root / "hop.moy" / "main.py.bak").write_text("crash-safety leftovers")
+    (root / "hop.moy" / ".main.py.moybak").write_text("crash-safety leftovers")
     (root / "hop.moy" / "thumbs").mkdir()
     (root / "hop.moy" / "thumbs" / "wp1x1.mct").write_text("cache")
 
@@ -367,7 +367,7 @@ def test_a_site_mode_watcher_sweeps_the_journal_and_a_board_one_never_does(
     assert "hop.moy/journal/journal.jsonl" in paths
     # ...and only the journal was let through: the crash-safety artifacts and
     # the regenerable cache stay home in BOTH modes.
-    assert not any(x.endswith(".bak") or "/thumbs/" in x for x in paths), paths
+    assert not any(x.endswith(".moybak") or "/thumbs/" in x for x in paths), paths
 
 
 def test_the_receiver_journals_a_push_and_only_when_asked(tmp_path):
@@ -668,7 +668,7 @@ def test_the_files_watcher_stamps_the_rooted_protocol(tmp_path):
 
 def test_a_markdown_document_crosses_the_wire_both_ways(tmp_path):
     """Documents are plain `.md` (2026-09-07). The wire has no extension table
-    -- `_skip` refuses `.bak`/`.tmp` and the kind allowlist does the rest -- so
+    -- `_skip` refuses the store's backups and `.tmp` and the kind allowlist does the rest -- so
     the file the board holds is the file the browser gets, byte for byte."""
     root = _files_store(tmp_path)
     applied, errors, shelf = apply_ops(
@@ -814,7 +814,7 @@ def _console_dir(tmp_path):
     (top / "shared.moygfx").write_bytes(bytes(range(40)))
     (top / "wifi.json").write_text('[{"ssid": "Home", "pw": "secret"}]')
     (top / "installed.json").write_text("{}")
-    (top / "system" / "settings.bak").write_text("x")
+    (top / "system" / ".settings.moybak").write_text("x")
     (top / "system" / "sources").write_text("https://x/index.json\n")
     return top
 
@@ -844,7 +844,7 @@ def test_the_system_watcher_carries_its_named_files_and_nothing_else(tmp_path):
     w = _system_watcher(top)
     assert set(w._snap) == {"system/settings", "shared.moygfx"}
     assert not w.sweep(), "the store as seeded has nothing to tell"
-    for name in ("wifi.json", "installed.json", "system.json", "system/settings.bak",
+    for name in ("wifi.json", "installed.json", "system.json", "system/.settings.moybak",
                  "system/sources", "achievements.json"):
         p = top / name
         p.write_text('{"changed": true}')

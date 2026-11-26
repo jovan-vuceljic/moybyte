@@ -54,7 +54,9 @@ later sync their files.
   `moybyte_web-<digest>.moy.zip` beside the payload, listed in the board's
   signed carts index (`tools/web_pack.py`): the stable release's every one,
   the beta's those of the last 30 days like the pack store (§12), within
-  the index's budget. The beta deletes an add-on no index lists once it is
+  the index's budget. A board whose console is online (the C3) installs no
+  add-on, so its index lists none (`web_pack.console_online`) and its
+  release carries the cart for the pack store alone. The beta deletes an add-on no index lists once it is
   older than that (`publish_firmware_release.prune_carts`). A board installs the one that
   fits through the ordinary install, every file checked against the signed
   index (`runtime/carts/web_addon.py`'s `AddonStep`; on a Zero
@@ -283,13 +285,14 @@ with `Access-Control-Allow-Origin: *`, which is all the loader needs, and
 `max-age=600`, which costs nothing, because the loader keeps a pack under
 its digest and asks for it only when its cache has none. Every `dev` and
 `master` push publishes, in the same Pages deploy as the project site,
-every pack named by an add-on in the two rolling releases' indexes, taken
-from the same assets the boards install from (`pages.yml`, "Assemble My
-consoles and the console's packs"). `tools/pack_store.py` is the store:
-`fetch` takes a release's indexes and add-on carts, `build` writes
-`console/<body digest>.pack`, keeping every pack of the stable release's
-and the beta's of the last 30 days (§12), each checked against its index
-entry and its digest, and `check` asks a host for every digest the indexes
+the pack of every add-on cart on the two rolling releases, the assets the
+boards install from, read by their names, since the C3's index names none
+(`pages.yml`, "Assemble My consoles and the console's packs").
+`tools/pack_store.py` is the store: `fetch` takes a release's indexes and
+add-on carts, `build` writes `console/<body digest>.pack`, keeping every
+pack of the stable release's and the beta's of the last 30 days (§12), each
+checked against its name's digest, and its index entry where an index names
+it, and `check` asks a host for every digest the indexes
 name, as a board's origin, and reads the pack back. `tools/os_site.py
 build` runs that `build` and puts My consoles beside the packs, so the
 mirror the images name is My consoles' own folder.

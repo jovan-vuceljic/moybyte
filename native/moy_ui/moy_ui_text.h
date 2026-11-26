@@ -45,10 +45,13 @@
 // The tones a run draws in: a syntax class's, or an SGR colour's. An SGR
 // run's tone carries more above its low byte (MOY_UI_TONE_*): an ink that is
 // a base colour exactly (38;2's nearest) and a ground (48;2's), each that
-// colour's MOY64 index plus one, 0 for none.
+// colour's MOY64 index plus one, 0 for none; and reverse video (7), where
+// the ink fills the run's cells and its text takes the ground (the view's
+// own where the run has none).
 #define MOY_UI_TONE_OF(t) ((t) & 0xFF)
 #define MOY_UI_TONE_INK(t) (((t) >> 8) & 0x1F)
 #define MOY_UI_TONE_GROUND(t) (((t) >> 16) & 0x1F)
+#define MOY_UI_TONE_REV (1 << 24)
 enum {
     MOY_UI_TT_TEXT = 0, MOY_UI_TT_KEYWORD, MOY_UI_TT_STRING, MOY_UI_TT_NUMBER,
     MOY_UI_TT_COMMENT, MOY_UI_TT_BUILTIN, MOY_UI_TT_VALUE, MOY_UI_TT_DANGER,

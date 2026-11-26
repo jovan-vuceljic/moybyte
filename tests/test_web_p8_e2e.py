@@ -67,14 +67,14 @@ def _serve(port):
     pytest.fail("serve.py never answered")
 
 
-def _run(base, profile, outdir, drop):
-    """One browsershot run of the p8 drop scenario -> (stdout, [js results])."""
+def _run(base, profile, outdir, drop, scenario="p8_import"):
+    """One browsershot run of a p8 drop scenario -> (stdout, [js results])."""
     env = dict(os.environ, MOY_BASE=base, MOY_PROFILE=str(profile),
                MOY_DROP=str(drop))
     r = subprocess.run(
-        ["node", "browsershot.mjs", "scenarios/p8_import.json", str(outdir)],
+        ["node", "browsershot.mjs", "scenarios/%s.json" % scenario, str(outdir)],
         cwd=RUNNER, env=env, capture_output=True, text=True, timeout=300)
-    assert r.returncode == 0, "browsershot p8_import failed:\n%s\n%s" % (
+    assert r.returncode == 0, "browsershot %s failed:\n%s\n%s" % (scenario,
         r.stdout[-4000:], r.stderr[-500:])
     js = re.findall(r"js -> (.*)$", r.stdout, re.M)
     return r.stdout, [j.strip().strip('"') for j in js]
@@ -95,9 +95,9 @@ def _pink(step):
 
 def _check(out, js, form):
     """The same assertions for both cart forms -- they are one feature."""
-    assert len(js) >= 11, "not enough js steps:\n%s" % out[-3000:]
-    (mode, pink_before, sent, imported, report, panel, playing, pink_after,
-     edit_btn, _clicked, edited) = js[:11]
+    assert len(js) >= 12, "not enough js steps:\n%s" % out[-3000:]
+    (mode, pink_before, sent, imported, report, panel, card, _focused, playing, pink_after,
+     _edit, edited) = js[:12]
     assert "saved in this browser" in mode, \
         "%s: a static host must land in site mode, said %r" % (form, mode)
     assert sent.endswith(form), sent
@@ -120,9 +120,8 @@ def _check(out, js, form):
     # was still broken (cfe89bf).
     assert "approximated: cartdata()/dget()/dset()" in report, \
         "%s: the report must name the gap this cart reaches: %r" % (form, report)
-    assert panel.startswith("block|"), \
-        "%s: the report card never showed: %r" % (form, panel)
-    assert panel.endswith("|"), "a successful import must not paint as an error"
+    assert panel.startswith("offer|"), \
+        "%s: the console's report card never showed, or showed as an error: %r" % (form, panel)
 
     # 3. IT RUNS -- the console's own assets payload names the cart playing...
     assert playing.startswith("tiny dash "), \
@@ -139,17 +138,17 @@ def _check(out, js, form):
         "nothing, which is what a stub, a dead shim or an unwired lifecycle "
         "all look like.\n%s" % (form, before, after, out[-3000:]))
 
-    # 4. ...and OPEN IN EDITOR lands in the editor, on the imported cart.
-    assert edit_btn.endswith("|open in editor"), edit_btn
+    # 4. ...and the cart opens in the Editor, on the imported cart.
+    assert card == "offer", card
     assert edited.startswith("editing tiny dash"), \
-        "%s: open-in-editor did not open: %r\n%s" % (form, edited, out[-3000:])
+        "%s: the Editor did not open: %r\n%s" % (form, edited, out[-3000:])
     assert "(menu/" in edited, \
         "%s: the editor screen is not up: %r" % (form, edited)
 
     # 5. ...on the imported cart's OWN assets, in the asset tabs -- #194's
     #    done-when names Sprites / Map / Music by name, and an editor that
     #    opened on the code alone would satisfy every check above.
-    sprites, music = js[12], js[14]
+    sprites, music = js[13], js[15]
     assert sprites == "editing tiny dash (menu/paint)", sprites
     assert music == "editing tiny dash (menu/music)", music
 
@@ -189,11 +188,54 @@ def test_a_file_that_is_not_a_cart_is_reported_not_crashed(tmp_path):
         imported, report, panel = js[3], js[4], js[5]
         assert "could not import" in imported, imported
         assert "no PICO-8 sections" in report, report
-        assert panel == "block|bad", \
-            "a refused import must paint as an error: %r" % panel
+        assert panel.startswith("tell|"), \
+            "a refused import must be the console's card with OK alone: %r" % panel
         # ...and the console is still alive: the shelf still answers.
         assert "moybyte.star_catcher.moy" in js[-1] or js[-1], js[-1]
         assert "console crash" not in out, out[-2000:]
     finally:
         server.terminate()
         server.wait(timeout=10)
+
+
+def test_the_console_draws_and_says_the_stage_while_a_cart_converts(tmp_path):
+    """A conversion takes seconds (an iPhone's, minutes), and it runs in a VM
+    of its own (worker.js, THE CONVERTER): the console's worker answers and
+    draws all through it, and its notice says the stage and the seconds so
+    far on a busy tile, then makes way for the report card. Before, the
+    console's thread converted and the first question asked during it
+    waited for the end."""
+    import json
+    import p8_fixture
+    web_e2e.require("store", "p8")
+    drop = tmp_path / "heavy_dash.p8"
+    drop.write_text(p8_fixture.heavy_p8_text(150), encoding="utf-8")
+    port = web_e2e.free_port()
+    server, base = _serve(port)
+    try:
+        out, js = _run(base, tmp_path / "chrome", tmp_path / "s", drop, "p8_progress")
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+    assert len(js) >= 6, out[-3000:]
+    _mode, sent, took, samples, after, card = js[:6]
+    assert sent == "heavy_dash.p8", sent
+    assert "imported local.heavy_dash.moy" in took, took
+    during = [s for s in json.loads(samples.replace('\\"', '"')) if not s[4]]
+    assert len(during) >= 4, ("the conversion was too quick to watch", took, samples)
+    slow = [s for s in during if s[1] > 1000]
+    assert not slow, ("the console's worker stopped answering while the cart "
+                      "converted", slow)
+    assert during[-1][2] > during[0][2], ("the console drew nothing while the "
+                                          "cart converted", during)
+    said = [s[3] for s in during]
+    assert all(n.startswith("Importing heavy_dash.p8 / ") for n in said), said
+    assert {s[5] for s in during} == {"busy"}, ("its tile is not work going on", during)
+    stages = {n.split(" / ", 1)[1].split(" (")[0] for n in said}
+    assert stages & {"Checking what it uses", "Writing the cart"}, said
+    assert any(n.endswith("s)") for n in said), ("no seconds said", said)
+    st = json.loads(after.replace('\\"', '"'))
+    assert st["p8"] and st["p8"]["boot"] > 0 and st["p8"]["mem"] > 0, st
+    assert not (st["notice"] and st["notice"][0].startswith("Importing")), \
+        ("the progress notice stayed up after the import", st)
+    assert card.startswith("offer|"), card

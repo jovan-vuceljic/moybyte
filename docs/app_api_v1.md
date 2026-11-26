@@ -1252,7 +1252,11 @@ run ends there when the app opened takes its place.
 4 KiB of text, the global `clipboard` (`put_text(text)`, False for a text
 too long; `text()`; `kind()`, "text" or none; `seq()`, which moves at every
 put), and what the editor handle's `cut`/`copy`/`paste` use (a compiled app
-imports its rows, §10).
+imports its rows, §10). In a browser the page's clipboard meets it: a paste
+there (Ctrl/Cmd+V) is put on the console's clipboard and pressed as its Paste
+(the Terminal types it whole), and a copy here goes on the browser's
+clipboard where the browser lets a page write it
+(`firmware/web_runner/web_boot.py`'s `_paste` and `_clip_out`).
 
 ## 6. Permissions and consent
 

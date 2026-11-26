@@ -16,12 +16,16 @@ The screens, in the order a kid meets them:
   CHECKING   the radio comes up under the "carts" lease and every index is
              fetched -- moybyte-org's carts repository unless `system/sources`
              names others (runtime/shell/pkg.py, the shell's `pkg`) --
-             then the covers they name that this session has not drawn yet:
              one busy page, the shelves counted as they come.
   LIST       the shelf: a card per cart, its cover (the 128 x 128
-             cover.png of SPEC.md 3.6, handed to the engine as the app's
-             own picture, `ui.pictures`, which the card names: `cover_pic`)
-             or, while it has none, its genre's icon on a tinted tile, its
+             cover.png of SPEC.md 3.6, which the card names: `cover_pic`)
+             -- a cart on the console its copy's, drawn from the shell's
+             cover cache (`image.cart`) with no network; any other the
+             index's, fetched after the shelf shows, the cards in view
+             first, and handed to the engine as the app's own picture
+             (`ui.pictures`), kept for the boot -- a still "on its way"
+             picture while it comes, and where it has none (or it failed)
+             its genre's icon on a tinted tile, its
              name and a sub line -- its size, or where it stands: On
              console, Update ready, Name taken when a different cart already
              has its folder, Too big or Can't play. The caption row counts
@@ -99,6 +103,7 @@ in that step and in the browser gives the frame back until its bytes come.
 """
 
 import json
+from array import array
 
 import uitree as ui
 import uitree_app
@@ -114,6 +119,13 @@ import moy_carts as _store
 # An index fetched this session is reused for this long before the app checks
 # again on its own; R (the desk's Check) asks at once.
 REFRESH_MS = 600000
+
+# The cover fetches asked of the http worker at once: it goes from one to the
+# next with no frame between them.
+COVERS_AHEAD = 2
+
+# The own picture a card shows while its cover is on its way.
+WAIT = "wait"
 
 # The check's piece of a frame: an index is parsed and the shelf's rows are
 # made in pieces of about this long, a frame between them, so a long index
@@ -202,6 +214,22 @@ def _any_key(inp):
 def vid(verb):
     """A verb's action: its button's stop."""
     return VERB[verb][2]
+
+
+def _wait_render(lay):
+    """The "on its way" picture at a card's size: three dots in the theme's
+    dim ink over its alt surface, which `clear=True` leaves out, so the
+    card's own tile shows under them."""
+    def render(w, h):
+        th = lay._theme.colors()
+        layer = lay._surf.canvas().new_layer(w, h)
+        layer.rect(0, 0, w, h, th["surface_alt"])
+        r = max(2, w // 28)
+        cx, cy = w // 2, h // 2
+        for dx in (-4 * r, 0, 4 * r):
+            layer.circ(cx + dx, cy, r, th["ink_dim"])
+        return layer
+    return render
 
 
 def genre_icon(cart):
@@ -670,8 +698,14 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         self.why = ""                 # the NOT INSTALLED page's reason
         self.why_detail = None        # ...and its cause exact, under it
         self.toast = None             # (text, icon, until ms): a passing message
-        self.thumbs = {}              # cover sha256 -> True once the engine holds it, None while not
-        self._covers = []             # the covers this check still fetches
+        self.thumbs = {}              # cover sha256 -> True once the engine holds it, False: failed
+        self._covers = []             # the carts whose covers this check still fetches
+        self._owed = {}               # ...their covers' sha256s, and those in flight
+        self._jobs = []               # [(cart, its cover's fetch)] in flight
+        self._here = {}               # a cart on the console: its folder -> its store path
+        self._row_of = {}             # a cart's folder -> its card's place on the shelf
+        self._tile = array("i", [0, 0, 0, 0])
+        self._wait_gen = None         # the theme the "on its way" picture was put in
         self._found = []
         self._checking = None         # the check's steps (`_check_steps`), while it runs
         self._step = 0                # its place: 0 before the indexes, then 1 + the index it is on
@@ -724,6 +758,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         if self.job is not None and not self.job.finished and self.job.cancel():
             self._go("cart" if self.cur is not None else "list")
         self._drop_fetch()
+        self._drop_covers()
         self._unpick()
         self._release()
         self._away = False
@@ -788,6 +823,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
 
     def _check(self):
         self._drop_fetch()
+        self._drop_covers()
         self._found = []
         self._covers = []
         self.unreached = 0
@@ -870,9 +906,11 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         if self.phase == "pick":
             self._poll_pick()
         if self.phase not in BUSY:
-            if self._covers and self.phase != "pick":
+            if (self._covers or self._jobs) and self.phase != "pick":
                 self._pump_covers()
             return
+        if self._jobs:
+            self._drop_covers()
         if not self.armed:
             self.armed = True         # this frame shows the screen; work next frame
             self._damage.again()
@@ -1065,62 +1103,127 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._focus = self._card_id(self.cur if self.cur in self.rows else self.rows[0])
 
     def _pump_covers(self):
-        """The shelf's covers, fetched after it shows rather than before: a
-        step of the next one each drawn frame while any is owed, a card
-        drawing its cover from the frame it lands in. On a Zero's page a
-        cover is the copy of a cart the console holds."""
-        board = self._inst.board() is not None
-        if not board:
-            self._hold()
-        try:
-            cart = self._covers[-1]
-            done = self._local_cover(cart) if board else \
-                self._fetch_cover(self._inst.net(), cart)
-        except Exception as exc:  # noqa: BLE001 -- a cover never takes the shelf down
-            _ci._log("%r" % (exc,))
-            done = True
-        if done:
-            self._covers.pop()
-            self._damage.all()
-        if self._covers:
+        """The shelf's covers, fetched after it shows rather than before:
+        COVERS_AHEAD asked of the http worker at once, the card in view
+        first, each stepped every drawn frame while any is owed and drawn
+        from the frame it lands in. On a Zero's page a cover is the copy of
+        a cart the console holds, one read a frame."""
+        self._put_wait()
+        if self._inst.board() is not None:
+            cart = self._next_cover()
+            try:
+                self._local_cover(cart)
+            except Exception as exc:  # noqa: BLE001 -- a cover never takes the shelf down
+                _ci._log("%r" % (exc,))
+            self._cover_done(cart, False)
+            if self._covers:
+                self._damage.step()
+            return
+        self._hold()
+        jobs = self._jobs
+        while self._covers and len(jobs) < COVERS_AHEAD:
+            cart = self._next_cover()
+            try:
+                jobs.append((cart, _ci.cover_fetch(self._inst.net(), cart)))
+            except _ci.InstallError as exc:
+                _ci._log(exc.detail)
+                self._cover_done(cart, None)
+        i = 0
+        while i < len(jobs):
+            cart, job = jobs[i]
+            try:
+                if job.step():
+                    i += 1
+                    continue
+                data = job.data
+            except Exception as exc:  # noqa: BLE001 -- a cover never takes the shelf down
+                _ci._log(getattr(exc, "detail", None) or "%r" % (exc,))
+                data = None
+            jobs.pop(i)
+            self._cover_done(cart, data)
+        if self._covers or jobs:
             self._damage.step()
         else:
             self._release()
 
+    def _next_cover(self):
+        """The owed cover the shelf shows first: the top card's in view,
+        else the top card's."""
+        covers = self._covers
+        cells = getattr(self.engine, "cells_tile", None)
+        best = top = None
+        n = len(self._row_of)
+        for i in range(len(covers)):
+            at = self._row_of.get(covers[i]["folder"], n)
+            if top is None or at < top[0]:
+                top = (at, i)
+            if cells is not None and at < n and cells(at, self._tile) and (best is None or at < best[0]):
+                best = (at, i)
+        return covers.pop((best or top)[1])
+
+    def _cover_done(self, cart, data):
+        """`cart`'s cover come (`data` its bytes), failed (None) or read
+        here (False): the card shows it, or its icon."""
+        sha = cart["cover"]["sha256"]
+        self._owed.pop(sha, None)
+        if data:
+            self._decode_cover(cart, data)
+        elif data is None:
+            self.thumbs[sha] = False
+        self._damage.all()
+
+    def _drop_covers(self):
+        """The fetches in flight let go, their carts owed again first."""
+        jobs, self._jobs = self._jobs, []
+        for cart, job in jobs:
+            job.close()
+        self._covers[:0] = [cart for cart, _job in jobs]
+
     def _covers_to_fetch(self, carts):
+        """The carts whose covers are fetched: those not on the console, one
+        a cover, whose cover the engine does not hold yet."""
+        self._find_here()
         out = []
-        seen = {}
-        root = self._inst.root() if self._inst.board() is not None else None
+        owed = {}
+        flying = {cart["cover"]["sha256"]: True for cart, _job in self._jobs}
+        board = self._inst.board() is not None
+        root = self._inst.root()
         for c in carts:
             ref = c.get("cover")
-            if ref is None or ref["sha256"] in seen:
+            if ref is None or c["folder"] in self._here:
                 continue
-            if root is not None and not _exists("%s/%s/cover.png" % (root, c["folder"])):
+            sha = ref["sha256"]
+            if sha in owed or sha in flying:
                 continue
-            seen[ref["sha256"]] = True
-            if not self.thumbs.get(ref["sha256"]):
+            if board and (root is None or not _exists("%s/%s/cover.png" % (root, c["folder"]))):
+                continue
+            if not self.thumbs.get(sha):
                 out.append(c)
+                owed[sha] = True
+        owed.update(flying)
+        self._owed = owed
         return out
 
-    def _fetch_cover(self, net, cart):
-        """One cover fetched and decoded: False while its bytes are on their
-        way, True once it is drawn or known not to come."""
-        sha = cart["cover"]["sha256"]
-        self.thumbs[sha] = None
-        try:
-            data = self._fetched(lambda: _ci.cover_fetch(net, cart), ("cover", sha))
-        except _ci.InstallError as exc:
-            _ci._log(exc.detail)
-            return True
-        if data is None:
-            return False
-        self._decode_cover(cart, data)
-        return True
+    def _find_here(self):
+        """Which of the shelf's carts are on the console (`_here`)."""
+        root = self._inst.root()
+        if self._inst.board() is not None or root is None:
+            self._here = {}
+            return
+        paths = {}
+        for c in self._carts_role.all():
+            p = c.get("path")
+            if p:
+                paths[p] = True
+        here = {}
+        for c in self.carts:
+            p = "%s/%s" % (root, c["folder"])
+            if p in paths:
+                here[c["folder"]] = p
+        self._here = here
 
     def _local_cover(self, cart):
-        """One cover read from the cart's copy here and decoded: True."""
-        sha = cart["cover"]["sha256"]
-        self.thumbs[sha] = None
+        """One cover read from the cart's copy here and decoded."""
         path = "%s/%s/cover.png" % (self._inst.root(), cart["folder"])
 
         def _bytes():
@@ -1129,17 +1232,35 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
         try:
             data = self._inst.op(_bytes)
         except OSError:
-            return True
+            return
         self._decode_cover(cart, data)
-        return True
 
     def cover_pic(self, cart):
-        """The picture a card and the cart's page show for `cart`: its cover
-        once the engine holds it, else None (its genre's icon)."""
+        """The picture a card and the cart's page show for `cart`: a cart on
+        the console its copy's cover, from the shell's cover cache; another
+        its fetched cover once the engine holds it, the "on its way"
+        picture while it is owed, else None (its genre's icon)."""
+        path = self._here.get(cart["folder"])
+        if path is not None:
+            return ui.image.cart(path)
         ref = cart.get("cover")
-        if ref is None or not self.thumbs.get(ref["sha256"]):
+        if ref is None:
             return None
-        return ui.image.own("cover:" + ref["sha256"])
+        sha = ref["sha256"]
+        if self.thumbs.get(sha):
+            return ui.image.own("cover:" + sha)
+        if sha in self._owed:
+            return ui.image.own(WAIT)
+        return None
+
+    def _put_wait(self):
+        """The "on its way" picture put, again where the theme moved."""
+        gen = self._theme.gen()
+        if gen == self._wait_gen:
+            return
+        self._wait_gen = gen
+        render = _wait_render(self)
+        self.engine.run(lambda: ui.pictures.put(WAIT, render=render, clear=True))
 
     def _decode_cover(self, cart, data):
         """A cover's bytes handed to the engine, which decodes them where a
@@ -1203,6 +1324,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             rows = [{"cart": c, "plan": _ci.plan(c, chip, fmt, ranges), "state": "get",
                      "had": None, "runs": False, "fit": None} for c in carts]
             free = None
+        self._find_here()
         have = _pkg.installed_ids(self._carts_role.all())
         for r in rows:
             c = r["cart"]
@@ -1210,6 +1332,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
                         or _pkg.depends_why(carts, c, have))
         rows.sort(key=lambda r: r["cart"]["name"].lower())
         self.rows = rows
+        self._row_of = {r["cart"]["folder"]: i for i, r in enumerate(rows)}
         self.free = free
         if self.cur is not None:
             folder = self.cur["cart"]["folder"]
@@ -1976,6 +2099,6 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             lines.append((self.pick_why, "danger"))
         lines.append(("This console can't fetch %s from %s."
                       % (e["path"], _ext_host(self.cur["cart"], e)), "ink"))
-        lines.append(("Choose your own copy of %s (%s) in the box below."
+        lines.append(("Choose your own copy of %s (%s) from this computer."
                       % (e["path"], _mb(e["size"])), "dim"))
         return "Your copy of %s" % e["path"], lines

@@ -49,6 +49,10 @@
 //                        its Improv answer carried (its first, or a new one
 //                        the cable asked for), then pair by it (THE SIGN-IN,
 //                        the claim)
+//   {t:"takeback"}       its user takes the board back from the browser
+//                        that took it (TAKEN)
+//   {t:"convert", name, buf, assets, base}  to a CONVERTER (THE CONVERTER):
+//                        the one PICO-8 cart it converts, TRANSFERRED
 // worker -> main:
 //   {t:"status", s}      boot progress text
 //   {t:"assets", json}   the page's metadata payload (size/title/audio/input)
@@ -63,15 +67,17 @@
 //                        durable. Sent to the PAGE because storage.persist()
 //                        is window-only -- a Worker cannot ask, only look.
 //   {t:"pair", pw, cable, why, wait}  this board has not paired this browser,
-//                        so the boot stopped before the VM: the page asks.
+//                        so the boot waits before its store: the page asks.
 //                        `pw` a password can pair it (else only the QR can),
 //                        `cable` the board pairs over the cable (a Zero: no
 //                        screen, so no QR; My consoles' Manage by cable), `why`
 //                        what failed last ("" the first time), `wait`
 //                        signInWaitSays' sentence while the board holds wrong
-//                        tries off, else ""
+//                        tries off, else ""; `taken` another browser took
+//                        the board (TAKEN): the page offers to take it back
 //   {t:"key", id, kid, key, reload}  a pairing's new device key for board `id`:
-//                        the page keeps it (and with `reload`, loads again)
+//                        the page keeps it; a boot that waited at the pairing
+//                        goes on, and `reload` (a console that ran) loads again
 //   {t:"unkey", id}      board `id` refused this browser's key: the page drops it
 //   {t:"claimed", ok, why}  the answer to {t:"claim"}: the password set (a
 //                        pairing's {t:"key"} follows), or why not
@@ -84,12 +90,19 @@
 //                        words; `report` is the p8 compatibility summary (the
 //                        shared writer's own lines) when there was one
 //   {t:"edited", s, ok}  the result of an "open in editor"
+//   {t:"ask", a}         the console's rows' asks of the browser (page_link.py)
 //   {t:"pick", id, name, size, host}  Get Carts needs a file this page cannot
 //                        fetch from `host`: the page asks the player for theirs
 //   {t:"unpick", id}     ...and the question is over
 //   {t:"installed", folder, d}  an install reached the browser's store
-//   {t:"state", json, sink, loop}  the answer to {t:"state"}, with the sink's
-//                        counters and the loop's longest waits
+//   {t:"state", json, sink, loop, p8}  the answer to {t:"state"}, with the
+//                        sink's counters, the loop's longest waits and the last
+//                        conversion's cost (THE CONVERTER)
+// a converter -> the console's worker:
+//   {t:"stage", s}       the stage it starts (web_p8's words)
+//   {t:"converted", r, files, boot, ms, mem}  web_p8.convert_json's answer and
+//                        the folder's files by path, TRANSFERRED, with its
+//                        VM's boot and its whole run in ms and its wasm memory
 // THE MODULES, by name (docs/web_console_online_2026-11.md §3): a page the
 // loader (loader.html) booted hands init the pack's assets as Blob URLs, and
 // the VM's module, the store's and the wasm come from them; a page served
@@ -113,7 +126,7 @@ function fetch(url, opt) {
 let mp = null, step = null, applyEvents = null, assets = null, reload = null;
 // The drop's and the export's Python entry points (#194), bound at boot like
 // the rest.
-let importP8Json = null, importArchiveJson = null, exportCart = null, dropKind = null;
+let importP8Json = null, p8Target = null, importArchiveJson = null, exportCart = null, dropKind = null;
 let editCart = null, openCart = null, stateJson = null;
 let wantAssets = false;   // an assets request that arrived before the VM was up
 let idleCollect = null;
@@ -164,6 +177,7 @@ let syncWaitSaid = false;     // the link panel is showing a sign-in wait
 
 function syncFailed(now) {
     syncFailing = true;
+    if (wifiMove) return;                       // THE MOVE: silence is expected
     if (!lastSyncOkAt) lastSyncOkAt = now;      // first contact never made
     if (now - lastSyncOkAt >= SYNC_GIVE_UP_MS) syncLost();
 }
@@ -211,6 +225,17 @@ const GPIO_MS = 33;
 // SCREEN is waiting -- `updateWants` is false on an idle console, so a page
 // nobody is updating from never touches the wire.
 let updatePoll = null, updateWants = null, updateAck = null, updateOff = null;
+// A Zero's WI-FI (wifi_link.py over the board's sealed /wifi), the same shape
+// again: asked once a second while a scan, a move or the open panel waits on
+// it, and seldom otherwise. THE MOVE: a join takes the board off the network
+// this page reaches it over, so from its answer until the board's two windows
+// have passed (`wifiMove.until`) a silence is the move, never a loss, and the
+// sync's give-up waits. The board found again settles it (it failed and came
+// back, or the new network reaches this page too); still silent at the end,
+// it moved, and the page says where it went.
+let wifiPoll = null, wifiWants = null, wifiAck = null, wifiMoved = null;
+let wifiBusy = false, lastWifiAt = 0, wifiMove = null;
+const WIFI_MS = 1000;
 let updateBusy = false, lastUpdateAt = 0;
 const UPDATE_MS = 1000;
 // GET CARTS (#124), site mode: the console's carts_link queues what it needs
@@ -769,8 +794,10 @@ let writtenStore = null;
 // Get Carts' record, beside the carts folder as on every console
 // (cart_index.RECORD_NAME, from the VM by bindStore).
 let installRecord = null;
-// The storage every store opens through: the origin's, or the page's channel's
-// (moy_store.channelNav), set by init before anything is seeded.
+// The storage every store opens through: the origin's OPFS, or IndexedDB in
+// its shape where the context has no OPFS (plain http, moy_store.pageNav), or
+// the page's channel's within it (moy_store.channelNav), set by init before
+// anything is seeded.
 let opfsNav = navigator;
 // The roots initStore seeded, which web_boot builds its watchers over.
 let seededRoots = null;
@@ -956,9 +983,10 @@ async function initStore(fetched) {
     if (!site) {
         persist("board", "carts are kept on the console");
     } else if (!anySite) {
-        // No OPFS at all: a private window, blocked site data, file://. The
-        // pre-#193 behaviour, but never silently -- the page says it out loud.
-        persist("none", "this browser has no local storage: work will NOT survive a reload");
+        // No storage at all, OPFS's nor IndexedDB's (moy_store.pageNav):
+        // blocked site data, file://, a private window that refuses both.
+        // The work is lost with the tab, and the page says so, once.
+        persist("none", "This tab keeps nothing");
     } else {
         // "loaded" once any root read the kid's work back from OPFS (a revisit);
         // "seeded" on a first visit. The word is the persistence evidence the
@@ -1089,8 +1117,113 @@ function dropped(name, buf) {
     return dropKind(String(name || ""), JSON.stringify(Array.from(head)));
 }
 
-async function importP8(name, buf) {
+// THE CONVERTER. A conversion holds its thread for seconds (an iPhone's,
+// with no JIT, for minutes), so it runs in a VM of its own: a second worker
+// running this file, started for the one cart and ended once it answers.
+// The console's loop goes on drawing meanwhile, and the console says which
+// stage the converter is on (web_p8's words) and for how long, in a busy
+// notice said again each second (page_link.py's `say`), taken down at the end. The
+// converted files come back by path and land where the console's own VM
+// names (web_boot.p8_target_json), asked once they are here, so two drops
+// never take one folder. A worker that can start no worker of its own (an
+// old Safari's) converts on its own thread, the console still meanwhile.
+const P8_BEAT_MS = 1000, P8_SAY_MS = 2500;
+let p8Last = null;
+
+function p8Say(title, sub, ms) {
+    inbox.push(JSON.stringify({ events: [{ type: "page", say: [title, sub, "busy", ms] }] }));
+}
+
+// The converter's end: its first message, the cart.
+async function convertHere(m) {
+    ASSETS_IN = m.assets || null;
+    if (m.base) BASE = m.base;
+    await loadModules(ASSETS_IN);
+    const t0 = performance.now();
+    mp = await loadMicroPython({ heapsize: 16 * 1024 * 1024, url: wasmUrl,
+        stdout: (l) => console.log("[moy p8]", l) });
+    const boot = performance.now() - t0;
+    const drop = mp.pyimport("web_vfs").DROP;
+    mkdirs(dirOf(drop));
+    mp.FS.writeFile(drop, new Uint8Array(m.buf));
+    const r = JSON.parse(mp.pyimport("web_p8").convert_json(drop, String(m.name || ""),
+        (s) => self.postMessage({ t: "stage", s: String(s) })));
+    const files = {}, moved = [];
+    const take = (dir, rel) => {
+        for (const n of mp.FS.readdir(dir)) {
+            if (n === "." || n === "..") continue;
+            if (vfsIsDir(dir + "/" + n)) { take(dir + "/" + n, rel + n + "/"); continue; }
+            const b = mp.FS.readFile(dir + "/" + n);
+            files[rel + n] = b;
+            moved.push(b.buffer);
+        }
+    };
+    if (r.ok) take(r.out, "");
+    self.postMessage({ t: "converted", r: r, files: files, boot: Math.round(boot),
+                       ms: Math.round(performance.now() - t0),
+                       mem: mp._module.HEAPU8.byteLength }, moved);
+    self.close();
+}
+
+// The console's end: the cart to a converter, its stages to `heard`, and
+// its answer.
+function convertAside(name, buf, heard) {
+    return new Promise((ok, fail) => {
+        const w = new Worker(self.location.href, { type: "module" });
+        const end = (e) => { w.terminate(); fail(e); };
+        w.onmessage = (e) => {
+            const c = e.data;
+            if (c.t === "stage") heard(c.s);
+            else if (c.t === "converted") { w.terminate(); ok(c); }
+            else if (c.t === "error") end(new Error(c.msg || "the converter stopped"));
+        };
+        w.onerror = (e) => { e.preventDefault(); end(new Error(e.message || "the converter did not start")); };
+        w.postMessage({ t: "convert", name: name, buf: buf, assets: ASSETS_IN, base: BASE }, [buf]);
+    });
+}
+
+// One conversion at a time: each lands before the next asks for its folder.
+let p8Line = Promise.resolve();
+
+function importP8(name, buf) {
     if (!importP8Json) throw new Error("this console cannot import PICO-8 carts");
+    const go = typeof Worker === "function" ? () => importP8Aside(name, buf)
+                                             : () => importP8Here(name, buf);
+    const run = p8Line.then(go, go);
+    p8Line = run.catch(() => {});
+    return run;
+}
+
+async function importP8Aside(name, buf) {
+    const title = "Importing " + name, t0 = performance.now();
+    let stage = "";
+    const beat = () => {
+        const secs = Math.floor((performance.now() - t0) / 1000);
+        p8Say(title, stage + (secs ? " (" + secs + "s)" : ""), P8_SAY_MS);
+    };
+    beat();
+    const every = setInterval(beat, P8_BEAT_MS);
+    let c;
+    try {
+        c = await convertAside(name, buf, (s) => { stage = s; beat(); });
+    } finally {
+        clearInterval(every);
+        p8Say(title, "", 0);
+    }
+    p8Last = { boot: c.boot, ms: c.ms, mem: c.mem, all: Math.round(performance.now() - t0) };
+    if (!c.r.ok) return { ok: false, report: c.r.report || ["that cart could not be imported"] };
+    const t = JSON.parse(p8Target(name, VFS.carts));
+    writeStore(t.out, c.files);
+    // Same rule as importZip: do NOT rebase the sync watcher. An import is a
+    // CHANGE, so the new files must stay pending and reach the local store on
+    // the next sweep like any other commit.
+    if (rescan) rescan();
+    return { ok: true, dir: t.dir, title: c.r.title, report: c.r.report };
+}
+
+async function importP8Here(name, buf) {
+    // The frames that paint the page's "Importing" notice go first.
+    await new Promise((ok) => setTimeout(ok, 150));
     // One fixed path rather than the dropped name: the name is attacker-shaped
     // text (it came off a file a browser handed us) and the converter only ever
     // needs SOME path to read. The real name still travels as `name`, which is
@@ -1100,9 +1233,6 @@ async function importP8(name, buf) {
     mp.FS.writeFile(tmp, new Uint8Array(buf));
     const r = JSON.parse(importP8Json(tmp, name, VFS.carts));
     if (!r.ok) return { ok: false, report: r.report || ["that cart could not be imported"] };
-    // Same rule as importZip: do NOT rebase the sync watcher. An import is a
-    // CHANGE, so the new files must stay pending and reach the local store on
-    // the next sweep like any other commit.
     if (rescan) rescan();
     return { ok: true, dir: r.dir, title: r.title, report: r.report };
 }
@@ -1158,12 +1288,24 @@ function signInWaitSays(ms) {
 
 let auth = { keys: {}, token: null, board: null, name: "a browser" };
 let authOpen = false;           // the host has no sign-in: plain requests
+// A boot whose sign-in met no answer asks again this many times, the n-th
+// wait n times GONE_MS, before it says the console does not answer.
+const GONE_TRIES = 5, GONE_MS = 1000;
 let signedIn = false;
 let sealedOnce = false;         // this page has signed in: never plain again
 const NONCE_TRIES = 3;          // hellos a credential is sent after
 let signingIn = null;           // the sign-in in flight, which every caller shares
 let authNeed = null;            // why the last sign-in failed: {pw, wait, why}
+// TAKEN: another browser's page took this board's live socket (its close
+// 4001 "taken", moy_webauth.c's moy_wa_take). The page is disconnected: no
+// sign-in, so nothing reaches the board, until its user takes the board back
+// ({t:"takeback"}), never by itself, so two pages never take it from each
+// other in turn.
+let taken = false;
+const TAKEN_SAYS = "Another browser signed in to this console, so this one was disconnected.";
 let authCable = false;          // the last hello's "cable": the board pairs over the cable
+let pairWait = null;            // resolves the boot a board that has not paired this
+                                // browser waits in: a pairing goes on with it, no reload
 let SW = null;                  // moy_seal_web.c's entry points
 const utf8 = new TextEncoder(), utf8d = new TextDecoder();
 
@@ -1253,7 +1395,11 @@ function finish(r, fresh) {
         const id = C.M.UTF8ToString(C.board());
         const kid = C.M.UTF8ToString(C.kid()), key = C.M.UTF8ToString(C.devkey());
         auth.keys[id] = { kid, key };
-        self.postMessage({ t: "key", id, kid, key, reload: fresh === "reload" });
+        // A boot waiting at the pairing goes on from its pulls; a console
+        // already running (a new password over the link) starts again.
+        const resume = fresh === "reload" ? pairWait : null;
+        self.postMessage({ t: "key", id, kid, key, reload: fresh === "reload" && !resume });
+        if (resume) { pairWait = null; resume(); }
     }
     return true;
 }
@@ -1315,6 +1461,7 @@ function need(r, pw, why, gone) {
     return false;
 }
 function signIn() {
+    if (taken) return Promise.resolve(false);
     if (authOpen || signedIn) return Promise.resolve(true);
     if (!signingIn) {
         signingIn = signInOnce().catch(() => need(null, false, "the console did not answer", true))
@@ -1324,22 +1471,31 @@ function signIn() {
 }
 
 // Pairing by the console's password (the page's prompt): SPAKE2+, then the
-// key, then a fresh load signed in with it.
+// key, and the boot that waited for it goes on signed in. Only the
+// password's own refusals say the password is wrong: the board's
+// confirmation failing to check (which a wrong password, or another console,
+// makes) or its 403 "password". A board busy with another browser's pairing
+// (503) is asked again, BUSY_TRIES times BUSY_MS apart.
+const BUSY_TRIES = 6, BUSY_MS = 1000;
 async function pairPassword(pw, name) {
+    const wrong = "that password did not work -- try again";
     let why = "";
     try {
-        for (let i = 0; i < NONCE_TRIES; i++) {
+        for (let i = 0, busy = 0; i < NONCE_TRIES; i++) {
             const h = await hello();
             if (!h.id) return need(h.r, true);
             const n = swCall(sw().pake, pw, name || auth.name);
             if (n < 0) { why = "the console's answer did not check -- try again"; break; }
             let r = await authPost(utf8d.decode(swGet(n)));
             if (r.status === 409) continue;            // the nonce went: ask again
+            if (r.status === 503 && ++busy < BUSY_TRIES) {
+                await new Promise((ok) => setTimeout(ok, BUSY_MS));
+                i--;
+                continue;
+            }
             if (r.status === 200) {
-                // The board's confirmation fails to check under a wrong password
-                // (and on another console, which the same sentence covers).
                 const c = sw().confirm(swPut(utf8.encode(r.text)));
-                if (c < 0) why = "that password did not work -- try again";
+                if (c < 0) why = wrong;
                 else {
                     r = await authPost(utf8d.decode(swGet(c)));
                     if (finish(r, "reload")) return true;
@@ -1348,7 +1504,9 @@ async function pairPassword(pw, name) {
             }
             if (r.status === 429) return need(r, true);
             why = why || (r.doc.error === "nopw" ? "the console has no password set"
-                                                 : "that password did not work -- try again");
+                          : r.doc.error === "password" ? wrong
+                          : r.status === 503 ? "the console is busy -- try again in a moment"
+                          : "the console did not take the sign-in (" + r.status + ")");
             break;
         }
     } catch (e) { why = "the console did not answer"; }
@@ -1373,7 +1531,25 @@ async function claimPassword(claim, id, pw, name) {
 }
 function askToPair() {
     self.postMessage(Object.assign({ t: "pair" }, authNeed || { pw: false, wait: "", why: "" },
-                                   { cable: authCable }));
+                                   { cable: authCable, taken }));
+}
+// The board taken by another browser's page: this one stops, and says so.
+function takenAway() {
+    if (taken) return;
+    taken = true;
+    signedIn = false;
+    authNeed = { pw: false, wait: "", ms: -1, why: TAKEN_SAYS, gone: false };
+    say("disconnected");
+    askToPair();
+}
+// Its user's word: sign in again and take the board's live socket back.
+function takeBack() {
+    if (!taken) return;
+    taken = false;
+    authNeed = null;
+    liveRetry = 0;
+    if (livePump) { liveOn = true; liveOpen(); }
+    say("live");
 }
 
 // A call to a sealed route: {status, text, wait}. `text` is the answer's
@@ -1427,20 +1603,47 @@ function crashMessage(e) {
              s: !stack ? msg : stack.startsWith(msg) ? stack : msg + "\n" + stack };
 }
 
+// The wasm, fetched here where the loader handed none over (its Blob URL),
+// its bytes said to the page's loading card as they arrive: on a slow link
+// that download is most of a boot. A Blob URL of it for the VM; the VM
+// fetches it itself where a body cannot be read here. The total is said
+// where the length is the bytes' (none where the host compressed them).
+async function wasmFetched() {
+    if (wasmUrl) return wasmUrl;
+    const r = await fetch("micropython.wasm").catch(() => null);
+    if (!r || !r.ok || !r.body) return undefined;
+    const n = r.headers.get("content-encoding") ? 0 : +r.headers.get("content-length") || 0;
+    const rd = r.body.getReader(), parts = [], mb = (b) => (b / 1048576).toFixed(1);
+    let got = 0, at = 0;
+    for (let c = await rd.read(); !c.done; c = await rd.read()) {
+        parts.push(c.value);
+        got += c.value.length;
+        if (performance.now() - at > 100) {
+            at = performance.now();
+            say("Loading the console, " + mb(got) + (n >= got ? " of " + mb(n) : "") + " MB");
+        }
+    }
+    return URL.createObjectURL(new Blob(parts, { type: "application/wasm" }));
+}
+
 async function init(search, coarse, channel, scheme, signin, rate) {
     await loadModules(ASSETS_IN);
     opfsNav = store.channelNav(navigator, channel);
     const qs = new URLSearchParams(search || "");
     if (signin) auth = Object.assign(auth, signin, { keys: Object.assign({}, signin.keys) });
-    say("loading vm...");
+    const wasmAt = await wasmFetched();
+    say("Starting the console");
     // 16MB: the per-frame GC sweep scales with heap SIZE under this build's
     // GC_SPLIT_HEAP_AUTO (~0.13ms/MB/frame, #176), so a generous heap is a
     // permanent frame tax, not headroom.
-    mp = await loadMicroPython({ heapsize: 16 * 1024 * 1024, url: wasmUrl,
-        stdout: (l) => console.log("[moy]", l) });
+    try {
+        mp = await loadMicroPython({ heapsize: 16 * 1024 * 1024, url: wasmAt,
+            stdout: (l) => console.log("[moy]", l) });
+    } finally {
+        if (wasmAt !== wasmUrl) URL.revokeObjectURL(wasmAt);
+    }
     installCartEngine(mp._module);
     installCommandEngine(mp._module);
-    say("loading console...");
     // FROZEN-first, like the page was: a ship build bakes the console into the wasm
     // and has no modules.json; a --stage-only dev dist adds one, and loading it into
     // /modules (first on sys.path) shadows the frozen copies.
@@ -1476,21 +1679,36 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // Every root's pull, at the endpoint the VM's registry names: the carts,
     // and the roots firmware before them 404s (the files layer, the console's
     // own documents, the apps' private folders).
-    const pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
-        ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
-    const fetched = {};
-    store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
-    const cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
-    if (!signedIn && !authOpen && !(authNeed && authNeed.gone)) {
-        // A BOARD THAT HAS NOT PAIRED THIS BROWSER: stop the boot here --
+    let pulled, fetched, cartsRes;
+    for (let tries = 1; ; tries++) {
+        pulled = await Promise.all(store.roots().map((r) => r.id === "carts"
+            ? gated("/" + r.endpoint) : gated("/" + r.endpoint).catch(none)));
+        fetched = {};
+        store.roots().forEach((r, i) => { fetched[r.id] = pulled[i].json; });
+        cartsRes = pulled[store.roots().indexOf(store.rootById("carts"))];
+        if (signedIn || authOpen) break;
+        if (authNeed && authNeed.gone) {
+            // NO ANSWER AT ALL (a fetch that failed, a 5xx): a slow phone's
+            // first requests can meet a link or a host still busy with the
+            // boot's downloads, so the boot asks again, saying what it does,
+            // before it says the console does not answer.
+            if (tries >= GONE_TRIES) break;
+            say("Loading your carts");
+            await new Promise((ok) => setTimeout(ok, GONE_MS * tries));
+            continue;
+        }
+        // A BOARD THAT HAS NOT PAIRED THIS BROWSER: the boot waits here --
         // there is nothing to boot, and seeding the VFS from a refusal would
-        // build a shelf out of it. The page asks; a pairing reloads it. A
-        // host that answered nothing boots on as before: no board behind it.
+        // build a shelf out of it. The page asks; a pairing (finish) goes on
+        // from the pulls, with the VM already up, so the console starts
+        // without loading the page again. A host that answered nothing boots
+        // on as before: no board behind it.
         const a = authNeed || { pw: false, wait: "", why: "" };
         say(a.wait || "pair this browser with the console");
         askToPair();
         console.log("[moy] sign-in: " + (a.wait || a.why || "not paired"));
-        return;
+        await new Promise((ok) => { pairWait = ok; });
+        say("Loading your carts");
     }
     if (!signedIn && !authOpen && cartsRes.json === null) {
         // The board went away between the page and its pulls: no shelf to
@@ -1502,7 +1720,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     await initStore(fetched);
     // Music's songs: the serving board's music folder, or this browser's.
     await mediaList(mode === "board" ? () => gated("/media").then((r) => r.json) : siteSongs);
-    say("booting console...");
+    say("Starting the console");
 
     // #9: does whoever served this page have PINS? ONE probe, here, before the
     // console exists -- so `pin_write`/`pin_read` are decided once and a cart
@@ -1512,7 +1730,8 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
-    const liveLink = mode === "board" ? await probeLive() : null;
+    const live = mode === "board" ? await probeLive() : null;
+    const wifiDoc = mode === "board" ? await probeWifi() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
         // sweeps the journal, and boot() is where that watcher is built.
@@ -1525,9 +1744,14 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + (shelves ? "web_boot.site_sources(" + JSON.stringify(VFS.carts) + ", "
             + JSON.stringify(JSON.stringify(shelves)) + ")\n" : "")
         + (gpioPins ? "web_boot.gpio_enable(" + JSON.stringify(JSON.stringify(gpioPins)) + ")\n" : "")
+        // The board's Wi-Fi, BEFORE boot(), which wires it as the console's.
+        + (wifiDoc ? "web_boot.wifi_enable(" + JSON.stringify(JSON.stringify(wifiDoc)) + ")\n" : "")
         // A console that installs carts into its own store when this page
         // asks (it answers /official): BEFORE boot(), which hands Get Carts the asking.
         + (official ? "web_boot.official_enable()\n" : "")
+        // The device kinds the board relays on the live socket, BEFORE
+        // boot(): an install check and the shelves ask for them.
+        + (live && live.kinds ? "web_boot.live_kinds(" + JSON.stringify(live.kinds) + ")\n" : "")
         // The console this page's address asks for: its tier, size and cart
         // (web_boot.page_boot), on the page's pointer and colour scheme
         // (page_tail.js: ?scheme= or prefers-color-scheme).
@@ -1543,7 +1767,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // The board's radio, a link on the live Workstation: after boot(),
         // which creates it, and before the address's cart starts, whose
         // launch grants "multiplayer" only where the console has a link.
-        + (liveLink ? "web_boot.live_enable(" + JSON.stringify(liveLink) + ")\n" : "")
+        + (live ? "web_boot.live_enable(" + JSON.stringify(live.mac) + ")\n" : "")
         // What the address starts it on (web_boot.page_start).
         + "web_boot.page_start()\n"
         + "from web_boot import assets_json, step_frame_json, apply_events_json, "
@@ -1551,11 +1775,12 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + "sync_poll_json, sync_ack, sync_off, sync_root, store_mode, "
         + "rescan_store, gpio_poll_json, gpio_ack_json, gpio_off, "
         + "update_poll_json, update_wants_poll, update_ack_json, update_off, "
+        + "wifi_poll_json, wifi_wants_poll, wifi_ack_json, wifi_moved, "
         + "services_json, carts_poll_json, carts_event_json, "
-        + "import_p8_json, import_archive_json, export_cart, drop_kind, "
+        + "import_p8_json, p8_target_json, import_archive_json, export_cart, drop_kind, "
         + "edit_cart, open_cart, state_json, pcm_addr, "
         + "term_enable, term_poll_json, term_feed, term_state, "
-        + "live_pump, live_feed, live_state");
+        + "live_pump, live_feed, live_state, live_hints, official_hint, store_pulled");
     step = mp.globals.get("step_frame_json");
     pcmAt = mp.globals.get("pcm_addr")();
     applyEvents = mp.globals.get("apply_events_json");
@@ -1573,6 +1798,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     cartsEvent = mp.globals.get("carts_event_json");
     if (keep) cartsSay({ room: [keep.usage, keep.quota] });
     importP8Json = mp.globals.get("import_p8_json");
+    p8Target = mp.globals.get("p8_target_json");
     importArchiveJson = mp.globals.get("import_archive_json");
     exportCart = mp.globals.get("export_cart");
     dropKind = mp.globals.get("drop_kind");
@@ -1585,7 +1811,12 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         termFeed = mp.globals.get("term_feed");
         termState = mp.globals.get("term_state");
     }
-    if (liveLink) {
+    if (live) {
+        liveTerm = live.term;
+        liveHints = live.hints;
+        officialHint = mp.globals.get("official_hint");
+        storePulled = mp.globals.get("store_pulled");
+        liveHintsSay = mp.globals.get("live_hints");
         livePump = mp.globals.get("live_pump");
         liveFeed = mp.globals.get("live_feed");
         liveState = mp.globals.get("live_state");
@@ -1597,6 +1828,12 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         gpioAck = mp.globals.get("gpio_ack_json");
         gpioOff = mp.globals.get("gpio_off");
         console.log("[moy] gpio: " + gpioPins.length + " pins on the host");
+    }
+    if (wifiDoc) {
+        wifiPoll = mp.globals.get("wifi_poll_json");
+        wifiWants = mp.globals.get("wifi_wants_poll");
+        wifiAck = mp.globals.get("wifi_ack_json");
+        wifiMoved = mp.globals.get("wifi_moved");
     }
     if (updateDoc) {
         updatePoll = mp.globals.get("update_poll_json");
@@ -1662,16 +1899,176 @@ function shipFrame(s) {
 // not served by anything with pins" -- a static host (moybyte.com, an export),
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
-// The board's address on the air where it relays its radio on the live
-// socket (GET /live without the upgrade, native/moy_net/moy_live.h), else
-// null. A board without the socket 404s it.
+// What the board relays on the live socket (GET /live without the upgrade,
+// native/moy_net/moy_live.h): {mac, kinds, term, hints}, its address on the
+// air where it relays its radio ("" where not), the device kinds it relays
+// (moy_dev_relayed's text), whether its shell's face is there and whether it
+// says when its routes' answers change, or null where it carries none of
+// them. A board without the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
         const d = r.status === 200 ? sealedJson(r) : null;
-        return d && d.live && d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : null;
+        if (!d || !d.live) return null;
+        const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
+        const kinds = typeof d.kinds === "string" ? d.kinds : "";
+        const term = d.term === 1, hints = d.hints === 1;
+        return mac || kinds || term || hints ? { mac, kinds, term, hints } : null;
     } catch (e) {
         return null;
+    }
+}
+
+// Does the serving board manage its Wi-Fi from here (a Zero's /wifi)? One
+// GET before the console exists, which then has that board's station or none.
+async function probeWifi() {
+    try {
+        const r = await sealed("GET", "/wifi");
+        if (r.status !== 200) return null;
+        const d = sealedJson(r);
+        return (d && "connected" in d) ? d : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// THE HINTS (native/moy_net/moy_live.c): a board whose live socket says when
+// what its routes answer changed ('H' + a letter a topic) is asked then, not
+// on a clock, while that socket is open: the Wi-Fi panel's GET /wifi on 'w',
+// the update screen's GET /update on 'u', Get Carts' GET /official on 'o', the
+// store pulled again on 's' (an SSH session's edit, another page's sync),
+// once this page's own sync and Get Carts' request in hand are through (an
+// install this page asked for brings its own copy). A queued POST still goes
+// at its pump's pace; each GET a topic
+// waits HINT_MIN_MS after the last, and PUSH_BACKSTOP_MS without a hint, in
+// case one went with a dropped socket. The socket's own beat is the board's
+// liveness then, so the idle heartbeat asks nothing. A page with no live
+// socket (or a board without the hints) keeps its clocks.
+const HINT_MIN_MS = 250, PUSH_BACKSTOP_MS = 15000, STORE_QUIET_MS = 300;
+let liveHints = false, officialHint = null, storePulled = null, liveHintsSay = null;
+let wifiHint = false, updateHint = false, storeHintAt = 0, storeBusy = false;
+let pushedWas = false;
+const HINTS = { w: 0, u: 0, o: 0, s: 0, pulls: 0 };
+function pushed() {
+    return liveHints && liveWs !== null && liveWs.readyState === 1;
+}
+function liveHinted(u8) {
+    for (const c of u8) {
+        const k = String.fromCharCode(c);
+        if (k in HINTS) HINTS[k]++;
+        if (k === "w") wifiHint = true;
+        else if (k === "u") updateHint = true;
+        else if (k === "o" && officialHint) { try { officialHint(); } catch (e) { } }
+        else if (k === "s") storeHintAt = performance.now();
+    }
+}
+// What a pump that asks on a hint does this turn: "post" (its poll may hold
+// a queued body), "get" too, or nothing.
+function hintDue(now, last, hinted, gap) {
+    if (!pushed()) return now - last >= gap ? "get" : null;
+    if (now - last < HINT_MIN_MS) return null;
+    return hinted || now - last >= PUSH_BACKSTOP_MS ? "get" : "post";
+}
+function pushPump() {
+    const on = pushed();
+    if (on !== pushedWas) {
+        pushedWas = on;
+        if (liveHintsSay) { try { liveHintsSay(on); } catch (e) { } }
+    }
+    const now = performance.now();
+    if (!storeHintAt || storeBusy || !storePulled || now - storeHintAt < STORE_QUIET_MS) return;
+    if (outstanding) return;                 // this page's own change goes first
+    if (cartsLive.size) return;              // ...and Get Carts' request in hand, which brings its own
+    storeHintAt = 0;
+    storeBusy = true;
+    storePull().finally(() => { storeBusy = false; });
+}
+// The served store over this page's copy (the reload's pull, no cart
+// restarted): every root the VM reads from the store, the carts first, a cart
+// folder the board no longer has taken off.
+async function storePull() {
+    const roots = JSON.parse(mp.pyimport("moy_sync").reload_json())
+        .map((id) => store.rootById(id));
+    let got;
+    try {
+        got = await Promise.all(roots.map((r, i) => {
+            const pull = sealed("GET", "/" + r.endpoint);
+            return i ? pull.catch(() => ({ status: 0 })) : pull;
+        }));
+    } catch (e) {
+        return;
+    }
+    const docs = got.map((r) => r.status === 200 ? sealedJson(r) : null);
+    if (!docs[0]) return;
+    roots.forEach((r, i) => {
+        if (!docs[i]) return;
+        if (i === 0) {
+            let names = [];
+            try { names = mp.FS.readdir(r.vfs); } catch (e) { }
+            for (const n of names) {
+                if (n === "." || n === ".." || n.startsWith(".")) continue;
+                const pre = n + "/";
+                if (!Object.keys(docs[0]).some((rel) => rel.startsWith(pre))) rmTree(r.vfs + "/" + n);
+            }
+        }
+        writeStore(r.vfs, docs[i]);
+    });
+    HINTS.pulls++;
+    try { storePulled(); } catch (e) { }
+}
+
+function wifiPump() {
+    if (!wifiPoll) return;
+    const now = performance.now();
+    if (wifiMove && now > wifiMove.until) {
+        const m = wifiMove;
+        wifiMove = null;
+        const port = BASE ? new URL(BASE).port : "";
+        const url = "http://" + m.host + (port ? ":" + port : "") + "/";
+        try { wifiMoved(m.ssid); } catch (e) { }
+        expected("the console moved to " + m.ssid,
+                 "It is on " + m.ssid + " now. Join " + m.ssid + " and open " + url
+                 + " to carry on.", url);
+        return;
+    }
+    if (wifiBusy) return;
+    const due = hintDue(now, lastWifiAt, wifiHint, WIFI_MS);
+    if (!due) return;
+    let body = "";
+    try { body = wifiPoll(); } catch (e) { return; }
+    if (!body) {
+        if (due !== "get") return;
+        let wants = false;
+        try { wants = wifiWants(); } catch (e) { return; }
+        wifiHint = false;
+        lastWifiAt = now;
+        if (!wants) return;
+    }
+    wifiHint = false;
+    lastWifiAt = now;
+    wifiBusy = true;
+    if (body) wifiHint = true;      // what a POST asked may change the answer at once
+    const req = body ? sealed("POST", "/wifi", body) : sealed("GET", "/wifi");
+    req.then((r) => {
+            const ok = r.status >= 200 && r.status < 300 ? 1 : 0;
+            wifiSaid(wifiAck(ok, ok || r.status === 409 ? (r.text || "") : ""));
+        })
+        .catch(() => { try { wifiSaid(wifiAck(0, "")); } catch (e) { } })
+        .finally(() => { wifiBusy = false; });
+}
+
+function wifiSaid(t) {
+    let d = null;
+    try { d = t ? JSON.parse(t) : null; } catch (e) { }
+    if (!d) return;
+    if (d.move) {
+        wifiMove = { until: performance.now() + d.move.ms, ssid: d.move.ssid,
+                     host: d.move.host || (BASE ? new URL(BASE).hostname : "") };
+        console.log("[moy] wifi: the console is moving to " + d.move.ssid);
+    } else if (d.settled) {
+        wifiMove = null;
+        syncOk(performance.now());
+        console.log("[moy] wifi: the move " + (d.ok ? "worked" : "failed") + " -- the console answers");
     }
 }
 
@@ -1719,18 +2116,25 @@ async function probeOfficial() {
 function updatePump() {
     if (updateBusy || !updatePoll) return;
     const now = performance.now();
-    if (now - lastUpdateAt < UPDATE_MS) return;
-    lastUpdateAt = now;
+    const due = hintDue(now, lastUpdateAt, updateHint, UPDATE_MS);
+    if (!due) return;
     let body = "";
     try { body = updatePoll(); } catch (e) { return; }
     if (!body) {
         // Nothing queued. GET the status only while a screen is waiting on
-        // something; otherwise say nothing at all.
+        // something (and, on a pushing board, it said something changed);
+        // otherwise say nothing at all.
+        if (due !== "get") return;
         let wants = false;
         try { wants = updateWants(); } catch (e) { return; }
+        updateHint = false;
+        lastUpdateAt = now;
         if (!wants) return;
     }
+    updateHint = false;
+    lastUpdateAt = now;
     updateBusy = true;
+    if (body) updateHint = true;    // what a POST asked may change the answer at once
     const req = body ? sealed("POST", "/update", body) : sealed("GET", "/update");
     req.then((r) => {
             // A wait is the board answering: the screen says it and the link
@@ -1814,10 +2218,13 @@ function gpioPump() {
 // arrival order and are handed to the VM between steps, never inside one. A
 // socket that fails before it opens says nothing of why, so the same route
 // without the upgrade is asked: 401 this browser refused, a wait, 404 no
-// shell here.
-const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, BUSY: 8, NONE: 9 };
+// shell here, and an answer (a board that restarted, its 401 having signed
+// this page in again) opens it again.
+const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, BUSY: 8, NONE: 9,
+               TAKEN: 10 };
 let termPoll = null, termFeed = null, termState = null;
 let termWs = null, termSealed = false;
+let termSize = null;             // the grid's size taken while no socket was open, sent at its open
 const termQ = [];
 function termB64(u8) {
     let s = "";
@@ -1826,7 +2233,9 @@ function termB64(u8) {
     }
     return btoa(s);
 }
+let termGen = 0;                 // one a termOpen or termClose: a retry's own open is the last
 function termClose() {
+    termGen++;
     const ws = termWs;
     termWs = null;
     if (ws) { try { ws.close(1000); } catch (e) { } }
@@ -1837,6 +2246,7 @@ async function termWhy() {
         if (r.wait >= 0) return [TERM.WAIT, r.wait];
         if (r.status === 401 || r.status === 0) return [TERM.REFUSED, 0];
         if (r.status === 404) return [TERM.NONE, 0];
+        if (r.status === 200) return [TERM.OPEN, 0];
     } catch (e) { }
     return [TERM.UNREACHABLE, 0];
 }
@@ -1853,8 +2263,13 @@ function termSend(ws, kind, u8) {
     const n = sw().up(0, swPut(raw));
     if (n > 0) ws.send(swGet(n));
 }
-async function termOpen(cols, rows) {
+// A shell another page just gave up (moy_wa_take: its bridge lets go at its
+// next turn) answers 1013 "busy" for that moment: the open is asked again,
+// TERM_BUSY_TRIES times TERM_BUSY_MS apart, before the Terminal says busy.
+const TERM_BUSY_TRIES = 4, TERM_BUSY_MS = 300;
+async function termOpen(cols, rows, tries = 0) {
     termClose();
+    const gen = termGen;
     const path = "/term?cols=" + cols + "&rows=" + rows;
     let target = path;
     termSealed = false;
@@ -1884,7 +2299,15 @@ async function termOpen(cols, rows) {
     ws.binaryType = "arraybuffer";
     let opened = false;
     termWs = ws;
-    ws.onopen = () => { if (termWs === ws) { opened = true; termQ.push({ s: TERM.OPEN, n: 0 }); } };
+    ws.onopen = () => {
+        if (termWs !== ws) return;
+        opened = true;
+        if (termSize) {
+            termSend(ws, "s", utf8.encode(JSON.stringify({ size: termSize })));
+            termSize = null;
+        }
+        termQ.push({ s: TERM.OPEN, n: 0 });
+    };
     ws.onmessage = (m) => {
         if (termWs !== ws || typeof m.data === "string") return;
         let u8 = new Uint8Array(m.data);
@@ -1905,22 +2328,103 @@ async function termOpen(cols, rows) {
         termWs = null;
         const exit = /^exit (-?\d+)$/.exec(c.reason || "");
         if (c.code === 1000 && exit) termQ.push({ s: TERM.ENDED, n: +exit[1] });
-        else if (c.code === 1013) termQ.push({ s: TERM.BUSY, n: 0 });
+        else if (c.code === 1013 && !opened && tries + 1 < TERM_BUSY_TRIES) {
+            setTimeout(() => { if (termGen === gen) termOpen(cols, rows, tries + 1); }, TERM_BUSY_MS);
+        } else if (c.code === 1013) termQ.push({ s: TERM.BUSY, n: 0 });
         else if (c.code === 1008 && c.reason === "revoked") termQ.push({ s: TERM.REFUSED, n: 0 });
+        else if (c.code === 4001) termQ.push({ s: TERM.TAKEN, n: 0 });
         else if (opened) termQ.push({ s: TERM.LOST, n: 0 });
-        else termWhy().then(([st, n]) => termQ.push({ s: st, n: n }));
+        else termWhy().then(([st, n]) => {
+            if (termGen !== gen) return;
+            if (st !== TERM.OPEN) termQ.push({ s: st, n: n });
+            else if (tries + 1 < TERM_BUSY_TRIES) termOpen(cols, rows, tries + 1);
+            else termQ.push({ s: TERM.UNREACHABLE, n: 0 });
+        });
     };
 }
+// ...and where the board's live socket carries its shell (the probe's
+// "term", native/moy_tty/moy_tty_live.c), the Terminal's face is that
+// socket's 't' channel and no /term is asked: 'O' with the grid's size opens
+// it, 'k' keys and 's' sizes go up, 'C' closes it; the board answers 'A' (open),
+// 'B' (another transport's face, or no memory), 'D' the face's bytes and 'X'
+// its exit status. The socket's end ends the face: LOST, TAKEN by another
+// session's page, REFUSED when its session ended. A face asked for before the
+// socket is open is opened when it is.
+let liveTerm = false;
+let termLive = null;             // {cols, rows, opened, tries} while the Terminal holds the face
+function u16s(a, b) { return new Uint8Array([a & 255, a >> 8, b & 255, b >> 8]); }
+function termLiveSay(kind, u8) {
+    const ws = liveWs;
+    if (!ws || ws.readyState !== 1) return false;
+    const b = new Uint8Array(2 + u8.length);
+    b[0] = 0x74;
+    b[1] = kind.charCodeAt(0);
+    b.set(u8, 2);
+    liveSend(ws, b);
+    LIVE.up++;
+    return true;
+}
+function termLiveOpen(cols, rows, tries = 0) {
+    termLive = { cols: cols, rows: rows, opened: false, tries: tries };
+    termLiveSay("O", u16s(cols, rows));     // or at the socket's open
+}
+function termLiveClose() {
+    if (termLive) termLiveSay("C", new Uint8Array(0));
+    termLive = null;
+}
+function termLiveLost(st) {
+    if (!termLive || !termLive.opened) return;
+    termLive = null;
+    termQ.push({ s: st, n: 0 });
+}
+function termLiveIn(u8) {
+    const t = termLive;
+    if (!t) return;
+    const k = u8[1];
+    if (k === 0x44) termQ.push({ d: termB64(u8.subarray(2)) });                        // D
+    else if (k === 0x41) {                                                             // A
+        t.opened = true;
+        if (termSize) {
+            termLiveSay("s", u16s(termSize[0], termSize[1]));
+            termSize = null;
+        }
+        termQ.push({ s: TERM.OPEN, n: 0 });
+    } else if (k === 0x58 && u8.length >= 6) {                                         // X
+        termLive = null;
+        termQ.push({ s: TERM.ENDED, n: new DataView(u8.buffer, u8.byteOffset + 2, 4).getInt32(0, true) });
+    } else if (k === 0x42) {                                                           // B
+        if (u8[2] === 0 && t.tries + 1 < TERM_BUSY_TRIES) {
+            setTimeout(() => { if (termLive === t) termLiveOpen(t.cols, t.rows, t.tries + 1); },
+                       TERM_BUSY_MS);
+        } else {
+            termLive = null;
+            termQ.push({ s: TERM.BUSY, n: 0 });
+        }
+    }
+}
+
 function termPump() {
     if (!termPoll) return;
     let j = "";
     try { j = termPoll(); } catch (e) { return; }
-    if (j) {
+    if (j && liveTerm) {
+        const d = JSON.parse(j);
+        if (d.want === 2) termLiveClose();
+        if (d.want === 1) termLiveOpen(d.cols, d.rows);
+        if (d.size) termSize = d.size;
+        if (termLive && termLive.opened) {
+            if (termSize) termLiveSay("s", u16s(termSize[0], termSize[1]));
+            termSize = null;
+            if (d.out) termLiveSay("k", new Uint8Array(d.out));
+        }
+    } else if (j) {
         const d = JSON.parse(j);
         if (d.want === 2) termClose();
         if (d.want === 1) termOpen(d.cols, d.rows);
+        if (d.size) termSize = d.size;
         if (termWs && termWs.readyState === 1) {
-            if (d.size) termSend(termWs, "s", utf8.encode(JSON.stringify({ size: d.size })));
+            if (termSize) termSend(termWs, "s", utf8.encode(JSON.stringify({ size: termSize })));
+            termSize = null;
             if (d.out) termSend(termWs, "k", new Uint8Array(d.out));
         }
     }
@@ -1931,12 +2435,14 @@ function termPump() {
 }
 
 // THE LIVE SOCKET (#256; native/moy_net/moy_live.h is the wire) on a page
-// whose board relays its radio: one WebSocket to GET /live, sealed as the
-// terminal's is (seal slot 1), its frames' first byte their channel. The
-// worker opens it at boot, keeps it beating, reopens a dropped one after
-// LIVE_RETRY_MS, and moves the link channel ('n') between the socket and
-// the VM between frames (web_boot's live_*), never inside one: the console
-// runs a console's match over it (native/moy_net/moy_link_web.c). Every
+// whose board relays its radio or a device: one WebSocket to GET /live,
+// sealed as the terminal's is (seal slot 1), its frames' first byte their
+// channel. The worker opens it at boot, keeps it beating, reopens a dropped
+// one after LIVE_RETRY_MS, and moves the link channel ('n') and the device
+// channel ('d') between the socket and the VM between frames (web_boot's
+// live_*), never inside one: the console runs a console's match over it
+// (native/moy_net/moy_link_web.c) and its relayed devices' handles
+// (moy_dev_web.c). Every
 // beat is an echo ('c' 'e', answered 'E'), the page's round trip to its
 // board, which a harness reads in `__moyState().live`.
 const LIVE_BEAT_MS = 1000, LIVE_LOST_MS = 3000;
@@ -1944,6 +2450,10 @@ const LIVE_RETRY_MS = [250, 500, 1000, 2000, 5000];
 let livePump = null, liveFeed = null, liveState = null, liveOn = false;
 let liveWs = null, liveSealed = false, liveRetry = 0, liveHidden = 0, liveWasHidden = 0;
 let liveHeard = 0, liveSaid = 0;
+// A socket that fails before it opens says nothing of why, and a board that
+// restarted has forgotten this page's session: the next open asks the same
+// route without the upgrade first, whose 401 signs in again (`sealed`).
+let liveAsk = false;
 const liveQ = [];
 const LIVE = { opens: 0, drops: 0, up: 0, down: 0, rtt: [] };
 function liveSend(ws, pl) {
@@ -1962,13 +2472,21 @@ function liveDrop(ws, why) {
     try { ws.close(1000); } catch (e) { }
     LIVE.drops++;
     liveQ.push({ s: 0, why: why });
+    termLiveLost(TERM.LOST);
     liveLater();
 }
 async function liveOpen() {
-    if (liveWs || !liveOn) return;
+    if (liveWs || !liveOn || taken) return;
     let target = "/live";
     liveSealed = false;
     if (!(await signIn())) { liveLater(); return; }
+    if (liveAsk && !authOpen) {
+        let r = { status: 0 };
+        try { r = await sealed("GET", "/live"); } catch (e) { }
+        if (r.status !== 200) { liveLater(); return; }
+        liveAsk = false;
+    }
+    if (liveWs || !liveOn || taken) return;
     if (!authOpen) {
         const C = sw();
         if (swCall((m, p) => C.seal(m, p, 0), "GET", target) < 0) { liveLater(); return; }
@@ -1982,12 +2500,15 @@ async function liveOpen() {
     try { ws = new WebSocket(u.href, "moy.live"); } catch (e) { liveLater(); return; }
     ws.binaryType = "arraybuffer";
     liveWs = ws;
+    let opened = false;
     ws.onopen = () => {
         if (liveWs !== ws) return;
+        opened = true;
         liveRetry = 0;
         LIVE.opens++;
         liveHeard = liveSaid = performance.now();
         liveQ.push({ s: 1 });
+        if (termLive) termLiveSay("O", u16s(termLive.cols, termLive.rows));
     };
     ws.onmessage = (m) => {
         if (liveWs !== ws || typeof m.data === "string") return;
@@ -1999,7 +2520,9 @@ async function liveOpen() {
         }
         liveHeard = performance.now();
         LIVE.down++;
-        if (u8[0] === 0x6e) liveQ.push({ d: u8 });
+        if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
+        else if (u8[0] === 0x74) termLiveIn(u8);
+        else if (u8[0] === 0x63 && u8[1] === 0x48) liveHinted(u8.subarray(2));
         else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
             const t = new Float64Array(u8.slice(2).buffer)[0];
             LIVE.rtt.push(performance.now() - t);
@@ -2010,8 +2533,12 @@ async function liveOpen() {
         if (liveWs !== ws) return;
         liveWs = null;
         LIVE.drops++;
+        if (!opened) liveAsk = true;
         liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
-        liveLater();
+        termLiveLost(c.code === 4001 ? TERM.TAKEN : c.code === 1008 && c.reason === "revoked"
+                     ? TERM.REFUSED : TERM.LOST);
+        if (c.code === 4001) takenAway();
+        else liveLater();
     };
 }
 function liveFeedAll(parts) {
@@ -2554,7 +3081,7 @@ function syncPump() {
                          + "Scan the code on its WEB CONSOLE screen to pair again.");
                 return;
             }
-            if (ok) { syncOk(now); outstanding = false; }
+            if (ok) { syncOk(now); outstanding = false; storeFullSaid(r.text); }
             else if (r.status === 503) { closingSaid(r.text); }
             else syncFailed(now);
             try { syncAck(ok ? 1 : 0); } catch (e) { }
@@ -2565,6 +3092,21 @@ function syncPump() {
             try { syncAck(0); } catch (e) { }
         })
         .finally(() => { syncBusy = false; });
+}
+
+// THE CONSOLE'S STORE IS FULL. A batch its store has no room for is answered
+// 200 with each write refused "OSError: [Errno 28]" (moy_sync_apply.c), and
+// the batch is acked like any other refusal, so nothing replays: the person
+// is told, once per batch, that what they made is in this tab alone.
+function storeFullSaid(text) {
+    let err;
+    try { err = (JSON.parse(text || "{}").err) || []; } catch (e) { return; }
+    const full = err.filter((e) => /\[Errno 28\]/.test(String(e && e[1]))).length;
+    if (!full) return;
+    console.log("[moy] sync: the console's storage is full, " + full + " write(s) refused");
+    self.postMessage({ t: "imported", ok: false,
+        s: "The console's storage is full: " + full + (full === 1 ? " file was" : " files were")
+           + " not saved on it. Remove a cart there and save again." });
 }
 
 // WHAT AN IDLE PAGE ASKS. With nothing to push there is no POST, and with no
@@ -2580,6 +3122,10 @@ function heartbeat(now) {
     if (!lastSyncOkAt) lastSyncOkAt = now;      // start the clock at first idle
     if (now - lastHeartbeatAt < HEARTBEAT_MS) return;
     lastHeartbeatAt = now;
+    if (pushed()) {                              // the socket's beat says it answers
+        syncOk(now);
+        return;
+    }
     syncBusy = true;
     fetch("sync", { method: "GET" })
         .then((r) => {
@@ -2632,11 +3178,11 @@ function closingSaid(t) {
     }
 }
 
-function expected(head, body) {
+function expected(head, body, go) {
     if (syncLostSaid) return;
     syncLostSaid = true;
     self.postMessage({ t: "lost", kind: "expected", risk: false,
-                       head: head, body: body });
+                       head: head, body: body, go: go || "" });
 }
 
 // Self-driven frame loop. setTimeout (not rAF -- workers have none) against a
@@ -2686,7 +3232,7 @@ function loop() {
         }
         liveIn();
         const _t0 = performance.now();
-        const s = step(dt, played);
+        let s = step(dt, played);
         const _d = performance.now() - _t0;
         // WORKER-SIDE PERF: the page's `recv` fps says the worker is behind but
         // not WHY. Track step cost + the worst offender's payload so the HUD
@@ -2696,6 +3242,16 @@ function loop() {
         if (_d > 20) WP.slow++;
         if (LOOP) longest("step", _d);
         const sounded = shipPCM();
+        if (s && (s.indexOf('"clip"') >= 0 || s.indexOf('"ask"') >= 0)) {
+            // A copy in the console: the page puts its text on the browser's
+            // clipboard. An ask of a console row: the page does it
+            // (page_link.py), from a message of its own, since the page keeps
+            // only its newest frame.
+            const o = JSON.parse(s);
+            if (o.clip !== undefined) self.postMessage({ t: "clip", s: o.clip });
+            if (o.ask) self.postMessage({ t: "ask", a: o.ask });
+            if (!o.paint) s = "";
+        }
         if (s) { WP.painted++; WP.bytes += s.length; shipFrame(s); }
         // GC scheduling (see IDLE_QUIET_FRAMES). A painted frame re-arms the
         // idle collect, and so does one within STREAM_FRAMES of shipped samples.
@@ -2716,6 +3272,8 @@ function loop() {
         termPump();
         liveStep(gap);
         updatePump();
+        wifiPump();
+        pushPump();
         cartsPump();
     } catch (e) {
         self.postMessage(crashMessage(e));
@@ -2728,7 +3286,9 @@ function loop() {
 self.onmessage = async (ev) => {
     const m = ev.data;
     try {
-        if (m.t === "init") {
+        if (m.t === "convert") {
+            await convertHere(m);
+        } else if (m.t === "init") {
             ASSETS_IN = m.assets || null;
             if (m.base) BASE = m.base;
             await init(m.search, !!m.coarse, m.channel || "", m.scheme, m.auth, +m.rate || 0);
@@ -2745,9 +3305,11 @@ self.onmessage = async (ev) => {
                     askToPair();
                 }
             } else if (!(await pairPassword(m.pw, m.name))) askToPair();
+        } else if (m.t === "takeback") {
+            takeBack();
         } else if (m.t === "password") {
-            // The pairing prompt's password: a pairing reloads the page (its
-            // {t:"key"}), anything else asks again with why.
+            // The pairing prompt's password: a pairing goes on with the boot
+            // (its {t:"key"}), anything else asks again with why.
             if (!(await pairPassword(m.pw, m.name))) askToPair();
         } else if (m.t === "input") {
             inbox.push(m.json);
@@ -2760,7 +3322,8 @@ self.onmessage = async (ev) => {
             if (liveHidden) liveWasHidden = 1;
         } else if (m.t === "state") {
             self.postMessage({ t: "state", json: stateJson ? stateJson() : "null", sink: sinkStats,
-                               loop: LOOP, live: liveOn ? LIVE : null });
+                               loop: LOOP, live: liveOn ? LIVE : null, hints: liveHints ? HINTS : null,
+                               p8: p8Last });
         } else if (m.t === "run") {
             // lastStep too: a (re)start must begin with a clean 1/60 dt, not a
             // clamped jump measured from whenever the loop last ran.
@@ -2838,11 +3401,10 @@ self.onmessage = async (ev) => {
                         self.postMessage({ t: "imported", ok: false,
                             s: "could not import " + m.name, report: r.report });
                     } else {
-                        // IT RUNS IMMEDIATELY (#194). The whole point of
-                        // converting on import is that the result is an
-                        // ordinary cart, so the honest proof is that it plays
-                        // the moment it lands -- not a row on a shelf.
-                        if (openCart) openCart(r.dir);
+                        // IT RUNS ON THE NEXT TAP (#194): the converted cart
+                        // is an ordinary cart, and the console's report card
+                        // (page_link.py's `offer`) says where it will stop
+                        // agreeing with PICO-8, its Open playing it.
                         self.postMessage({ t: "imported", ok: true,
                             s: "imported " + r.dir + " into your carts",
                             report: r.report, dir: r.dir });

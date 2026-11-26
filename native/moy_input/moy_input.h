@@ -84,6 +84,10 @@
 // enter no pressed mask, no key event and no last_key, so a cart's btnp,
 // key() and keyp() read what they read without them. moy_input_add_steps adds
 // a producer's steps (the trackball's) to the frame's counts after the merge.
+// A source whose device repeats its own keys (a browser's keyboard:
+// moy_input_set_own_repeat) is owed none at the merge; its producer adds the
+// device's repeats as they come (moy_input_add_steps,
+// moy_input_add_key_repeats), so a key let go late never repeats.
 // moy_input_spend_edges zeroes the frame's edges and counts, a held button
 // keeping its level and its schedule (a caret took the step);
 // moy_input_clear_edges also starts every held repeat's delay over. A clock
@@ -395,6 +399,15 @@ void moy_input_set_repeat(moy_input_t *t, int32_t delay_ms, int32_t rate_ms);
 void moy_input_get_repeat(const moy_input_t *t, int32_t *delay_ms, int32_t *rate_ms);
 // A producer's steps on `button` this frame, added to its repeat count.
 int moy_input_add_steps(moy_input_t *t, uint8_t button, uint32_t n);
+// The source's device repeats its own held keys: the merge owes its held
+// buttons and its typing level no repeats. Let go, a key it holds starts the
+// table's delay.
+int moy_input_set_own_repeat(moy_input_t *t, uint32_t h, bool own);
+bool moy_input_own_repeat(const moy_input_t *t, uint32_t h);
+// A producer's `n` repeats of key event `ev` this frame, the typing count's
+// (another key's count before it this frame is replaced); a chord and a key
+// that types no byte add none, as they repeat none.
+int moy_input_add_key_repeats(moy_input_t *t, int32_t ev, uint32_t n);
 // The trackball's coast as this build has it (MOY_INPUT_BALL_COAST), and its
 // rate (rate, NULL: not asked).
 int32_t moy_input_ball_coast(int32_t *rate);

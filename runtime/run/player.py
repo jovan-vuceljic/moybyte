@@ -1301,7 +1301,10 @@ class Player(PlayerDiag):
         # when this cart declares the "network" permission, so a normal kid cart
         # gets NO `wifi` name (sandbox preserved). make_api injects `wifi` into the
         # cart namespace iff the backend it receives is non-None.
-        wifi = ws.wifi if ws.cart_has_perm("network") else None
+        # A station that is not a cart's (a Zero's, whose join moves the
+        # board from under the page serving it: `CARTS`) is never handed one.
+        wifi = ws.wifi if ws.cart_has_perm("network") and getattr(ws.wifi, "CARTS", True) \
+            else None
         if wifi is not None:
             ws.spine.wifi_hold("cart", self.pid)  # the radio lease for this run; its end lets go
         # Multiplayer message service (#65): gate net.* by the "multiplayer"

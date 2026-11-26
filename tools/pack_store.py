@@ -11,11 +11,14 @@ so the store carries the packs and decides nothing. Its tree is
 file, so the loader on a board's origin can read it; a name that is a
 digest never changes, and the loader keeps what it read under it.
 
-Its packs are those the add-on entries of the rolling releases' indexes name
-(`carts-<board>.json`, tools/web_pack.py), taken from the same add-on carts
-the boards install, each checked against its index entry and its digest:
-every one of the stable release's, and the beta release's published in the
-last DEV_DAYS days (§12: a dev board older than that updates its firmware).
+Its packs are those of the rolling releases' add-on carts
+(`moybyte_web-<body digest>.moy.zip`, tools/web_pack.py), the carts the
+boards install, read by their names, so a board whose console is online
+(the C3 Zero's), whose index names no add-on, finds its pack too: every one
+of the stable release's, and the beta release's published in the last
+DEV_DAYS days (§12: a dev board older than that updates its firmware). Each
+is checked against its name's digest, and against its entry where an index
+(`carts-<board>.json`) names it.
 
 Beside them it mirrors each release's indexes whole, at
 `console/releases/<tag>/carts-<board>.json` (cart_index.index_mirror names
@@ -101,17 +104,21 @@ def _indexes(folder):
 
 
 def pack_of(folder, digest, asset):
-    """The pack bytes of the add-on `asset` (an index entry's) in `folder`,
-    checked: the cart's size and sha256 as the index names them, and the
-    pack's body digest as the entry's `fits`."""
+    """The pack bytes of the add-on `asset` (wanted's) in `folder`, checked:
+    the cart's size and sha256 as an index names them, where one does, and
+    the pack's body digest as `digest`."""
     path = os.path.join(folder, asset["url"])
     with open(path, "rb") as f:
         data = f.read()
-    if len(data) != asset.get("size") or hashlib.sha256(data).hexdigest() != asset.get("sha256"):
+    if "sha256" in asset and (len(data) != asset.get("size")
+                              or hashlib.sha256(data).hexdigest() != asset["sha256"]):
         raise StoreError("%s is not the cart its index names" % asset["url"])
-    with zipfile.ZipFile(path) as z:
-        name = web_pack.cart_id(digest) + ".moy/" + web_pack.PACK_FILE
-        pack = z.read(name)
+    name = web_pack.cart_id(digest) + ".moy/" + web_pack.PACK_FILE
+    try:
+        with zipfile.ZipFile(path) as z:
+            pack = z.read(name)
+    except (KeyError, zipfile.BadZipFile):
+        raise StoreError("%s holds no %s" % (asset["url"], name))
     try:
         got = web_pack.digest_of(pack)
     except web_pack.PageError as e:
@@ -122,18 +129,25 @@ def pack_of(folder, digest, asset):
 
 
 def wanted(folder, since=None):
-    """{body digest: add-on asset entry} the indexes in `folder` name, only
-    those whose cart is dated `since` (a timestamp) or later when given."""
-    out = {}
+    """{body digest: add-on asset entry} of the add-on carts in `folder`,
+    only those dated `since` (a timestamp) or later when given: the entry an
+    index in `folder` names, else one of the cart's name alone."""
+    named = {}
     for name in _indexes(folder):
         with open(os.path.join(folder, name), "rb") as f:
             index = f.read()
         for digest, asset in _addons(index):
-            path = os.path.join(folder, asset["url"])
-            if since is not None and (not os.path.exists(path)
-                                      or os.path.getmtime(path) < since):
-                continue
-            out.setdefault(digest, asset)
+            named.setdefault(asset["url"], (digest, asset))
+    out = {}
+    for name in sorted(os.listdir(folder)):
+        if not web_pack.ADDON_ASSET.match(name):
+            continue
+        path = os.path.join(folder, name)
+        if since is not None and os.path.getmtime(path) < since:
+            continue
+        digest, asset = named.get(name) or (name[len("moybyte_web-"):-len(".moy.zip")],
+                                            {"url": name})
+        out.setdefault(digest, asset)
     return out
 
 
@@ -253,9 +267,9 @@ def _gh_json(*args):
 
 
 def fetch(tag, dest):
-    """A release's indexes, the add-on carts they name and the official
-    carts' files they name (web_pack.shelf_files) into `dest`, each file's
-    mtime the asset's publication date (for build's `dev` cut)."""
+    """A release's indexes, its add-on carts and the official carts' files
+    the indexes name (web_pack.shelf_files) into `dest`, each file's mtime
+    the asset's publication date (for build's `dev` cut)."""
     assets = {a["name"]: a for a in _gh_json("release", "view", tag, "--json", "assets")["assets"]}
     os.makedirs(dest, exist_ok=True)
     with open(os.path.join(dest, TAG_FILE), "w") as f:
@@ -264,11 +278,10 @@ def fetch(tag, dest):
     with tempfile.TemporaryDirectory() as tmp:
         for name in names:
             _download(tag, name, tmp, dest, assets[name])
-        want = set()
+        want = {n for n in assets if web_pack.ADDON_ASSET.match(n)}
         for name in names:
             with open(os.path.join(dest, name), "rb") as f:
                 index = f.read()
-            want |= {a["url"] for _digest, a in _addons(index)}
             want |= set(web_pack.shelf_files(index))
         for name in sorted(want):
             if name in assets and not os.path.exists(os.path.join(dest, name)):
@@ -289,7 +302,7 @@ def _download(tag, name, tmp, dest, meta):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    f = sub.add_parser("fetch", help="a release's indexes and the carts they name, dated")
+    f = sub.add_parser("fetch", help="a release's indexes, add-on carts and the carts they name, dated")
     f.add_argument("tag")
     f.add_argument("dest")
     b = sub.add_parser("build", help="the store's tree to deploy")

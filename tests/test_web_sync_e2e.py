@@ -107,20 +107,23 @@ def test_a_cart_made_in_chrome_lands_on_disk(tmp_path):
         assert man.get("title"), man
         # ...and nothing that must stay home CROSSED. The test is what came
         # over the WIRE, not what is on the disk afterwards, and those stopped
-        # being the same thing: `moy_fs._publish` leaves a `<name>.bak` redo
-        # log beside EVERY file it writes, so the receiver's own crash safety
-        # now puts `main.py.bak` next to `main.py` exactly as it has always put
-        # `journal/cursor.json.bak` next to the cursor. Counting either against
-        # the wire counts this side's durability as a leak.
+        # being the same thing: `moy_fs._publish` leaves its backup
+        # (`.<name>.moybak`) beside EVERY file it writes, so the receiver's own
+        # crash safety puts `.main.py.moybak` next to `main.py` exactly as it
+        # puts one next to the journal's cursor. Counting either against the
+        # wire counts this side's durability as a leak.
         #
         # A backup whose PRINCIPAL did not cross is still a leak, and that is
-        # what this asks: every `.bak`/`.tmp` here must belong to a file that
-        # is itself here. An orphan means something arrived that should not
-        # have -- which is the failure the line was written to catch.
+        # what this asks: every backup or `.tmp` here must belong to a file
+        # that is itself here. An orphan means something arrived that should
+        # not have -- which is the failure the line was written to catch.
         here = {p.name for p in new.iterdir()}
-        orphans = sorted(n for n in here
-                         if n.endswith((".bak", ".tmp"))
-                         and n.rsplit(".", 1)[0] not in here)
+
+        def principal(n):
+            if n.startswith(".") and n.endswith(".moybak"):
+                return n[1:-len(".moybak")]
+            return n.rsplit(".", 1)[0] if n.endswith(".tmp") else None
+        orphans = sorted(n for n in here if principal(n) is not None and principal(n) not in here)
         assert not orphans, "a backup with no file to back: %s" % orphans
 
         # THE JOURNAL IS THE RECEIVER'S OWN (2026-08-25). This used to assert

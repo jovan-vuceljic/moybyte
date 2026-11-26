@@ -66,11 +66,15 @@ typedef struct {
     const char *loc;        // Location's value, trimmed; NULL when none
     size_t loc_n;
     size_t head_end;        // the byte past the blank line
+    uint8_t keep;           // the connection outlives the response (below)
 } moy_http_resp_t;
 
 // A response head off the first `n` bytes of `buf`: MOY_HTTP_OK with `r`
 // filled, or MOY_HTTP_PARTIAL until the "\r\n\r\n" arrives. Header names
-// match without regard to ASCII case.
+// match without regard to ASCII case. `keep` is 1 when the server keeps the
+// connection open after this body and the body's end is known: a Connection
+// header names keep-alive and none names close, a Content-Length reads, and
+// there is no Transfer-Encoding (moy_ota.h's THE POOL).
 int moy_http_resp_parse(const char *buf, size_t n, moy_http_resp_t *r);
 
 // -- the listener and the platform (moy_net_port.c) -----------------------------
@@ -265,6 +269,7 @@ typedef struct {
     char *shelf;                    // NULL: the folders are not noted
     size_t shelf_cap;
     const char *apps;               // NULL: no apps root
+    int spend;                      // the batch's bytes are the caller's to overwrite
 } moy_sync_store_t;
 
 typedef struct {
@@ -290,6 +295,14 @@ int moy_sync_path(const char *p, size_t n, int history);
 // Apply the ops array at [ops, ops_end) into `root` of `s`, one op at a time:
 // a bad op is refused with its reason and never aborts the batch. A system
 // root has no store here: each of its ops is refused "no such store".
+// With `spend` an op's text is decoded where it lies in the batch (a decoded
+// string and a decoded base64 are never longer than their source), so a part
+// costs its request's buffer and no second block; without, in a block of the
+// store's, and the batch is left as it came.
+// A batch whose writes its store's volume has no room for (moy_vol_room, less
+// MOY_SYNC_ROOM_KEEP) is refused whole before any of it is written, each
+// writing op with "OSError: [Errno 28]"; its removals still apply.
+#define MOY_SYNC_ROOM_KEEP (16u * 1024u)
 void moy_sync_apply(const moy_sync_store_t *s, int root, const char *ops,
                     const char *ops_end, moy_sync_result_t *res);
 
@@ -335,6 +348,7 @@ enum {
     MOY_WEB_EV_SHELF = 1,           // a batch changed the shelf: rescan
     MOY_WEB_EV_STOPPED = 2,         // the listener closed (the goodbye ran out)
     MOY_WEB_EV_PAIRED = 4,          // a browser paired: the QR's token is spent
+    MOY_WEB_EV_PASSWORD = 8,        // a claim set the password: the SSH server starts
 };
 
 typedef struct {

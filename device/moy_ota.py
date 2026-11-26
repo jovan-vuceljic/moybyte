@@ -82,6 +82,11 @@ def poll_online(online, autoconnect, since):
 # therefore carries the board (latest-<board>.json), and this is stamped by
 # build.sh alongside the channel.
 BOARD = "tdeck"
+# A board's name as a reader knows it (About, neofetch's Board), by its OTA id.
+BOARD_NAMES = {"tdeck": "T-Deck Plus", "p4": "Waveshare P4 7″", "guition_s3": "Guition 3.5″",
+               "guition_p4": "Guition P4 10″", "elecrow_p4": "Elecrow P4 10″",
+               "xiao_zero": "XIAO ESP32-S3", "c3_zero": "ESP32-C3 Zero",
+               "cores3": "M5Stack CoreS3 SE"}
 
 # Released-build identity (mirrors cart versioning). The online check offers an update
 # when the manifest is for a DIFFERENT channel than the running build (a deliberate

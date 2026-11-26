@@ -57,6 +57,7 @@ import host_api
 import layout_base
 import moy_carts
 import moy_catalogue
+import page_link
 import web_canvas
 import web_input
 import web_vfs
@@ -262,7 +263,8 @@ WEB_TOUCH_INPUTS = (("touch", "touch"), ("local", "keys"), ("pad", "pad"))
 
 
 def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
-         windowed=False, font_scale=0, hud=True, coarse=False, scheme=None):
+         windowed=False, font_scale=0, hud=True, coarse=False, scheme=None,
+         zoom=None, zooms=(0, 1)):
     """Build the shared Workstation over the RGB565 canvas + the VFS store.
     The page/harness wrote the cart bundle into `carts_root` before calling.
 
@@ -282,6 +284,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         canvas for the desk and its app windows, plus a separate 320x240 game
         canvas that `blit_game` composites into a window (integer-scaled through
         the same C kernel). Boots onto the desk with project management on.
+        `zoom` (not None) makes its glass the page's that zooms: the UI size
+        chosen (0: Auto) and `zooms` the choices (`Appearance.zoom_glass`),
+        set before the stored settings apply, so the page's size stands.
     """
     # GC POLICY (surface model Phase B, the gate-0 finding): the port hardcodes
     # gc_alloc_threshold to 16KB, so EVERY painted frame schedules a FULL
@@ -331,11 +336,11 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
         # rasterizer here was unaffordable at ~85ms/frame interpreted.
         sysc = web_canvas.make_canvas(width, height, font_scale=font_scale)
         game = web_canvas.WebSystemCanvas(web_canvas.compositor(320, 240))
-        # The desk declares the P4's glass at the P4's pixel density, so it
-        # lays out on the desk's metrics as that board does at any page size.
         ws = console.Workstation(host_api._NullComp(), game, inp, carts,
                                  sys_canvas=sysc, font_scale=font_scale,
-                                 panel_diagonal_in=layout_base.desk_diagonal_in(width, height))
+                                 panel_diagonal_in=glass_in(width, height))
+        if zoom is not None:
+            ws.look.zoom_glass(int(zoom), tuple(zooms))
     else:
         sysc = game = web_canvas.make_canvas(320, 240, font_scale=font_scale)
         ws = console.Workstation(host_api._NullComp(), game, inp, carts)
@@ -358,7 +363,10 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # The board-agnostic service wiring, in the one canonical order (host + both
     # boards + this runner).
     #
-    # NO WIFI SERVICE, and that is the honest answer rather than a missing one.
+    # THE WIFI SERVICE is the serving Zero's own, where the worker's probe of
+    # its sealed /wifi answered (`wifi_enable`, wifi_link.BoardWifi): the
+    # panel, the bar's glyph and the Settings row are that board's. Anywhere
+    # else there is NONE, and that is the honest answer rather than a missing one.
     # This wired host_api's FakeWifi until 2026-08-30 -- the SIMULATOR's stand-in,
     # whose whole job is to invent four access points ("Home WiFi", "Coffee
     # Shop", "Neighbor 5G", "Library Guest") and a 192.168.1.42 so the desktop's
@@ -373,7 +381,7 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     # board's own service (as gpio_link and update_link are), not a fake.
     console.wire_workstation_core(
         ws, moy_carts, carts_root, _make_api,
-        None,
+        _S.get("wifi"),
         audio_out=_RunnerPump(), runtimes=runtimes, can_manage=True,
         pointer=console.Pointer(sysc.w, sysc.h), inp=inp, first_variant=scheme)
     # AUTHORING IS ON, BOTH TIERS (owner call): the browser build is the whole
@@ -439,9 +447,13 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     if not hud:
         ws.show_fps = False
         ws.perf_hud = False
-    driver = host_api.ConsoleDriver(ws)
+    driver = host_api.ConsoleDriver(ws, own_repeat=True)   # the browser repeats its keys
     ws.use_inputs(WEB_TOUCH_INPUTS if coarse else WEB_INPUTS)
     ws.soft_keyboard = True     # the page's ⌨ summons the browser's keyboard
+    ws.panel_light = False      # no light to set: Brightness is not offered
+    # The page around the console: its asks and its word (page_link.py). A
+    # page a console serves plays a cart on that console's glass too.
+    ws.page = page_link.PageLink(served=_S.get("store_mode") == "board", play=open_cart)
     _S["ws"] = ws
     # The pin backend, if the worker's probe found one. Stashed by gpio_enable
     # (which runs BEFORE this, since the probe is answered while the console is
@@ -681,9 +693,13 @@ def page_boot(carts_root, query_json, coarse=False, scheme=""):
     alike. It was the handheld 320x240 tier, which made the full-size product
     the thing you had to know a url parameter to see.
       ?handheld=1  the 320x240 console (the phone-shaped one)
-      ?size=WxH    override the desk's panel size (1024x600)
+      ?size=WxH    the glass's size (1024x600); the page passes its own,
+                   live, unless its address names one, which stays fixed
+      ?zoom=N&zooms=0,N,..  the glass zooms: the UI size chosen (0: Auto)
+                   and the choices, as percents (`Appearance.zoom_glass`)
       ?cart=NAME   that cart; a bundle of one cart names it without asking
       ?desktop=1   the desk even with a cart named
+      ?console=1   start in console mode (the desk's PLAY), the windows' tier
       ?meter=1     the VM heap's allocation counted each frame (`_METER`)
       ?linkcheck=1 the match's world check armed on the board's radio link
                    (`live_pump`), as the dev channel's `link check on` arms
@@ -709,11 +725,16 @@ def page_boot(carts_root, query_json, coarse=False, scheme=""):
         wh = size.split("x")
         if len(wh) == 2 and wh[0].isdigit() and wh[1].isdigit():
             w, h = int(wh[0]), int(wh[1])
-        boot(carts_root, None, w, h, True, coarse=coarse, scheme=scheme)
+        zoom = q.get("zoom")
+        zooms = tuple(int(z) for z in (q.get("zooms") or "0,1").split(",") if z.isdigit())
+        boot(carts_root, None, w, h, True, coarse=coarse, scheme=scheme,
+             zoom=int(zoom) if zoom is not None and zoom.isdigit() else None,
+             zooms=zooms or (0, 1))
     else:
         boot(carts_root, cart=cart, coarse=coarse, scheme=scheme)
     _S["page_start"] = (q.get("edit"), q.get("tab"), bool(q.get("play")),
-                        desktop, cart, len(names))
+                        desktop, cart, len(names), bool(q.get("console")),
+                        q.get("only") == "desk")
     return ""
 
 
@@ -721,11 +742,17 @@ def page_start():
     """What a page's address starts the console on (after `page_boot`):
     ?edit=<cart>[&tab=code|paint|map|...][&play=1] opens that cart in the
     Editor (`start_edit`), where a plain visit lands on the home, and with
-    play=1 presses its Play; a desk with a cart named opens it; and the
+    play=1 presses its Play; with &only=desk it does so only where the
+    console lands on the desk, and in console mode (a phone) the visit lands
+    on the home; a desk with a cart named opens it; and the
     one-cart player of a bundle of one cart is a kiosk -- the exit gesture
     restarts the game instead of dropping into the shell, because the game
-    IS the page."""
-    edit, tab, play, desktop, cart, served = _S.pop("page_start")
+    IS the page. ?console=1 starts the desk in console mode (its PLAY)."""
+    edit, tab, play, desktop, cart, served, cons, only_desk = _S.pop("page_start")
+    if cons and getattr(_S["ws"].wm, "mode", None) == "desktop":
+        _S["ws"].wm.enter_console()
+    if only_desk and getattr(_S["ws"].wm, "mode", None) != "desktop":
+        edit = None
     if edit:
         start_edit(edit, tab or None, play)
     if desktop and cart:
@@ -926,17 +953,27 @@ def drop_kind(name, head_json):
     return "p8" if p8_writer.looks_like_png(bytes(json.loads(head_json))) else "archive"
 
 
+def p8_target_json(name, root):
+    """Where a PICO-8 cart dropped as `name` lands in the store `root`, by
+    the store's import rule (moy_carts.import_base, import_target):
+    {"out": its path, "dir": its folder}. Asked once the cart converted,
+    so two drops never take one folder."""
+    out_dir = moy_carts.import_target(root, moy_carts.import_base(name))
+    return json.dumps({"out": out_dir, "dir": out_dir.rsplit("/", 1)[-1]})
+
+
 def import_p8_json(path, name, root):
     """Convert a dropped PICO-8 cart at `path` into a `.moy` folder (#194) in
-    the store `root`, named by the store's import rule
-    (moy_carts.import_base): web_p8's report, with the folder as `dir`.
+    the store `root`, on the console's own thread (worker.js, THE CONVERTER,
+    where a worker can start no worker of its own): web_p8's report, with
+    the folder as `dir`.
 
     Lazily imported so the console boots without the converter in RAM: a session
     that never drops a cart never pays for it."""
     import web_p8
-    out_dir = moy_carts.import_target(root, moy_carts.import_base(name))
-    r = json.loads(web_p8.import_p8_json(path, name, out_dir))
-    r["dir"] = out_dir.rsplit("/", 1)[-1]
+    t = json.loads(p8_target_json(name, root))
+    r = json.loads(web_p8.import_p8_json(path, name, t["out"]))
+    r["dir"] = t["dir"]
     return json.dumps(r)
 
 
@@ -1076,7 +1113,9 @@ def _step(dt, played):
     Returns "" when the console skipped the redraw (#44 dirty gate: nothing
     moved) -- the page then simply keeps the pixels it already has. Otherwise
     a small JSON string carrying what does not live in the framebuffer:
-    whether it painted, the cart title and the input hint. `played` is the
+    whether it painted, the cart title and the input hint, and where a copy
+    changed the console's clipboard its text (`clip`), which a frame that
+    did not paint carries too (its `paint` 0). `played` is the
     page's sink's count of samples played (-1 = no sink): _RunnerPump tops
     its depth up from it.
 
@@ -1096,6 +1135,7 @@ def _step(dt, played):
     _feed_events()
     _S["driver"].frame(dt)
     painted = ws.frame_state.frames_drawn != painted_before
+    clip = _clip_out()
     pcm = _PCM
     pcm[0] = 0
     if au is not None:
@@ -1110,13 +1150,53 @@ def _step(dt, played):
             pcm[1] = au.at
             pcm[2] = 1 if au.starts else 0
             pcm[3] = _pcm_buf(au)
-    if not painted:
+    zoom = ws.look.zoom
+    moved = zoom != _ZOOM[0]
+    _ZOOM[0] = zoom
+    page = ws.page
+    asks = page.drain() if page is not None else None
+    if clip is None and asks is None and not moved and not painted:
         return ""
-    return json.dumps({
-        "paint": 1,
-        "cart": _cart_title(),
-        "input": web_input.effective_input_kinds(ws),
-    })
+    cv = _S.get("canvas") or ws.sys_canvas
+    out = {"paint": 1 if painted else 0, "cart": _cart_title(),
+           "input": web_input.effective_input_kinds(ws), "w": cv.w, "h": cv.h}
+    if clip is not None:
+        out["clip"] = clip
+    if asks is not None:
+        out["ask"] = asks
+    if zoom is not None:
+        out["zoom"] = zoom
+    return json.dumps(out)
+
+
+# The UI size of the last frame (`zoom` in every frame's JSON on a zoomed
+# glass, 0: Auto): Settings' UI size row's, which the page keeps per browser
+# and divides its viewport by. A frame where it moved is sent painted or not;
+# every frame names it, since the page keeps only the newest frame.
+_ZOOM = [None]
+
+
+def glass(w, h, zoom, zooms):
+    """The page's viewport changed (a resize, a rotation, a UI size the page
+    took from a frame): the glass at `w` x `h` (`Workstation.resize_glass`,
+    the diagonal `glass_in` declares), `zoom` the UI size chosen (0: Auto)
+    and `zooms` the choices this viewport offers Settings' UI size row."""
+    ws = _S["ws"]
+    _ZOOM[0] = int(zoom)
+    ws.look.zoom_glass(int(zoom), tuple(int(z) for z in zooms))
+    ws.resize_glass(int(w), int(h), glass_in(int(w), int(h)))
+
+
+def glass_in(w, h):
+    """The diagonal a `w` x `h` page glass declares: where it holds the
+    desk's room (`layout_base.desk_room`), the P4's glass at the P4's pixel
+    density (`layout_base.desk_diagonal_in`), so it lays out on the desk's
+    metrics and tap floor as that board does at any page size; below it
+    none, as the T-Deck declares none, so a phone and a small window lay
+    out the handheld at its chrome scale."""
+    if layout_base.desk_room(w, h, 1):
+        return layout_base.desk_diagonal_in(w, h)
+    return None
 
 
 # This frame's samples, as step_frame_json leaves them for the worker: their
@@ -1141,12 +1221,33 @@ def _pcm_buf(au):
     return a
 
 
+def _wifi_panel(ws):
+    """The Wi-Fi panel as a harness drives it: the networks listed, the
+    saved ones, its line, the focused stop, whether a join runs, and the
+    console's question or card over it (its verb and title)."""
+    sl = getattr(ws, "settings_layer", None)
+    if sl is None:
+        return None
+    c = ws.confirm
+    return {"nets": [n[0] for n in sl.wifi_nets], "known": list(sl.wifi_known),
+            "msg": sl.wifi_msg, "focus": sl._sub_focused, "pick": sl.wifi_pick,
+            "joining": sl.wifi_joining is not None,
+            "card": [c.verb, c.title] if c.open else None}
+
+
 def _edit_state(ws):
     """What a key in the Editor changed, for a harness that types into it:
     the open tab, the sprite's pixels as hex, the code's first lines and
-    whether it holds a selection, and whether the system menu shows."""
+    whether it holds a selection, and whether the system menu shows, with
+    its rows' words (`menu`) and the highlighted one's place among them
+    (`menu_at`)."""
+    m = ws.sysmenu
     out = {"tab": getattr(ws, "menu_view", None),
-           "sysmenu": bool(getattr(ws.sysmenu, "open", False))}
+           "sysmenu": bool(getattr(m, "open", False))}
+    if out["sysmenu"]:
+        rows = [r for r in m.items if r[0] == "item"]
+        out["menu"] = [r[4] if len(r) > 4 else str(r[1]) for r in rows]
+        out["menu_at"] = sum(1 for r in m.items[:m.sel] if r[0] == "item")
     pe, sheet = getattr(ws, "paint", None), getattr(ws, "sheet", None)
     if pe is not None and sheet is not None:
         ox, oy = sheet.tile_origin(pe.n)
@@ -1212,19 +1313,45 @@ def state_json():
     one is on its way), the Terminal's grid as lines (`term`, None before
     it first opens), the media stream's `now()` (`media`, None with no run)
     and how its last run ended (`media_last`, dev_media.last), the heap's
-    allocation where the page meters it (`alloc`, step_frame_json's) and
-    the radio link's stats (`link_stats`, EspNowLink.stats: the match's
-    frame, checkpoints and desync; None with no link), for a harness
-    driving the page (`window.__moyState()`)."""
+    allocation where the page meters it (`alloc`, step_frame_json's), the
+    buttons held (`held`), the page's word (`page`: full screen, where it
+    keeps the carts, whether a console serves it, whether its browser has
+    full screen, whether it runs as a home-screen app, its host), the card
+    up (`card`: its verb, title and lines; None), the notice up
+    (`notice_up`: title, sub, kind; None), the glass's metric class,
+    chrome scale, top bar thickness in glass pixels and the back-stack's
+    floor and depth (`glass`), the desk keyboard's
+    typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
+    frame, checkpoints and desync; None with no link), the relayed devices'
+    channel (`devs`, `_live_devs`), for a harness
+    driving the page (`window.__moyState()`), and the Wi-Fi panel's
+    (`wifi_panel`, `_wifi_panel`)."""
     import dev_channel
     st = dev_channel._remote_state(_S["ws"])
     st["ach"] = sorted(_S["ws"].ach.doc().get("system", {}).get("found", {}))
     st["system"] = json.loads(_S["ws"].system.dump() or "{}")
     st["show_fps"] = bool(_S["ws"].show_fps)
+    inp = _S["ws"].input
+    st["held"] = [n for n in web_input.BUTTON_NAMES if inp.held(n)]
+    st["typing"] = inp.source("local").typing
     st["sync"] = {"acked": _S.get("sync_acked", 0),
                   "busy": any(w.busy() for w in _watchers())}
     st["edit"] = _edit_state(_S["ws"])
+    pg = _S["ws"].page
+    st["page"] = None if pg is None else {"fs": pg.fullscreen, "kept": pg.kept,
+                                          "served": pg.served, "canfs": pg.can_fullscreen,
+                                          "app": pg.app, "host": pg.host}
+    cf = _S["ws"].confirm
+    st["card"] = {"verb": cf.verb, "title": cf.title,
+                  "lines": [t for t, _tone in cf.line_rows()]} if cf.open else None
     st["input"] = _input_state(_S["ws"])
+    st["wifi_panel"] = _wifi_panel(_S["ws"])
+    ws = _S["ws"]
+    st["notice_up"] = (list(ws.notice_up) if ws.notice_up is not None
+                       and ws.notices.notice_active() else None)
+    st["glass"] = {"cls": ws.metric_class, "cs": ws.look.effective_chrome_scale(),
+                   "bar": ws.layout.status_h * ws.render_scale,
+                   "floor": ws.wm.floor(), "depth": ws.wm.stack.depth()}
     term = getattr(_S["ws"].app("terminal"), "face", None)
     st["term"] = term.lines() if term is not None else None
     try:
@@ -1254,7 +1381,20 @@ def state_json():
     st["pmem"] = list(img)[:32] if img is not None else None
     lk = getattr(_S["ws"], "link", None)
     st["link_stats"] = lk.stats() if lk is not None else None
+    st["devs"] = _live_devs()
     return json.dumps(st)
+
+
+def _live_devs():
+    """The live socket's device channel on this page (moy_dev_web.c's
+    counts), None where its board relays no kind."""
+    import devices
+    if not devices.RELAYED:
+        return None
+    import moy_net
+    v = moy_net.live_devs()
+    return dict(zip(("kinds", "rows", "opens", "up", "down", "records", "events", "dropped",
+                     "timed", "rtt_min_us", "rtt_max_us", "rtt_sum_us", "rtt_last_us"), v))
 
 
 def _apply(events):
@@ -1265,7 +1405,35 @@ def _apply(events):
         on_esc=d.escape, on_hold=d.hold, on_key_hold=d.key_hold,
         on_super=d.system_key, on_full=d.full_key, on_key_down=d.key_down,
         on_key_up=d.key_up, on_mods=d.set_mods, on_wheel=d.wheel, on_middle=d.middle,
-        on_gamepad=_gamepad)
+        on_gamepad=_gamepad, on_paste=_paste, on_glass=glass,
+        on_page=lambda ev: _S["ws"].page.heard(_S["ws"], ev))
+
+
+# The console's clipboard as the page last heard of it: its seq (moy_app.h's
+# clip_seq) at the last copy the page was sent, or the last paste it sent.
+_CLIP = [None]
+
+
+def _paste(text):
+    """The page's clipboard pasted: the console takes it
+    (`ConsoleDriver.paste`), and the page's clipboard holds it already."""
+    _S["driver"].paste(text)
+    _CLIP[0] = _S["ws"].clipboard.seq()
+
+
+def _clip_out():
+    """The console's clipboard's text where a copy changed it since the
+    page last heard (None where none did): the page puts it on the
+    browser's clipboard."""
+    clip = _S["ws"].clipboard
+    seq = clip.seq()
+    if seq == _CLIP[0]:
+        return None
+    first = _CLIP[0] is None
+    _CLIP[0] = seq
+    if first or clip.kind() != "text":
+        return None
+    return clip.text()
 
 
 def _gamepad(on):
@@ -1486,6 +1654,57 @@ def update_enable(status_json):
     return ""
 
 
+def wifi_enable(doc_json):
+    """The serving board answered the /wifi probe: its Wi-Fi is the
+    console's (wifi_link.BoardWifi). Before `boot`, which wires it as the
+    console's station, so the bar lays its glyph out from the first frame."""
+    try:
+        doc = json.loads(doc_json)
+    except Exception:                # noqa: BLE001 -- a garbled probe answer
+        return ""
+    if not isinstance(doc, dict) or "connected" not in doc:
+        return ""
+    try:
+        from wifi_link import BoardWifi
+        _S["wifi"] = BoardWifi(doc)
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("wifi unavailable:", exc)
+    return ""
+
+
+def wifi_poll_json():
+    """The next request for the worker to POST to /wifi, or ""."""
+    w = _S.get("wifi")
+    return w.take_json() if w is not None else ""
+
+
+def wifi_wants_poll():
+    """True when the worker should GET /wifi now."""
+    w = _S.get("wifi")
+    return bool(w is not None and w.wants_poll())
+
+
+def wifi_ack_json(ok, text=""):
+    """Settle the request or poll in flight with the board's document;
+    what the worker must know back (BoardWifi.ack), or ""."""
+    w = _S.get("wifi")
+    if w is None:
+        return ""
+    out = w.ack(bool(ok), text or "")
+    _S["ws"].mark_dirty()
+    return out
+
+
+def wifi_moved(ssid):
+    """The worker waited out a move the board never came back from: it is
+    on `ssid` (BoardWifi.moved)."""
+    w = _S.get("wifi")
+    if w is not None:
+        w.moved(str(ssid))
+        _S["ws"].mark_dirty()
+    return ""
+
+
 def official_enable():
     """The serving console answered the /official probe: it installs
     carts when this page asks. Called before
@@ -1632,7 +1851,11 @@ def term_state(state, n=0):
     return ""
 
 
-# -- the live socket's radio link ----------------------------------------------------
+# -- the live socket: the radio link and the relayed devices -----------------------
+#
+# A page served by a board that relays a device kind (GET /live's "kinds")
+# holds its handles as remote rows (live_kinds), their calls and the board's
+# pushes moved by the same feed and pump as the link's.
 #
 # A page served by a board that relays its radio (a Zero: GET /live answers
 # {"link":1}, native/moy_net/moy_live.c) has a link as a console board does:
@@ -1672,9 +1895,55 @@ class _LiveWlan:
         return 0
 
 
+def live_hints(on):
+    """Whether the board's live socket is open and says when its routes'
+    answers change (native/moy_net/moy_live.c, THE HINTS): Get Carts' board
+    requests ask on its hint rather than on their clock."""
+    import carts_link
+    carts_link.pushed(on)
+    return ""
+
+
+def official_hint():
+    """The board said its /official answer changed."""
+    import carts_link
+    carts_link.hint()
+    return ""
+
+
+def store_pulled():
+    """The worker brought the served store over the VFS because the board
+    said it changed (its hint 's': an SSH session's edit, another page's
+    sync): the shelf reads it again and every watcher adopts it
+    as its baseline, as a reload does, with no cart restarted."""
+    _rescan()
+    for w in _watchers():
+        w.rebase()
+    return True
+
+
+def live_kinds(spec):
+    """The board relays device kinds on the live socket (the /live probe's
+    "kinds", native/moy_kernel/moy_dev_kinds.h's THE RELAY): their handles
+    become the kernel table's remote rows here (native/moy_net/
+    moy_dev_web.c), and the console has the device APIs they name
+    (devices.RELAYED), as a console board with the device has."""
+    try:
+        import moy_net
+        import devices
+        if not hasattr(moy_net, "live_kinds"):
+            return ""
+        moy_net.live_kinds(spec)
+        devices.RELAYED = tuple(k.split(":")[0] for k in spec.split(";") if k)
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("live kinds unavailable:", exc)
+    return ""
+
+
 def live_enable(mac):
-    """The board answered the /live probe with its radio and its address
-    (`mac`, hex): the console gains a link, as a console board wires one
+    """The board answered the /live probe: the socket is this page's. Where
+    it relays its radio, with its address (`mac`, hex; "" where not), the
+    console gains a link, as a console board wires one
     (device/wire_links.py), before the address's cart starts."""
     ws = _S.get("ws")
     if ws is None:
@@ -1684,10 +1953,11 @@ def live_enable(mac):
         import moy_net
         if not hasattr(moy_net, "live_take"):
             return ""
-        from players import EspNowLink, launch_cart
-        ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(binascii.unhexlify(mac)),
-                             launch=launch_cart)
-        ws.net = ws.link.net
+        if mac:
+            from players import EspNowLink, launch_cart
+            ws.link = EspNowLink(board="web", name="Browser",
+                                 wlan=_LiveWlan(binascii.unhexlify(mac)), launch=launch_cart)
+            ws.net = ws.link.net
         _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False,
                       "check": _S.get("linkcheck", False)}
     except Exception as exc:         # noqa: BLE001 -- never block a boot

@@ -182,6 +182,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self.root_ctx = _LayoutCtx.capture(ws)
         self._win_layer = _WindowStackLayer(self)
         self.windows = {}               # slot key -> _Win
+        # Where each window stood when a relayout dropped it, by kind: (the
+        # scales it was built at, `_scales`; x, y, w, h; its restore rect
+        # where full screen). Its rebuild at the same scales stands there
+        # again (`_make_window`).
+        self._places = {}
         self._prewarm_failed = set()  # window kinds whose prewarm draw has been reported
         # Two orders of the same slots: `_kinds` is the back-stack's above the
         # desk (the order the windows opened in, which the chips keep), and
@@ -199,6 +204,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         # beside it is being typed in; only its X / the pause menu's Quit (when
         # focused) / an exit verb ends it. None = the desktop root has focus.
         self.focus_key = None
+        self.walk = None             # an Alt+Tab walk: [the windows front first, where it is]
         # PLAY INTENT (#178): the same run() verb serves two jobs on a desktop --
         # playing a game (open it as big as fits) and PLAYTESTING the cart you are
         # editing (open it small, so the editor beside it stays readable). The
@@ -446,7 +452,9 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         mode switch stops there: it relayouts the bars and the root context and
         never drops a window. Anything else drops every window so it rebuilds
         at the new scale on the next frame, and releases the parked stamps,
-        which re-render at it on the way back to the desk."""
+        which re-render at it on the way back to the desk. A window rebuilt
+        at the same scale stands where it stood (`_places`): a theme switch
+        moves no window."""
         if self._ctx_switching:
             return                    # an internal (window-building) relayout
         if self._in_draw:
@@ -460,7 +468,8 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
             self._ctx_switching = False
         self.root_ctx = _LayoutCtx.capture(ws)
         self._pop_reset()             # a relayout repaints what a popover covered
-        if self._mode_switch:
+        if self._mode_switch or self.ws.glass_moving:
+            # A glass resize keeps the windows (`fit_glass` clamps them).
             # The desk's cache stays good: its signature carries the layout's
             # content rect, so a switch that moves the desk's bars renders it
             # again, and leave_console restarts its streak.
@@ -469,6 +478,12 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         if self.parked is not None:
             for win in self.parked.wins.values():
                 self._drop_win(win)
+        if self.windows:
+            # (a second relayout before the rebuild finds none, and keeps
+            # what the first kept)
+            self._places = {}
+            for win in self.windows.values():
+                self._places[win.kind] = (win.scales, win.x, win.y, win.w, win.h, win.saved)
         self._drop_wins()
         self._kinds = []
         self.z_order = []
@@ -559,6 +574,11 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
     def _fs(self):
         return self.ws.look.effective_font_scale()
 
+    def _scales(self):
+        """(font scale, chrome scale) a window built now is laid out at."""
+        look = self.ws.look
+        return (look.effective_font_scale(), look.effective_chrome_scale())
+
     def desk_rect(self):
         """The desk's content rect, (x, y, w, h) on the root canvas: the glass
         less the OS bar. Windows size, cascade, maximise and move inside it and
@@ -619,9 +639,19 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
     # -- the two modes (docs/theme_and_shell_2026-11.md §8.1) ----------------------
 
     def floor(self):
-        """Console mode's home has the desk beneath it (the X shows there);
-        desktop mode's floor is the desk itself."""
-        return 0 if self.mode == "console" else 2
+        """Console mode's home has the desk beneath it (the X shows there)
+        where the desk may come back (`desk_beneath`), and is the floor where
+        it may not; desktop mode's floor is the desk itself."""
+        if self.mode != "console":
+            return 2
+        return 0 if self.desk_beneath() else 1
+
+    def desk_beneath(self):
+        """Whether the desk may come back from console mode: not on a
+        zoomed glass (the browser page's) without the desk's room, which
+        holds console mode with the home as its floor, as on a handheld."""
+        ws = self.ws
+        return ws.look.zoom is None or ws.desk_fits()
 
     def root_kind(self):
         return "launcher" if self.mode == "console" else "desk"
@@ -683,6 +713,8 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         Play in a window, the game on the home going on above them, its
         window made as a desk play's."""
         if self.mode != "console":
+            return
+        if not self.desk_beneath():
             return
         ws = self.ws
         if self.stack.depth() > 1 and not game:
@@ -931,12 +963,24 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         fs = self._fs()
         w, h = self._open_size(key, fs)
         title_h = _layout_base.metric("title", fs)
+        scales = self._scales()
+        place = self._places.pop(kind, None)
+        if place is not None and place[0] == scales:
+            win = _Win(kind, place[1], place[2], place[3], place[4], title_h)
+            win.scales = scales
+            if place[5] is not None:
+                win.saved = place[5]
+                self._set_full(win)
+            self._build_content(win)
+            self.prewarm(win)
+            return win
         if key == "desktop" and self.play_intent == "dev":
             x, y = self._dev_place(w, h, fs)
         else:
             x, y, w, h = self._cascade(kind, w, h, title_h, depth, fs)
         x, y = self._clear_of_subject(x, y, w, h, fs)
         win = _Win(kind, x, y, w, h, title_h)
+        win.scales = scales
         if self._opens_full(kind):
             win.saved = (x, y, w, h)
             self._set_full(win)
@@ -1464,10 +1508,12 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         2026-10-31): on a board with a desk, which this WM is, in both modes
         -- over a game full screen (console mode's, standing on the home, or
         a desk window's) or docked in the Editor's Run slot; never over one
-        already in a window. A handheld's WM has no desk and no such row."""
+        already in a window, nor in a console mode held for want of the
+        desk's room (`desk_beneath`). A handheld's WM has no desk and no
+        such row."""
         ws = self.ws
         if self.mode == "console":
-            return (self.stack.depth() == 2 and self.stack.top() == "desktop"
+            return (self.desk_beneath() and self.stack.depth() == 2 and self.stack.top() == "desktop"
                     and not ws.run.app_window_canvas and ws.cart_error is None
                     and not ws.run.player.is_app())
         win = self.windows.get("desktop")
@@ -1745,6 +1791,60 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         self.bring_to_front(kind)
         self.ws.mark_dirty()
         return True
+
+    def fit_glass(self):
+        """The glass changed size (`Workstation.resize_glass`): every window
+        kept in its order with the focus, clamped into the new desk -- a
+        full-screen one takes the whole new glass -- and rendered again at
+        its rect; a parked one's buffer goes, so it renders again on the way
+        back to the desk; the drag backdrop is made again at the new size."""
+        dx, dy, dw, dh = self.desk_rect()
+        p = self.parked
+        for win in list(self.windows.values()) + (list(p.wins.values()) if p else []):
+            if win.full():
+                self._set_full(win)
+            else:
+                win.w = min(win.w, dw)
+                win.h = min(win.h, dh)
+                win.x = max(dx, min(win.x, dx + dw - win.w))
+                win.y = max(dy, min(win.y, dy + dh - win.h))
+            self._drop_win(win)
+            if p is None and win.kind != "desktop":
+                self._build_content(win)
+        self.drop_backdrop()
+        self._backdrop_valid = False
+        self._win_sig = None
+        self.content_gen += 1
+        self.ws.mark_dirty()
+
+    def cycle(self, step):
+        """Alt+Tab (`step` 1) or Alt+Shift+Tab (-1) on the desk: the next
+        window in the order they stood when Alt went down, front first,
+        shown, focused and raised; minimised ones are on the walk too, and
+        a docked playtest is not. While Alt stays down each Tab walks on
+        from the order taken at the first; `cycle_end` (Alt's release)
+        ends the walk. False where there is no desk."""
+        if self.mode != "desktop":
+            return False
+        if self.walk is None:
+            order = [k for k in reversed(self.z_order)
+                     if k in self.windows and self.windows[k].docked is None]
+            if self.focus_key in order:
+                order.remove(self.focus_key)
+                order.insert(0, self.focus_key)
+            self.walk = [order, 0]
+        order = self.walk[0]
+        if len(order) < 2:
+            return True
+        at = (self.walk[1] + step) % len(order)
+        self.walk[1] = at
+        if order[at] in self.windows:
+            self.bring_to_front(order[at])
+            self.ws.mark_dirty()
+        return True
+
+    def cycle_end(self):
+        self.walk = None
 
     def player_has_pointer(self):
         """Console hook: whether the game-space pointer publication should carry

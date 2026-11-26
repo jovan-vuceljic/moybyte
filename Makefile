@@ -291,6 +291,8 @@ unix-micropython:
 	@MOYBYTE_REQUIRE_WEB_BUNDLE=0 $(PYTHON) tools/gen_web_blob.py --quiet >/dev/null
 	@bash tools/mpy_tree.sh $(UNIX_MP_SRC) $(UNIX_MP_TAG)
 	@$(PYTHON) tools/patch_fatfs_lfn.py $(UNIX_MP_SRC)
+# A FAT file's close is final, as on every board (tools/patch_fatfs_close.py).
+	@$(PYTHON) tools/patch_fatfs_close.py $(UNIX_MP_SRC)
 # The console boards' map growth (tools/patch_map_load.py): a lookup's probe
 # length is part of what a frame costs, so the model grows its maps as they do.
 	@$(PYTHON) tools/patch_map_load.py $(UNIX_MP_SRC)

@@ -2277,31 +2277,39 @@ def cart_store_follows_the_card(board):
 
 
 _SD_SQUEEZE = r"""
-def _sd_squeeze():
-    import esp32, moy_alloc, moy_sd, os
-    caps = 0x808          # MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL
+def _sd_squeeze(caps):
+    import esp32, moy_alloc
     def largest():
         return max(r[2] for r in esp32.idf_heap_info(caps))
+    held = []
+    for _ in range(256):
+        big = largest()
+        if big < 512:
+            break
+        try:
+            held.append(moy_alloc.alloc(max(big - 128, 64), caps))
+        except MemoryError:
+            try:                # a block the request's header overflows
+                held.append(moy_alloc.alloc(big // 2, caps))
+            except MemoryError:
+                break
+    return held, largest()
+
+def _sd_release(held):
+    import moy_alloc
+    for v in held:
+        moy_alloc.free(v)
+
+def _sd_io(caps):
+    import moy_sd, os
     path = '/sd/moybyte/.sd_squeeze'
     data = bytes(range(256)) * 12
     ref = bytearray(16 * 512)
     buf = bytearray(16 * 512)
     moy_sd.read(64, ref, 16)
-    held = []
     out = {'read': None, 'write': None}
+    held, out['left'] = _sd_squeeze(caps)
     try:
-        for _ in range(256):
-            big = largest()
-            if big < 512:
-                break
-            try:
-                held.append(moy_alloc.alloc(max(big - 128, 64), caps))
-            except MemoryError:
-                try:                # a block the request's header overflows
-                    held.append(moy_alloc.alloc(big // 2, caps))
-                except MemoryError:
-                    break
-        out['left'] = largest()
         try:
             moy_sd.read(64, buf, 16)
             out['read'] = 'same' if buf == ref else 'differs'
@@ -2314,8 +2322,7 @@ def _sd_squeeze():
         except OSError as e:
             out['write'] = str(e)
     finally:
-        for v in held:
-            moy_alloc.free(v)
+        _sd_release(held)
     try:
         with open(path, 'rb') as f:
             out['back'] = f.read() == data
@@ -2323,17 +2330,57 @@ def _sd_squeeze():
     except OSError as e:
         out['back'] = str(e)
     return out
-ws._g['_sd_squeeze'] = _sd_squeeze
+
+def _sd_saves(caps):
+    import moy_sd, moy_store, os
+    path = '/sd/moybyte/.sd_squeeze.pmem'
+    moy_store.save_wait()
+    before = moy_store.save_stats()[1], moy_sd.stats()
+    held, left = _sd_squeeze(caps)
+    try:
+        for i in range(3):
+            moy_store.pmem_save(path, list(range(i, i + 256)))
+            moy_store.save_wait()
+    finally:
+        _sd_release(held)
+    back = moy_store.pmem_read(path) == list(range(2, 258))
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+    after = moy_store.save_stats()[1], moy_sd.stats()
+    return {'left': left, 'refused': after[0] - before[0],
+            'errors': after[1][2] - before[1][2], 'back': back,
+            'hops': after[1][4] - before[1][4], 'hop_free': after[1][5]}
+
+ws._g['_sd_io'] = _sd_io
+ws._g['_sd_saves'] = _sd_saves
 """
 
+# MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL: what an S3's SPI card would take.
+SD_INTERNAL_DMA = 0x808
+# MALLOC_CAP_SPIRAM: where a P4's SDMMC bounce lives.
+SD_PSRAM = 0x400
 
-def sd_card_io_takes_no_internal_dma(board):
-    """An SPI card's transfers take no internal DMA memory: with every block of
-    it taken (the largest left under one sector), a 16-sector multi-block read
-    returns the card's bytes and a store file is written and reads back. With
-    WiFi and BLE up an S3 has a few KB of internal DMA memory left, and a
-    per-call buffer taken there failed a cart's module read with EIO under a
-    radio's burst. The squeeze is moy_alloc's, freed before this returns."""
+
+def sd_card_io_allocates_nothing(board, caps, saves=True):
+    """A card transfer takes no memory of its own (native/moy_sd/moy_sd.c's
+    header): with every block of `caps` taken (the largest left under one
+    sector), a 16-sector multi-block read returns the card's bytes, a store
+    file is written and reads back, and (`saves`) the saver's records --
+    written on its own task, whose stack is PSRAM -- land with no write
+    refused. `caps` is the memory the board's transfer would otherwise take:
+    internal DMA on an S3's SPI card, where a per-call buffer failed a cart's
+    module read with EIO under a radio's burst, and every saver write once it
+    ran short; PSRAM on a P4's SDMMC, whose bounce was taken per call. What
+    an S3's saver lost was a few bytes a command, under what the squeeze
+    can reach (moy_alloc's registry nodes are internal SRAM too), so there
+    its transfers are also held to the hop, the internal stack sdspi's
+    command bytes stay on, with headroom left on it. A P4
+    checks no saves: the store's file and record buffers are PSRAM
+    (moy_store_alloc), so with PSRAM gone the saver's open is refused before
+    the card sees a sector. The squeeze is moy_alloc's, freed before each
+    check returns."""
     if not board.pyval("__import__('moy_sd').sector_count()", strict=True):
         pytest.skip("no card in the slot")
     root = str(board.pyval("str(ws.carts_root)", timeout=20, strict=True))
@@ -2341,11 +2388,18 @@ def sd_card_io_takes_no_internal_dma(board):
         pytest.skip("the card's volume did not mount (the store is %s)" % root)
     board.pyexec(_SD_SQUEEZE, strict=True)
     got = board.pyval("(getattr(ws, 'with_sd', None) or (lambda fn: fn()))"
-                      "(ws._g['_sd_squeeze'])", timeout=30, strict=True)
+                      "(lambda: ws._g['_sd_io'](%d))" % caps, timeout=30, strict=True)
     assert got["left"] < 512, ("the squeeze left a sector's worth: no power", got)
     assert got["read"] == "same", got
     assert got["write"] == "ok" and got["back"] is True, got
-    return got
+    if not saves:
+        return got, None
+    saves = board.pyval("ws._g['_sd_saves'](%d)" % caps, timeout=30, strict=True)
+    assert saves["left"] < 512, ("the squeeze left a sector's worth: no power", saves)
+    assert saves["refused"] == 0 and saves["errors"] == 0 and saves["back"], saves
+    if caps == SD_INTERNAL_DMA:
+        assert saves["hops"] > 0 and saves["hop_free"] >= 512, saves
+    return got, saves
 
 
 def web_console_add_on_fits_the_image(board):
@@ -4387,6 +4441,7 @@ def wasm_app_reaches_its_roles(board, root):
     at load naming prefs_get; App Shell Wasm's verdict keeps the VM, naming its
     shell-served import. Leaves the desk as it found it."""
     hops0 = board.pyval("__import__('moy_app').wasm_hops()", strict=True)
+    svc0 = service_counts(board)
     line = board.cmd("run %s" % APP_ROLES[1].lower(), wait_for="REMOTE run")
     assert line is not None and "no cart match" not in line, line
     try:
@@ -4397,7 +4452,8 @@ def wasm_app_reaches_its_roles(board, root):
         assert not st.get("notice"), st["notice"]
         # The run's books hold no crossing but the console's own frame.
         play = st.get("play")
-        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], play
+        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], \
+            (play, services_since(board, svc0))
     finally:
         board.leave_cart()
         board.drain(1.0)
@@ -4488,6 +4544,21 @@ def app_tree_host_page(look, tier):
     return pm, crc
 
 
+SVC_BITS = ("web", "-", "update", "healthy", "diag", "sched", "tasks")   # moy_loop.h's MOY_SVC_*
+
+
+def service_counts(board):
+    """The service upcalls by the MOY_SVC_* bit they carried, in total."""
+    return board.pyval("__import__('moy_loop').service_counts()", strict=True)
+
+
+def services_since(board, n0):
+    """The services that crossed since `n0` (service_counts), by name: what
+    a run's MOY_UPC_SERVICE count was."""
+    n1 = service_counts(board)
+    return dict((SVC_BITS[i], b - a) for i, (a, b) in enumerate(zip(n0, n1)) if b != a)
+
+
 def wasm_app_draws_the_toolkit(board, root):
     """App Tree Wasm's UI tree page is drawn by the engine in the toolkit's
     widgets (sdk/include/moybyte/uitree.h): no row fails, the page's pixels
@@ -4505,6 +4576,7 @@ def _wasm_app_draws_the_toolkit(board, root):
         strict=True), board.pyval(_TIER, strict=True))
     pm_expr = ("(lambda a: (__import__('moycore').pmem_image(a), list(a))[1])"
                "(__import__('array').array('i', bytearray(1024)))")
+    svc0 = service_counts(board)
     line = board.cmd("run %s" % APP_TREE[1].lower(), wait_for="REMOTE run")
     assert line is not None and "no cart match" not in line, line
     try:
@@ -4513,7 +4585,8 @@ def _wasm_app_draws_the_toolkit(board, root):
         assert st.get("cart") == APP_TREE[1], st.get("cart")
         assert not st.get("cart_error"), st["cart_error"]
         play = st.get("play")
-        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], play
+        assert play is not None and play["upcalls"][1:] == [0, 0, 0, 0, 0], \
+            (play, services_since(board, svc0))
         pm = board.pyval(pm_expr, timeout=30, strict=True)
         assert pm[_UI_FAIL] == 0, "a uitree row answered -%d" % pm[_UI_FAIL]
         assert pm[_UI_FRAMES] > 0, pm

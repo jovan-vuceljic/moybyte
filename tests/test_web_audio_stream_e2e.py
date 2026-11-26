@@ -239,3 +239,29 @@ def test_a_station_playing_on_behind_the_desk_allocates_within_its_bounds(tmp_pa
     assert frames > 5 * wall, (frames, wall)
     assert step <= STEP_ALLOC_MAX, (step, a, b)
     assert loop <= LOOP_ALLOC_MAX, (loop, a, b)
+
+
+def test_audio_off_makes_no_context_and_the_hud_says_so(tmp_path):
+    """?audio=0 on a page served over plain HTTP: no context, so the console
+    has no sink (`played` -1) and sends no samples; ?hud=1 shows the HUD from
+    the load, its lines the page's rate, the worker's report and the sound."""
+    server, base = web_e2e.serve(web_e2e.DIST, web_e2e.free_port())
+    base = base.replace("127.0.0.1", INSECURE)
+    env = {"MOY_CHROME_ARGS": json.dumps(["--host-resolver-rules=MAP %s 127.0.0.1" % INSECURE])}
+    try:
+        out, js = web_e2e.run(
+            tmp_path, "audio_off", "?desktop=1&audio=0&hud=1",
+            [{"waitFor": "/worker step/.test(document.getElementById('hud').textContent)",
+              "timeout": 15000},
+             {"js": "__moyState().then(s => JSON.stringify({actx: actx === null,"
+                    " played: s.pcm ? s.pcm.played : null,"
+                    " hud: document.getElementById('hud').textContent,"
+                    " shown: getComputedStyle(document.getElementById('hud')).display}))"}],
+            base, tmp_path / "chrome", boot_ms=40000, env=env)
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+    got = json.loads(js[-1])
+    assert got["actx"] and got["played"] == -1, got
+    assert got["shown"] == "block", got
+    assert "sound off http" in got["hud"] and "steps" in got["hud"], got

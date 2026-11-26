@@ -398,7 +398,7 @@ def _commit(store, path, text, file="main.py"):
 
 def test_a_published_commit_claims_its_backup_instead_of_writing_the_payload(tmp_path):
     """The bytes are already on the medium: _write_atomic left a stamped copy in
-    <file>.bak, and that file is spent the moment the publish completes. The
+    its backup, and that file is spent the moment the publish completes. The
     snapshot RENAMES it rather than putting a 20KB main.py down a third time
     (#154) -- so the commit writes no snapshot payload at all, and the entry
     says `stamped` so the reader knows to come back through the stamp."""
@@ -413,7 +413,7 @@ def test_a_published_commit_claims_its_backup_instead_of_writing_the_payload(tmp
     assert len(entries) == 2
     e = entries[-1]
     assert e.get("stamped") == 1, "a published commit claims its backup"
-    assert not Path(path + "/main.py.bak").exists(), "the spent backup MOVED"
+    assert not Path(path + "/.main.py.moybak").exists(), "the spent backup MOVED"
     # and what an undo would restore is exactly the source, stamp line stripped
     assert jf.read_snap(jdir, e) == src
 

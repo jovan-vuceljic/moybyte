@@ -174,3 +174,32 @@ def test_a_drag_that_reaches_one_frame_selects_to_its_end(web_boot, tmp_path, mo
         web_boot.step_frame_json(1 / 30)
     assert ed.selected_text() == "alph"
     assert web_boot._S["evq"] == []
+
+
+def test_the_pages_paste_types_into_the_terminal_and_a_copy_goes_back(web_boot, tmp_path,
+                                                                      monkeypatch):
+    """The page's `paste` event is the console's paste (ConsoleDriver.paste:
+    the Terminal types it whole), never sent back to the page as a copy; a
+    copy in the console is (`_clip_out`), once."""
+    from runtime import web_input
+    ws = build_ws(Path(tmp_path))
+    drv = make_drv(ws)
+    monkeypatch.setitem(web_boot._S, "ws", ws)
+    monkeypatch.setitem(web_boot._S, "driver", drv)
+    monkeypatch.setattr(web_boot, "_CLIP", [None])
+    assert web_boot._clip_out() is None, "the first frame learns where it stands"
+    app = ws.app("terminal")
+    ws.spine.open_app(app)
+    try:
+        for _ in range(3):
+            drv.frame(1 / 30)
+        web_input.apply_events([{"type": "paste", "text": "echo pasted\n"}], drv.input,
+                               None, on_paste=web_boot._paste)
+        drv.frame(1 / 30)
+        app.face.take()
+        assert any(ln.strip() == "pasted" for ln in app.face.lines())
+        assert web_boot._clip_out() is None, "the page's own paste goes back as nothing"
+        ws.clipboard.put_text("copied")
+        assert web_boot._clip_out() == "copied" and web_boot._clip_out() is None
+    finally:
+        app.close_session()

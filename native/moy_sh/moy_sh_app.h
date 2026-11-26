@@ -15,9 +15,16 @@
 // the face's size with no scrollback, so the shell's grid is untouched and is
 // back, as it was, when the app ends: the alternate screen and its restore),
 // which it writes as any VT100 app writes its stdout, cursor moves and SGR
-// inks. It reads KEYS as a terminal sends them (moy_sh_app_key decodes them):
-// the bytes typed, control keys as themselves, the arrows, Home, End, PgUp,
-// PgDn and Delete as xterm's escapes, a lone ESC as Esc. A face turns its
+// inks. A face that is itself a terminal can take the app's writes STRAIGHT
+// instead (`out` at the open): the app keeps no screen, so it opens at any
+// size in the memory of its record, and the face draws it whole when it
+// shows it (moy_sh_app_draw), which the open does not. The stream face
+// (SSH, the web terminal) does where there is no PSRAM
+// (native/moy_tty/moy_tty_sh.c): a screen of 200 by 60 is 48 KB, more than
+// the C3 Zero has free beside an SSH session. It reads
+// KEYS as a terminal sends them (moy_sh_app_key decodes them): the bytes
+// typed, control keys as themselves, the arrows, Home, End, PgUp, PgDn and
+// Delete as xterm's escapes, a lone ESC as Esc. A face turns its
 // input into those bytes: a keyboard's keys, the trackball's and a d-pad's
 // steps as the arrows, a key row's buttons as the bytes each names. A RESIZE
 // is the app's screen resized and drawn whole. A tick (`tick`) comes with
@@ -31,9 +38,10 @@
 // never opens.
 //
 // ITS MEMORY is the host table's `alloc` (PSRAM on a board): the front, the
-// app's record and its screen at the open, given back at the end; a key or a
-// tick allocates nothing but what the app itself asks (an edit's growth, a
-// save's copy, top's row fetch).
+// app's record and its screen (none when straight) at the open, given back
+// at the end; a key or a
+// tick allocates nothing but what the app itself asks (an edit's blocks,
+// top's row fetch).
 
 #ifndef MOY_SH_APP_H
 #define MOY_SH_APP_H
@@ -79,6 +87,8 @@ typedef struct {
 
 // A line run in the face's session, as the face runs a typed one.
 typedef int (*moy_sh_app_run_fn)(void *ctx, const char *text, size_t n);
+// A straight app's writes, to the face's terminal.
+typedef void (*moy_sh_app_out_fn)(void *ctx, const char *p, size_t n);
 
 // The app argv[0] names, or NULL.
 const moy_sh_app_ops_t *moy_sh_app_find(const char *name);
@@ -86,10 +96,11 @@ const moy_sh_app_ops_t *moy_sh_app_find(const char *name);
 // Open the app argv[0] names in front of a face of `cols` by `rows`, from
 // inside the run of the command that names it: NULL with *status the exit
 // code where it would not open (or memory refused). `run` runs a line app's
-// lines; `ctrl` says the input types control keys (a keyboard's Ctrl).
+// lines; `out`, when not NULL, takes a full-screen app's writes straight;
+// `ctrl` says the input types control keys (a keyboard's Ctrl).
 moy_sh_app_t *moy_sh_app_open(moy_sh_t *s, int cols, int rows, int ctrl,
-                              moy_sh_app_run_fn run, void *ctx, int argc, char **argv,
-                              int *status);
+                              moy_sh_app_run_fn run, moy_sh_app_out_fn out, void *ctx,
+                              int argc, char **argv, int *status);
 // The same with no session behind it (`s` NULL: a link's face,
 // moy_sh_link.c), its memory `heap`'s.
 typedef struct {
@@ -98,18 +109,20 @@ typedef struct {
     void *ctx;
 } moy_sh_app_heap_t;
 moy_sh_app_t *moy_sh_app_new(moy_sh_t *s, const moy_sh_app_heap_t *heap, int cols, int rows,
-                             int ctrl, moy_sh_app_run_fn run, void *ctx, int argc, char **argv,
-                             int *status);
+                             int ctrl, moy_sh_app_run_fn run, moy_sh_app_out_fn out, void *ctx,
+                             int argc, char **argv, int *status);
 void moy_sh_app_close(moy_sh_app_t *a);
 
 int moy_sh_app_keys(moy_sh_app_t *a, const char *p, size_t n);
 int moy_sh_app_line(moy_sh_app_t *a, const char *text);
 int moy_sh_app_tick(moy_sh_app_t *a, uint32_t ms);
 void moy_sh_app_resize(moy_sh_app_t *a, int cols, int rows);
+// A full-screen app drawn whole: what a straight app's face does to show it.
+void moy_sh_app_draw(moy_sh_app_t *a);
 void moy_sh_app_set_ctrl(moy_sh_app_t *a, int ctrl);
 
 const moy_sh_app_ops_t *moy_sh_app_ops(const moy_sh_app_t *a);
-// A full-screen app's screen (NULL for a line app).
+// A full-screen app's screen (NULL for a line app and a straight one).
 moy_term_t *moy_sh_app_term(const moy_sh_app_t *a);
 const char *moy_sh_app_prompt(moy_sh_app_t *a);
 

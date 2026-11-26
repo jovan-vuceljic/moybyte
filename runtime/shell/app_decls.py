@@ -39,5 +39,5 @@ APPS = [
     {'id': 'calc', 'entry': 'calc_app:CalcAppLayer', 'order': 70, 'folder': 'moybyte.calc', 'title': 'Calc', 'needs': ('surface', 'theme', 'damage'), 'marker': 'calc', 'min_size': (170, 190)},
     {'id': 'getcarts', 'entry': 'getcarts_app:GetCartsAppLayer', 'order': 80, 'folder': 'moybyte.get_carts', 'title': 'Get Carts', 'needs': ('surface', 'theme', 'damage', 'install', 'nav', 'carts'), 'name': 'Get carts', 'marker': 'getcarts'},
     {'id': 'jukebox', 'entry': 'music_app:MusicAppLayer', 'order': 85, 'folder': 'moybyte.music', 'title': 'Music', 'needs': ('surface', 'theme', 'damage', 'prefs', 'install', 'nav'), 'prefs_ns': 'music', 'marker': 'music', 'min_size': (300, 220)},
-    {'id': 'terminal', 'entry': 'terminal_app:TerminalAppLayer', 'order': 90, 'folder': 'moybyte.terminal', 'title': 'Terminal', 'needs': ('surface', 'theme', 'damage', 'install'), 'marker': 'terminal', 'min_size': (200, 120)},
+    {'id': 'terminal', 'entry': 'terminal_app:TerminalAppLayer', 'order': 90, 'folder': 'moybyte.terminal', 'title': 'Terminal', 'needs': ('surface', 'theme', 'damage', 'install', 'clipboard'), 'marker': 'terminal', 'min_size': (200, 120)},
 ]

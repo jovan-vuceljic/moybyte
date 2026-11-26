@@ -622,7 +622,7 @@ def test_the_pushed_bytes_arrive_intact(tmp_path):
 
 
 def test_a_push_retires_the_stamped_backup_the_board_kept(tmp_path):
-    """moy_fs's invariant (#154): the store leaves a stamped `<file>.bak` beside
+    """moy_fs's invariant (#154): the store leaves a stamped backup beside
     everything it publishes, and it describes the file it published. A push puts
     different bytes there, so leaving that stamp behind would have the board's
     next read "recover" the kid's own last save over what was just pushed."""
@@ -633,7 +633,7 @@ def test_a_push_retires_the_stamped_backup_the_board_kept(tmp_path):
     dst = "/moy/carts/demo.moy/main.lua"
     kid = "-- the kid's own save, made on the board\n"
     dev.fs.files[dst] = kid
-    dev.fs.files[dst + ".bak"] = moy_fs._stamp_line(kid) + kid
+    dev.fs.files[moy_fs._native.bak_path(dst)] = moy_fs._stamp_line(kid) + kid
 
     assert push_cart.push_file_raw(b, src, dst, push_cart.Link(window)) is True
 

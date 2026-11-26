@@ -708,6 +708,30 @@ def test_a_file_that_is_not_a_cart_reports_instead_of_importing():
     assert sections_problem(import_p8.parse_p8(SYNTHETIC_P8)) is None
 
 
+def test_the_browser_s_converter_says_each_stage_as_it_starts(tmp_path):
+    """The browser converts in a VM of its own while the console says which
+    stage it is on (worker.js, THE CONVERTER): web_p8 says them, in order,
+    and a cart refused before a stage never says it."""
+    sys.path.insert(0, str(ROOT / "firmware" / "web_runner"))
+    try:
+        import web_p8
+    finally:
+        sys.path.remove(str(ROOT / "firmware" / "web_runner"))
+    p8 = tmp_path / "c.p8"
+    p8.write_text(SYNTHETIC_P8, encoding="utf-8")
+    heard = []
+    r = json.loads(web_p8.import_p8_json(str(p8), "c.p8", str(tmp_path / "c.moy"),
+                                         heard.append))
+    assert r["ok"], r
+    assert heard == [web_p8.READING, web_p8.CHECKING, web_p8.WRITING]
+    junk = tmp_path / "junk.p8"
+    junk.write_text("hello, I am a readme\n", encoding="utf-8")
+    heard = []
+    r = json.loads(web_p8.import_p8_json(str(junk), "junk.p8", str(tmp_path / "j.moy"),
+                                         heard.append))
+    assert not r["ok"] and heard == [web_p8.READING, web_p8.CHECKING]
+
+
 def test_a_nonsense_pxa_stream_raises_rather_than_returning_half_a_program(tmp_path):
     """PICO-8 >= 0.2.0 packs its Lua with the `pxa` scheme, which the converter
     READS since 2026-08-30 -- it used to refuse it and tell the reader to

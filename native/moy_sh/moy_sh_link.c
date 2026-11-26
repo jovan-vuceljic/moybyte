@@ -187,6 +187,11 @@ void moy_sh_link_state(int state, int n) {
     case MOY_SH_LINK_NONE:
         snprintf(msg, sizeof msg, "%sThis console has no shell.%s\r\n", DIM, PLAIN);
         break;
+    case MOY_SH_LINK_TAKEN:
+        restore(l);
+        snprintf(msg, sizeof msg, "%s\r\n%sAnother browser opened this console's shell, so this one "
+                 "was disconnected. Press Enter to take it back.%s\r\n", PLAIN, DIM, PLAIN);
+        break;
     default:
         break;
     }
@@ -352,7 +357,7 @@ static void open_remote(moy_sh_screen_t *f) {
     int cols, rows, status;
     char *argv[] = {"remote", NULL};
     moy_term_size(f->t, &cols, &rows);
-    f->app = moy_sh_app_new(NULL, &HEAP, cols, rows, f->ctrl, NULL, NULL, 1, argv, &status);
+    f->app = moy_sh_app_new(NULL, &HEAP, cols, rows, f->ctrl, NULL, NULL, NULL, 1, argv, &status);
 }
 
 moy_sh_screen_t *moy_sh_screen_new(int cols, int rows, const char *root) {

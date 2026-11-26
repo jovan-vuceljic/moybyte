@@ -316,7 +316,8 @@ def test_a_verb_that_loses_something_is_the_danger_button(tmp_path):
     """Delete, Close and Stop & play lose something: their dialogs draw the
     verb in the danger look (`ui.dialog(kind="danger")`, the goldens'
     desk_close_refusal and status_vmstop pin its pixels); Receive and Open
-    lose nothing and are primary."""
+    lose nothing and are primary, and so are a `tell`'s OK and the Move of
+    a Wi-Fi switch (which goes back where it fails)."""
     ws = build_ws(tmp_path)
     drv = _drv(ws)
     ws.confirm.ask(_own(ws))
@@ -324,4 +325,45 @@ def test_a_verb_that_loses_something_is_the_danger_button(tmp_path):
     kinds = {ln.split("buttons=")[1].split(",")[-1]: "kind='danger'" in ln
              for ln in ws.confirm._page.dump().splitlines() if " dialog " in ln}
     assert kinds == {"delete": True, "close": True, "stop_play": True, "receive": False,
-                     "open": False, "cancel": False}, kinds
+                     "open": False, "cancel": False, "ok": False, "switch": False}, kinds
+
+
+@pytest.mark.parametrize("sys_size", [None, (1024, 600)], ids=["tdeck", "p4"])
+@pytest.mark.parametrize("kind", ["errors", "format"])
+def test_a_card_in_trouble_is_told_once_and_ok_dismisses_it(tmp_path, sys_size, kind):
+    """The boot's card verdict (`Notices.card_trouble`): a dialog with OK over
+    the home, its title and lines the verdict's; OK (or any cancel) takes it
+    down, and the home works under it."""
+    from runtime import console_notices
+    ws = build_ws(tmp_path, sys_size=sys_size)
+    drv = _drv(ws)
+    assert ws.notices.card_trouble(None) is False and not ws.confirm.open
+    assert ws.notices.card_trouble(kind)
+    _frames(drv)
+    c = ws.confirm
+    title, rows = console_notices.CARD_TROUBLE[kind]
+    assert c.open and c.verb == "tell" and c.title == title
+    assert c.line_rows() == rows
+    assert c.focused == "OK"
+    x, y, w, h = c._host.box("OK")
+    assert 0 <= x and x + w <= ws.sys_canvas.w and y + h <= ws.sys_canvas.h
+    _press(drv, "a")
+    assert not c.open
+    ws.home.set_home_tab("apps")
+    _frames(drv)
+    assert ws.launcher.tab == "apps" and not c.open
+
+
+def test_the_card_errors_name_what_the_user_must_know():
+    """The facts the words keep: the card has errors, the console is on its
+    own memory, the carts are still on the card, copy them on a computer,
+    then reformat or try another card."""
+    from runtime import console_notices
+    title, rows = console_notices.CARD_TROUBLE["errors"]
+    words = " ".join([title] + [t for t, _tone in rows])
+    for fact in ("card has errors", "its own memory", "still on the card",
+                 "on a computer", "reformat", "another card"):
+        assert fact in words, fact
+    title, rows = console_notices.CARD_TROUBLE["format"]
+    words = " ".join([title] + [t for t, _tone in rows])
+    assert "FAT32 or exFAT" in words and "its own memory" in words

@@ -24,8 +24,13 @@
 //   GET  /live (Upgrade: websocket)            sealed: the live socket, handed to its bridge
 //                                              (moy_live.h) with the session's keys;
 //                                              without the upgrade, {"live":1,"link":0|1}
-//                                              (the probe: whether this board relays its
-//                                              radio to the page)
+//                                              and "kinds" where it relays any, "term":1
+//                                              where it carries the web terminal, "hints":1
+//                                              where it says what changed (the
+//                                              probe: whether this board relays its radio
+//                                              to the page, the device kinds it relays,
+//                                              moy_dev_relayed's text, and its shell; such
+//                                              a board answers GET /term 404)
 //   anything in the configured `defer`         sealed, then parked for the VM (/run, /update,
 //                                              /console.json; "*": every path)
 //
@@ -148,6 +153,10 @@ static const moy_htab_mem_t STORE_MEM = { moy_store_alloc, moy_store_free };
 #include "moy_live.h"
 #pragma weak moy_web_live
 #pragma weak moy_web_live_link
+#pragma weak moy_web_live_kinds
+#pragma weak moy_web_live_term
+#pragma weak moy_live_store_mine
+#pragma weak moy_live_hint
 
 #define CHUNK_MIN 8192
 #define CHUNK_HEAD 8
@@ -176,6 +185,10 @@ static const struct {
     {"moy_store.mjs", "text/javascript; charset=utf-8"},
     {"micropython.mjs", "text/javascript; charset=utf-8"},
     {"micropython.wasm", "application/wasm"},
+    {"manifest.webmanifest", "application/manifest+json"},
+    {"icon-180.png", "image/png"},
+    {"icon-192.png", "image/png"},
+    {"icon-512.png", "image/png"},
 };
 
 
@@ -447,6 +460,9 @@ uint32_t moy_web_events(void) {
     }
     if (moy_wa_paired()) {
         W->events |= MOY_WEB_EV_PAIRED;
+    }
+    if (moy_wa_claimed()) {
+        W->events |= MOY_WEB_EV_PASSWORD;
     }
     uint32_t e = W->events;
     W->events = 0;
@@ -1280,10 +1296,19 @@ static int sync_post(out_t *o, const char *b, size_t n) {
         .shelf = W->shelf,
         .shelf_cap = sizeof(W->shelf),
         .apps = W->has_apps ? W->apps : NULL,
+        .spend = 1,                 // the request's own buffer, opened in place
     };
     moy_sync_result_t r;
     store_gate();
+    // the live socket's own page's changes are no news to it (moy_live.c, THE HINTS)
+    int mine = moy_live_store_mine != NULL && moy_wa_holds(MOY_WA_LIVE, o->seal);
+    if (mine) {
+        moy_live_store_mine(1);
+    }
     moy_sync_apply(&s, batch.root, batch.ops, batch.ops_end, &r);
+    if (mine) {
+        moy_live_store_mine(0);
+    }
     if (r.shelf && batch.root == MOY_SYNC_CARTS) {
         W->events |= MOY_WEB_EV_SHELF;
         if (r.shelf & MOY_SYNC_SHELF_FULL) {
@@ -1722,7 +1747,9 @@ static int upgrade(out_t *o, const moy_http_req_t *r, const char *key, size_t kn
 // caller neither answers nor closes it), 0 when the request was answered
 // here.
 static int stream(out_t *o, const moy_http_req_t *r, int which) {
-    int have = which == MOY_WA_TERM ? moy_web_term != NULL : moy_web_live != NULL;
+    // a board whose live socket carries the terminal serves no /term
+    int live_term = moy_web_live_term != NULL && moy_web_live_term();
+    int have = which == MOY_WA_TERM ? moy_web_term != NULL && !live_term : moy_web_live != NULL;
     if (!have) {
         simple(o, 404, "text/plain; charset=utf-8", "not found");
         return 0;
@@ -1737,15 +1764,22 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
             json(o, 200, "{\"term\":1}");
         } else {
             uint8_t m[6];
-            if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
-                json(o, 200, "{\"live\":1,\"link\":0}");
-            } else {
-                char d[64];
-                snprintf(d, sizeof d,
-                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"}",
-                         m[0], m[1], m[2], m[3], m[4], m[5]);
-                json(o, 200, d);
+            char k[112] = "";
+            if (moy_web_live_kinds != NULL && moy_web_live_kinds(k + 10, sizeof k - 12) > 0) {
+                memcpy(k, ",\"kinds\":\"", 10);
+                strcat(k, "\"");
             }
+            char d[208];
+            const char *t = live_term ? ",\"term\":1" : "";
+            const char *h = moy_live_hint != NULL ? ",\"hints\":1" : "";
+            if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
+                snprintf(d, sizeof d, "{\"live\":1,\"link\":0%s%s%s}", k, t, h);
+            } else {
+                snprintf(d, sizeof d,
+                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"%s%s%s}",
+                         m[0], m[1], m[2], m[3], m[4], m[5], k, t, h);
+            }
+            json(o, 200, d);
         }
         return 0;
     }
@@ -1753,6 +1787,7 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
         json(o, 400, "{\"error\":\"key\"}");
         return 0;
     }
+    moy_wa_take(which, o->seal);
     if (upgrade(o, r, key, kn, which == MOY_WA_TERM ? "moy.sh" : "moy.live") != 0) {
         return 0;
     }

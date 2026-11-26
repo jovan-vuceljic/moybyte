@@ -87,7 +87,7 @@ def run(api, root):
     os.makedirs(os.path.join(root, proj, "images"), exist_ok=True)
     for n, body in (("manifest.json", "{\"title\": \"demo\"}"), ("main.py", "x = 1\n"),
                     ("scenes/a.moyscene", "{}"), ("images/b.moyimg", "{}"),
-                    ("zz.txt", "z"), ("main.py.bak", "junk")):
+                    ("zz.txt", "z"), (".main.py.moybak", "junk")):
         with open(os.path.join(root, proj, n), "w") as f:
             f.write(body)
     _tree(top, 1)

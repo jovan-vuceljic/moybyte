@@ -139,6 +139,10 @@ class _Sink:
         self.job.in_store(_io)
         self.fill = 0
 
+    def drop(self):
+        """The buffer given back: the job writes no more."""
+        self.buf = self.mv = None
+
     def abort(self):
         f, self.f = self.f, None
         if f is not None:

@@ -208,9 +208,13 @@ typedef struct {
 } moy_tty_ws_stats_t;
 
 void moy_tty_ws_stats(moy_tty_ws_stats_t *out);
+// ...and the live socket's terminal channel's (moy_tty_live.c), on a board
+// that serves its page's terminal there (the Zeros, which link no bridge).
+void moy_tty_live_stats(moy_tty_ws_stats_t *out);
 
-// The web terminal's link (moy_tty_ws.c): cut, and its quiet time in ms.
-void moy_web_term_cut(void);
+// The web terminal's link (moy_tty_ws.c): cut (its session ended, or
+// `taken` by another session's page), and its quiet time in ms.
+void moy_web_term_cut(int taken);
 uint32_t moy_web_term_idle_ms(void);
 
 #endif // MOY_TTY_H

@@ -1,6 +1,6 @@
 {
   "format": "moy-1",
-  "version": 3,
+  "version": 4,
   "title": "Terminal",
   "id": "moybyte.terminal",
   "runtime": "python",
@@ -15,7 +15,7 @@
       "id": "terminal",
       "entry": "terminal_app:TerminalAppLayer",
       "order": 90,
-      "needs": ["surface", "theme", "damage", "install"],
+      "needs": ["surface", "theme", "damage", "install", "clipboard"],
       "marker": "terminal",
       "min_size": [200, 120]
     },

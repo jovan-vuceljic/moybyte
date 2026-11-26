@@ -70,6 +70,10 @@ typedef struct {
     // The device lease class (moy_lease.h) the row's handle took beside its
     // kind's own, 0 for none: kept through the VM's end as the kind's is.
     uint8_t (*holds)(uint32_t slot);
+    // Whether this board has the device (a driver linked on a board without
+    // it, the C3's lora), NULL: it has. A kind relayed to a page counts only
+    // where it has (moy_dev_relayed).
+    int (*present)(void);
 } moy_dev_ops_t;
 
 // The drivers' verbs (weak: an image without the driver answers ABSENT).
@@ -80,6 +84,42 @@ extern const moy_dev_ops_t moy_dev_http;
 extern const moy_dev_ops_t moy_dev_usb;
 extern const moy_dev_ops_t moy_dev_ble;
 extern const moy_dev_ops_t moy_dev_media;
+
+// THE RELAY (#256; native/moy_net/moy_live_dev.c the board's half,
+// moy_dev_web.c the page's): a board relays a device API to the browser
+// console it serves over the live socket, where the kind has a RELAY LIST,
+// its driver is linked and the board has the device. The list is the
+// kind's gets the page answers from what the board pushed, since the page's
+// call cannot wait on the socket: `packet:state`, each comma-separated --
+// the packet gets the board reads with each record it reads for the page
+// (lora's rssi, snr and port: "of the packet read last"), the state gets it
+// reads after each answer and each event (lora's joined, fcnt, busy). A kind
+// with no list is not relayed, and on the page stays ABSENT.
+//
+// A board builds the board's half only where it can relay: where a class
+// row of its board.toml names the API of a kind with a list (its MOY_API_
+// define, board_config.hw_defines), each such kind named here
+// (tests/test_live_dev.py holds the two lists equal). A board with none
+// (the C3 Zero) links no device channel.
+#ifndef MOY_DEV_RELAYS
+#if defined(MOY_API_LORA)
+#define MOY_DEV_RELAYS 1
+#endif
+#endif
+//
+// The kinds this board relays, "name:packet:state" each, split by ';', into
+// `out` (cap bytes, NUL-terminated): its length, 0 for none.
+size_t moy_dev_relayed(char *out, size_t cap);
+// The relay list of kind `name` (n bytes), NULL for a kind not relayed here.
+const char *moy_dev_relay_of(const char *name, size_t n);
+
+// The page's half (moy_dev_web.c, the browser console's build; weak): a kind
+// whose driver this image lacks and that the page's board relays opens as a
+// remote row, its verbs the relay's.
+bool moy_dev_web_has(const char *name);
+int32_t moy_dev_web_open(uint32_t slot, const char *name, uint32_t pid, const char *cfg,
+                         size_t cn);
+extern const moy_dev_ops_t moy_dev_web;
 
 // moy_dev.c's half: the device API `name` names, its kind (> 0) or 0.
 int moy_dev_kind(const char *name, size_t n);

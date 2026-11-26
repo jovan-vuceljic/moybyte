@@ -336,7 +336,7 @@ SH end 0
 SH 3 /nl.txt
 SH end 0
 > sh ls /
-SH bin/  dev/  etc  nl.txt  nl.txt.bak  notes.txt  notes.txt.bak  proc/  sd
+SH bin/  dev/  etc  nl.txt  notes.txt  proc/  sd
 SH end 0
 > sh rm /nl.txt
 SH end 0
@@ -369,7 +369,7 @@ SH app vi
 > sh :q^M
 SH end 0
 > sh ls /
-SH bin/  dev/  etc  notes.txt  notes.txt.bak  proc/  sd
+SH bin/  dev/  etc  notes.txt  proc/  sd
 SH end 0
 > sh view /notes.txt
 SH three

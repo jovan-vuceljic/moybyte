@@ -125,6 +125,11 @@ int moy_ota_judge_c6(const char *text, size_t n, int require_sig,
 // -- the client ---------------------------------------------------------------------
 
 #define MOY_HTTPC_HOPS 4            // redirects followed
+// A handle's head buffer starts at MOY_HTTPC_HEAD_FIRST and doubles, up to
+// MOY_HTTPC_HEAD_MAX, only while a request or a head needs more: a redirect's
+// hop gives the room back. A board with no PSRAM pays its internal RAM for
+// it beside the handshake's 16 KB record buffer.
+#define MOY_HTTPC_HEAD_FIRST 2048
 #define MOY_HTTPC_HEAD_MAX 16384    // GitHub's redirect head measured 5147 bytes
 #define MOY_HTTPC_IO_MS 15000       // a connect, or a read that has no byte this long
 // The VM's two clients, one the http device API's worker holds
@@ -156,6 +161,8 @@ int moy_httpc_read_wait(int h, void *buf, size_t n, uint32_t ms);
 // the head has none.
 int moy_httpc_header(int h, const char *name, char *out, size_t cap);
 void moy_httpc_close(int h);
+// The bytes handle `h`'s head buffer holds (0 for a handle that is not open).
+size_t moy_httpc_head_room(int h);
 // The same asking for the `n` bytes from `start` (a Range header on every hop):
 // a server that honours it answers 206 with those bytes, one that does not 200
 // with the whole file.
@@ -174,6 +181,33 @@ int moy_httpc_get(const char *url, const char *agent, size_t cap, int *status,
 int moy_httpc_get_ex(const char *url, const char *agent, uint32_t flags, size_t cap,
                      int *status, char **body, size_t *n);
 
+// THE POOL. A request asks the server to keep its connection open
+// (HTTP/1.0 with `Connection: keep-alive`). When the response agrees and gives
+// its length (moy_http_resp_t's `keep`), the body reads to that length and
+// ends there, and a connection whose body was read to its end is kept, idle,
+// for the next request to the same host and port in the same MOY_CONN_* mode:
+// a verified request never rides a connection the updater opened unchecked,
+// and a kept one was verified when it was made. A redirect's hop is such a
+// request (its body, at most MOY_HTTPC_HOP_BODY, read and dropped first), so
+// GitHub's release asset pays each of its two handshakes once per burst, not
+// once per file. At most MOY_HTTPC_POOL are kept (a board fact, board.toml
+// [net] http_pool; 0 keeps none and asks for none), the oldest closed for a
+// newer one, each closed after MOY_HTTPC_IDLE_MS idle, and all closed when
+// the radio's last lease goes (moy_wifi_book) and when the fetch worker ends.
+// A kept connection the server closed meanwhile is found so before it is used
+// (moy_conn_alive) and closed; a request whose kept connection fails before
+// its response's first byte is made again, once, on a fresh one.
+#ifndef MOY_HTTPC_POOL
+#define MOY_HTTPC_POOL 2
+#endif
+#define MOY_HTTPC_IDLE_MS 5000u
+#define MOY_HTTPC_HOP_BODY 4096u
+// The idle ones closed (the timer's, moy_net_reap_after); every one closed;
+// how many are kept.
+void moy_httpc_pool_reap(void);
+void moy_httpc_pool_flush(void);
+uint32_t moy_httpc_pool_count(void);
+
 // The platform's connection (moy_net_port.c): 0 and a connection, or -errno.
 // `tls` is MOY_CONN_PLAIN, MOY_CONN_TLS (the certificate verified: its chain
 // to a root of the bundle, the host's name, its dates; -MOY_HTTPC_ECERT when
@@ -191,6 +225,13 @@ int moy_conn_read(void *conn, void *p, size_t n);
 int moy_conn_read_wait(void *conn, void *p, size_t n, uint32_t ms);
 int moy_conn_write(void *conn, const void *p, size_t n);
 void moy_conn_close(void *conn);
+// 1 when a kept connection may carry a request: the network's gate is open and
+// nothing waits to be read on it (a server's close, or bytes no request asked for).
+int moy_conn_alive(void *conn);
+// moy_httpc_pool_reap called once, `ms` from now, on a timer's task; a call
+// while one is armed moves it. A no-op where the image has no timer task (the
+// host, the browser), whose pool is reaped as it is next used.
+void moy_net_reap_after(uint32_t ms);
 
 // -- the updater ----------------------------------------------------------------------
 

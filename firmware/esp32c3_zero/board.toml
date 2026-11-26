@@ -22,8 +22,7 @@
 #    `[image]` names as a way out: a factory slot, no otadata, and
 #    `moy_ota.OtaUpdater.available()` False, which is how the shared update
 #    screen already reads a board it cannot update. A new image goes on by
-#    cable, and the flash installs the browser console add-on that fits it
-#    into the store (`[flash] addon`).
+#    cable; its browser console comes from a mirror (`[web]`).
 #  * SINGLE CORE, RISC-V. Every task the native tier starts is on core 0
 #    (native/moy_kernel/moy_tasks.h).
 
@@ -112,8 +111,8 @@ packages = []
 packages_why = "No device package crosses: the store host is flat modules."
 
 [[modules.device.group]]
-files = ["zero_host.py", "zero_setup.py", "zero_shell.py", "zero_improv.py"]
-why = "The Zero's store host, its first-boot setup, its first setup over the cable (Improv) and its terminal: both Zero boards' main.py."
+files = ["zero_host.py", "zero_setup.py", "zero_shell.py", "zero_improv.py", "zero_wifi.py"]
+why = "The Zero's store host, its first-boot setup, its first setup over the cable (Improv), its terminal and the Wi-Fi its page manages: both Zero boards' main.py."
 
 [[modules.device.group]]
 files = ["cart_net.py"]
@@ -172,9 +171,9 @@ console = "online"
 image  = "dist/c3_zero/moybyte_c3_zero.bin"
 offset = "0x0"
 baud   = 460800
-# The carts folder the browser console add-on that fits the flashed image is
-# installed into, over the REPL, after a cable flash (tools/board_flash.py):
-# with no OTA, a cable flash is how a new image arrives, and its page with it.
+# The carts folder: after a cable flash, tools/board_flash.py installs the
+# official carts `[roster] install` names over the REPL, and no browser
+# console add-on, as the console is online (`[web]`).
 addon  = "/moy/carts"
 
 [image]
@@ -230,6 +229,17 @@ name = "flash"
 class = "never"
 pins = [11, 12, 13, 14, 15, 16, 17]
 why = "the in-package flash and its VDD_SPI"
+
+# ---------------------------------------------------------------------------
+
+[net]
+# The http client keeps no connection open between fetches (native/moy_net/
+# moy_ota.h's THE POOL, tools/board_config.py NET_PARAMS). A kept TLS session
+# holds its context, its keys and its socket in the one internal heap this
+# chip has, beside WiFi's buffers, an SSH session and an upload's buffer
+# (mpconfigboard.h's THE PYTHON HEAP), and an install here is a few
+# fetches.
+http_pool = 0
 
 # ---------------------------------------------------------------------------
 

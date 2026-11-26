@@ -58,7 +58,8 @@ class Layer:
     here: `ui_host` (the AppHost its pages draw through, which answers the
     toolkit's half: a field's open edit types, Mic and back cancel it, back
     dismisses a popover), `typing`, `cancel`, `back` and `has_page` (its own
-    page step, after the toolkit's), `close` (leaving it, by any route),
+    page step, after the toolkit's), `paste` (a paste from outside the
+    console taken whole), `close` (leaving it, by any route),
     `page_title` and `ball_steps`. `B_BACK`: its B is the host's back, as
     every app's is; a surface whose B is a button of its own leaves it
     False. `ESC_LEAVES`: Esc on its first page leaves it. `KEYS_IDLE`: a
@@ -139,6 +140,13 @@ class Layer:
 
     def has_page(self):
         """Whether a page of its own is open, which `back` steps out of."""
+        return False
+
+    def paste(self, text):
+        """A paste from outside the console (a browser page's clipboard),
+        taken whole: True where the surface typed it. By default False, and
+        the host presses the console's Paste, which a field and an editor
+        take from the clipboard."""
         return False
 
     def close(self):
@@ -328,6 +336,13 @@ class _UpdateLayer(Layer):
 
     def handle_pointer(self, px, py, click):
         self.ws.update_ui._update_pointer(px, py, click)
+        return True
+
+    def back(self):
+        """Esc (`InputPolicy.back`) is its page's back, as B, on every
+        tier: back to Settings, the install dropped; past the point of no
+        return it stays (update_ui's `leave`)."""
+        self.ws.update_ui._page().role("back")
         return True
 
 
@@ -626,8 +641,11 @@ class _SysMenuLayer(Layer):
 
     def handle_pointer(self, px, py, click):
         ws = self.ws
-        if click:
-            m = ws.sysmenu
+        m = ws.sysmenu
+        if not click:
+            if m.comp is None:
+                ws.menu_ui.point(px, py, False)   # a finger's drag scrolls the rows
+        else:
             comp = m.comp
             if comp is not None:
                 r = m.panel_rect()

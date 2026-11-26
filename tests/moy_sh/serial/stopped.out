@@ -25,6 +25,10 @@ SH end 0
 SH 1.500 warning moybyte.doom/9 a slow frame
 SH 1.500 warning moybyte.doom/9 and its second line
 SH end 0
+> sh log doom > /log.txt; grep -c . /log.txt; dmesg | wc -l
+SH 2
+SH 3
+SH end 0
 > sh cat /proc/9/log
 SH a slow frame
 SH and its second line

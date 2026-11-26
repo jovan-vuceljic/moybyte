@@ -202,19 +202,21 @@ class ThemeDoc:
         self.ws.look.preview_pixels(self.sheet, self.flags)
 
     def seed(self, slot):
-        """The tile a smooth slot turns into when it is painted: the pixel
-        set's own tile where the image carries it, else the set's mask, each
-        pixel it sets in the ink."""
-        sheet = _iconsets.pixel_sheet()
-        if sheet is not None and slot < sheet.count:
-            ox, oy = sheet.tile_origin(slot)
-            out = bytearray(256)
-            for y in range(16):
-                for x in range(16):
-                    v = sheet.pget(ox + x, oy + y)
-                    out[y * 16 + x] = v if v != sheet.clear else self.sheet.clear
-            return out
+        """The tile a smooth slot turns into when it is painted: the mask
+        the slot shows at the zoom, each pixel it sets in the ink, so the
+        first dot changes that dot and nothing else of the icon; the pixel
+        set's own tile where the live set has no mask for it."""
         mask = self.mask(slot)
+        if mask is None:
+            sheet = _iconsets.pixel_sheet()
+            if sheet is not None and slot < sheet.count:
+                ox, oy = sheet.tile_origin(slot)
+                out = bytearray(256)
+                for y in range(16):
+                    for x in range(16):
+                        v = sheet.pget(ox + x, oy + y)
+                        out[y * 16 + x] = v if v != sheet.clear else self.sheet.clear
+                return out
         ink = 0 if self.ws.theme_colors.get("surface_light", False) else 7
         out = bytearray(bytes((self.sheet.clear,)) * 256)
         if mask is not None:

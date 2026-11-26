@@ -15,6 +15,8 @@ modules take a path from, so the page and the VM never name one twice.
              removes it after: a stray drop under the carts folder would be
              swept as a cart
     EXPORT   a cart packed for the page to take
+    CONVERTED  a PICO-8 cart the converter's own VM wrote (web_p8.convert_json),
+             in THAT VM's VFS, which the console's takes its files from
 """
 
 CARTS = "/moy/carts"
@@ -23,3 +25,4 @@ SPOOL = "/moy/net"
 LISTING = SPOOL + "/media.json"
 DROP = "/moy/tmp/drop"
 EXPORT = "/moy/tmp/export.zip"
+CONVERTED = "/moy/tmp/converted"

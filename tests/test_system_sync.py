@@ -298,6 +298,17 @@ def test_a_document_in_parts_lands_at_its_publish_across_batches():
     assert e4 == [(0, "part out of order")]
 
 
+def test_parts_the_next_batch_does_not_go_on_with_are_dropped():
+    """A page that left mid-document leaves nothing held on the board."""
+    rx = moy_sync.SystemReceiver()
+    _rx_apply([{"p": SETTINGS, "t": "x" * 4000, "part": 0}], rx=rx)
+    assert rx._parts
+    _rx_apply([], rx=rx)
+    assert rx._parts == {}
+    (_a, errors, _c), _, _ = _rx_apply([{"p": SETTINGS, "t": "y", "part": 1}], rx=rx)
+    assert errors == [(0, "part out of order")]
+
+
 # -- the webhost ----------------------------------------------------------------------
 
 
@@ -381,9 +392,9 @@ def test_a_system_batch_is_merged_and_its_keys_re_applied(tmp_path):
 
 
 def test_a_host_without_the_system_root_refuses_its_batch(tmp_path):
-    """A board whose VM answers no /console.json (the Zero, whose page keeps
-    its Settings in the tab) refuses the batch, never misfiles it; firmware
-    from before the root refuses it too, as a batch it cannot parse."""
+    """A host built with no system root refuses the batch, never misfiles
+    it; firmware from before the root refuses it too, as a batch it cannot
+    parse."""
     h = _host(tmp_path, ws=False)
     page = _paired(h)
     ops = [{"p": SETTINGS, "t": ""}]
@@ -393,6 +404,38 @@ def test_a_host_without_the_system_root_refuses_its_batch(tmp_path):
     assert _status(h.handle_http("GET", target, b"")) == 404
     assert not (tmp_path / "carts" / SETTINGS).exists()
     assert not (tmp_path / SETTINGS).exists()
+
+
+def test_a_zero_keeps_the_pages_settings_in_its_store(tmp_path, monkeypatch):
+    """The Zero has no console to apply them to, and still keeps them
+    (`StoreSystem`, issue 269): a theme a page picks and its badges land in
+    the store's system/settings, and the next page -- a fresh browser, as
+    board mode keeps nothing in the tab -- pulls them back. Without it a
+    reload came back on the default theme with the custom one on the shelf."""
+    import zero_host
+    carts = _store(tmp_path)
+    (tmp_path / "system").mkdir()
+    monkeypatch.setattr(zero_host, "CARTS_DIR", str(carts))
+    system = zero_host.make_system()
+    assert isinstance(system, wh.StoreSystem)
+    h = wh.WebHost(str(carts), auth=str(tmp_path / "system"), system=system, port=0)
+    h.handle_http("GET", "/sync", b"")
+    page = _paired(h)
+    st, doc = page.json("GET", "/console.json")
+    assert st == 200 and _doc(doc[SETTINGS]) == {}
+    sent = {"theme": "custom", "theme_variant": "dark", "show_fps": True,
+            "volume": 7, "consent": NATIVE}
+    st, doc = page.json("POST", "/sync", json.loads(_batch([
+        {"p": SETTINGS, "t": _text(sent)}])))
+    assert st == 200 and doc == {"ok": 1, "err": []}
+    kept = _doc((tmp_path / SETTINGS).read_text())
+    assert kept == {"theme": "custom", "theme_variant": "dark", "show_fps": True}
+    # A reset: the next host reads the store, and a new page pulls them.
+    h2 = wh.WebHost(str(carts), auth=str(tmp_path / "system"),
+                    system=wh.StoreSystem(str(carts)), port=0)
+    h2.handle_http("GET", "/sync", b"")
+    st, doc = _paired(h2).json("GET", "/console.json")
+    assert _doc(doc[SETTINGS]) == kept
 
 
 def test_a_carts_batch_still_applies_in_c_beside_the_system_root(tmp_path):

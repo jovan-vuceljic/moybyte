@@ -11,6 +11,9 @@
 #include "gensignkey.h"
 #include "gened25519.h"
 #include "dbmalloc.h"
+#include "channel.h"
+#include "chansession.h"
+#include "packet.h"
 
 #include "moy_kmem.h"
 #include "moy_platform.h"
@@ -31,10 +34,25 @@
 #define SYS_PATH 192u
 #define KEYS_MAX (16u * 1024u)
 
-// The server's own state, PSRAM (moy_ssh_globals): the jump an exit takes,
-// the stored record and what getpwnam and crypt answer with.
+// A second connection signing in while a session is served (THE TAKEOVER,
+// below): its socket (-1: none), the jump its exit takes, its session's
+// globals, and the served session's while its own are swapped in.
+typedef struct {
+    int fd;
+    jmp_buf jmp;
+    struct sshsession *sess, *sess_was;
+    struct serversession *svr, *svr_was;
+} next_t;
+
+// The server's own state, PSRAM (moy_ssh_globals): the jump an exit takes
+// (`at`: the served session's, or the next's while its turn runs), the
+// stored record and what getpwnam and crypt answer with.
 typedef struct {
     jmp_buf jmp;
+    jmp_buf *at;
+    int lfd;                    // the listening socket while a session is served
+    unsigned epoch;             // the served session's allocations' (1 or 2)
+    next_t next;
     char hash[MOY_SSH_HASH_MAX];
     char crypt[MOY_SSH_HASH_MAX];
     char user[33];
@@ -142,6 +160,7 @@ int moy_ssh_globals(void) {
         return -1;
     }
     s_stats.heap_now = s_stats.heap_peak = sizeof *g;
+    g->lfd = g->next.fd = -1;
     moy_ssh_g_ses = moy_ssh_calloc(1, sizeof(struct sshsession));
     moy_ssh_g_svr_ses = moy_ssh_calloc(1, sizeof(struct serversession));
     moy_ssh_g_opts = moy_ssh_calloc(1, sizeof(runopts));
@@ -341,7 +360,7 @@ void moy_ssh_log(int priority, const char *msg) {
 
 void moy_ssh_exit_jump(int code) {
     (void)code;
-    longjmp(s_jmp, 1);
+    longjmp(*g->at, 1);
 }
 
 // -- the password ---------------------------------------------------------------
@@ -388,6 +407,7 @@ int moy_ssh_setup(const char *system_dir) {
     // Setup's own allocations (the options, the host key) live in epoch 0,
     // which no session frees. An exit here returns to this frame.
     m_malloc_set_epoch(0);
+    g->at = &s_jmp;
     if (setjmp(s_jmp) != 0) {
         printf("SSH setup failed\n");
         return -1;
@@ -455,12 +475,21 @@ static void mark_shell(void) {
 
 // -- Dropbear's side of the face (port/moy_ssh_port.h) -------------------------------
 
+// One face at a time (native/moy_tty/moy_tty.h): while the browser console's
+// Terminal holds it, a shell, a command or `sftp` is refused and the client
+// reads why on its stderr, its status 1 (the patch's moy_channel_refuse),
+// where a channel failure would read only "shell request failed". Out of
+// memory stays a channel failure.
+#define BUSY_SAYS "the terminal is open in a browser; close it there and try again"
+
 // The `sftp` subsystem arrives as the command SFTPSERVER_PATH
 // (port/localoptions.h), and so does an `exec` of that name, as on OpenSSH.
 // A board with no PSRAM refuses it: its buffers (native/moy_tty/README.md,
 // Memory) do not fit beside a session in the one internal heap, and a refusal
 // is what the client reports, where running out would cut a transfer short.
-int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t *pid) {
+int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t *pid,
+                    const char **says) {
+    *says = NULL;
     if (cmd != NULL && strcmp(cmd, SFTPSERVER_PATH) == 0) {
         #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
         return -1;
@@ -468,7 +497,11 @@ int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t
         cmd = NULL;
         pty = MOY_TTY_SFTP;
     }
-    return moy_tty_open(MOY_TTY_SSH, cmd, pty, cols, rows, mark_shell, fd, pid) == 0 ? 0 : -1;
+    int r = moy_tty_open(MOY_TTY_SSH, cmd, pty, cols, rows, mark_shell, fd, pid);
+    if (r == MOY_TTY_EBUSY) {
+        *says = pty == 1 ? BUSY_SAYS "\r\n" : BUSY_SAYS "\n";   // a terminal's line ends CR LF
+    }
+    return r == 0 ? 0 : -1;
 }
 
 int moy_ssh_reap(pid_t *pid, int *status) {
@@ -481,6 +514,182 @@ int moy_ssh_signal(pid_t pid, int sig) {
 
 void moy_ssh_winch(pid_t pid, int cols, int rows) {
     moy_tty_winch(pid, cols, rows);
+}
+
+// -- the takeover ------------------------------------------------------------------
+//
+// THE TAKEOVER (owner, 2026-11-25): a new connection that signs in ends the
+// session served, which is told so on its terminal and closed; one that does
+// not sign in ends nobody's. While a session is served its loop also waits on
+// the listening socket (Dropbear's session_loop, moy_ssh_loop_fds and
+// moy_ssh_loop_heard), so a second connection is accepted beside it and its
+// own session -- its globals swapped in for its turn of each loop, its
+// allocations in the other epoch, its exit jumping back here -- runs its key
+// exchange and sign-in while the first one goes on. Signed in, it is served
+// from then on (moy_ssh_serve_one); its exit before that (a wrong password,
+// AUTH_TIMEOUT, its client gone, no memory) frees what it took and leaves the
+// served session as it was. One at a time: a third waits in the backlog.
+
+#define TAKEN_SAYS "\r\nanother session signed in; this one is closing\r\n"
+// What a second connection's sign-in must find free beside a session on a
+// board without PSRAM, whose one internal heap the served session, its face
+// and WiFi share: room for its handshake (about a session's own Dropbear
+// peak, stats()'s session_peak) with WiFi's share left over it, and one block
+// for its largest buffer. Under it the connection is closed unanswered and
+// the session served goes on: a sign-in never takes the heap the board runs
+// on.
+#define NEXT_ROOM (32u * 1024u)
+#define NEXT_BLOCK (8u * 1024u)
+
+// The globals the second connection's (on) or the served session's (off).
+static void as_next(int on) {
+    next_t *n = &g->next;
+    if (on) {
+        n->sess_was = moy_ssh_g_ses;
+        n->svr_was = moy_ssh_g_svr_ses;
+        moy_ssh_g_ses = n->sess;
+        moy_ssh_g_svr_ses = n->svr;
+        m_malloc_set_epoch(3u - g->epoch);
+        g->at = &n->jmp;
+    } else {
+        moy_ssh_g_ses = n->sess_was;
+        moy_ssh_g_svr_ses = n->svr_was;
+        m_malloc_set_epoch(g->epoch);
+        g->at = &g->jmp;
+    }
+}
+
+// The second connection gone (its session's cleanup ran, or never began).
+static void next_end(void) {
+    next_t *n = &g->next;
+    m_malloc_free_epoch(3u - g->epoch, 1);
+    close(n->fd);
+    n->fd = -1;
+    moy_ssh_free(n->sess);
+    moy_ssh_free(n->svr);
+    n->sess = NULL;
+    n->svr = NULL;
+    s_stats.ended++;
+}
+
+static int next_room(void) {
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+    return heap_caps_get_free_size(MALLOC_CAP_INTERNAL) >= NEXT_ROOM
+           && heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL) >= NEXT_BLOCK;
+#else
+    return 1;
+#endif
+}
+
+// The store's sign-in record and keys, for the connection signing in now.
+static void conf_take(conf_t *c) {
+    strcpy(s_hash, c->hash);
+    moy_ssh_free(g->keys);
+    g->keys = c->keys;
+    g->keys_n = c->keys_n;
+    svr_opts.noauthpass = !c->password_auth;
+    s_stats.sessions++;
+    s_accepted_at = moy_tty_ms();
+}
+
+static void next_begin(void) {
+    next_t *n = &g->next;
+    int fd = accept(g->lfd, NULL, NULL);
+    if (fd < 0) {
+        return;
+    }
+    conf_t c;
+    if (!next_room()) {
+        printf("SSH a second sign-in has no memory beside this session\n");
+        close(fd);
+        return;
+    }
+    moy_tty_hop(conf_here, &c);
+    n->sess = moy_ssh_calloc(1, sizeof(struct sshsession));
+    n->svr = moy_ssh_calloc(1, sizeof(struct serversession));
+    if (c.hash[0] == 0 || n->sess == NULL || n->svr == NULL) {
+        moy_ssh_free(c.keys);
+        n->fd = fd;
+        next_end();
+        return;
+    }
+    conf_take(&c);
+    n->fd = fd;
+    as_next(1);
+    if (setjmp(n->jmp) == 0) {
+        svr_session_begin(fd, -1);
+        as_next(0);
+    } else {
+        as_next(0);
+        next_end();
+    }
+}
+
+// The served session ended for the one that signed in beside it: told so on
+// each channel, what it queued sent (a second at most), then closed.
+static void take_over(void) {
+    moy_channels_end(TAKEN_SAYS);
+    uint32_t t0 = moy_tty_ms();
+    while (!isempty(&ses.writequeue) && moy_tty_ms() - t0 < 1000) {
+        fd_set w;
+        FD_ZERO(&w);
+        FD_SET(ses.sock_out, &w);
+        struct timeval tv = {0, 100000};
+        if (select(ses.sock_out + 1, NULL, &w, NULL, &tv) > 0) {
+            write_packet();
+        }
+    }
+    dropbear_close("another session signed in");
+}
+
+int moy_ssh_loop_fds(fd_set *readfd, fd_set *writefd, struct timeval *timeout, int maxfd) {
+    next_t *n = &g->next;
+    if (n->fd < 0) {
+        if (g->lfd >= 0) {
+            FD_SET(g->lfd, readfd);
+            maxfd = g->lfd > maxfd ? g->lfd : maxfd;
+        }
+        return maxfd;
+    }
+    if (timeout->tv_sec > 1) {
+        timeout->tv_sec = 1;            // its timeouts are looked at every loop
+    }
+    volatile int top = maxfd;
+    as_next(1);
+    if (setjmp(n->jmp) == 0) {
+        int m = session_loop_fds(readfd, writefd);
+        top = m > top ? m : top;
+        as_next(0);
+    } else {
+        as_next(0);
+        next_end();
+    }
+    return top;
+}
+
+void moy_ssh_loop_heard(fd_set *readfd, fd_set *writefd) {
+    next_t *n = &g->next;
+    if (n->fd < 0) {
+        if (g->lfd >= 0 && FD_ISSET(g->lfd, readfd)) {
+            FD_CLR(g->lfd, readfd);
+            next_begin();
+        }
+        return;
+    }
+    volatile int in = 0;
+    as_next(1);
+    if (setjmp(n->jmp) == 0) {
+        session_loop_step(readfd, writefd, svr_chansess_checksignal);
+        in = ses.authstate.authdone;
+        as_next(0);
+    } else {
+        as_next(0);
+        next_end();
+        return;
+    }
+    if (in) {
+        take_over();
+    }
 }
 
 int moy_ssh_serve_one(int lfd, int wait_ms) {
@@ -508,31 +717,54 @@ int moy_ssh_serve_one(int lfd, int wait_ms) {
         s_stats.ended++;
         return 0;
     }
-    strcpy(s_hash, c.hash);
-    g->keys = c.keys;
-    g->keys_n = c.keys_n;
-    s_stats.sessions++;
-    s_accepted_at = moy_tty_ms();
+    conf_take(&c);
     s_session_base = s_stats.heap_now;
     s_stats.session_peak = 0;
 
     memset(&ses, 0, sizeof ses);
     memset(&svr_ses, 0, sizeof svr_ses);
+    g->lfd = lfd;
+    g->epoch = 1;
+    g->at = &s_jmp;
     m_malloc_set_epoch(1);
-    if (setjmp(s_jmp) == 0) {
-        seedrandom();
-        svr_opts.noauthpass = !c.password_auth;
-        svr_session(fd, -1);
+    seedrandom();
+    // The session served, then each that signed in beside it and ended it,
+    // or was signing in when it ended (THE TAKEOVER).
+    volatile int served = fd, resumed = 0;
+    for (;;) {
+        if (setjmp(s_jmp) == 0) {
+            if (resumed) {
+                session_loop(svr_chansess_checksignal);
+            } else {
+                svr_session(served, -1);
+            }
+        }
+        m_malloc_free_epoch(g->epoch, 1);
+        close(served);
+        moy_tty_reap_all(MOY_TTY_SSH, 5000);
+        s_stats.ended++;
+        next_t *nx = &g->next;
+        if (nx->fd < 0) {
+            break;
+        }
+        moy_ssh_free(moy_ssh_g_ses);
+        moy_ssh_free(moy_ssh_g_svr_ses);
+        moy_ssh_g_ses = nx->sess;
+        moy_ssh_g_svr_ses = nx->svr;
+        nx->sess = NULL;
+        nx->svr = NULL;
+        served = nx->fd;
+        nx->fd = -1;
+        g->epoch = 3u - g->epoch;
+        m_malloc_set_epoch(g->epoch);
+        resumed = 1;
     }
-    m_malloc_free_epoch(1, 1);
     m_malloc_set_epoch(0);
-    close(fd);
-    moy_tty_reap_all(MOY_TTY_SSH, 5000);
+    g->lfd = -1;
     moy_ssh_free(g->keys);
     g->keys = NULL;
     g->keys_n = 0;
     s_hash[0] = 0;
-    s_stats.ended++;
     return 0;
 }
 

@@ -19,7 +19,8 @@
 //
 // The card is brought up once and never torn down (a teardown between ops is
 // what hangs the T-Deck); only a failed bring-up gives back what it took. Its
-// state is PSRAM: an idle card holds no internal SRAM of its own.
+// state is PSRAM. What a transfer moves through is made at bring-up and kept,
+// so a transfer never allocates (moy_sd.c's header).
 
 #ifndef MOY_SD_H
 #define MOY_SD_H
@@ -38,6 +39,16 @@ uint32_t moy_sd_card_sectors(void);
 // `count` sectors moved from or to `buf`, raising nothing: ESP_OK or the
 // driver's error. What native/moy_store's card volume reads through.
 int moy_sd_card_io(uint32_t start, uint8_t *buf, uint32_t count, int write);
+
+// What the transfers met since boot (or the last reset): moy_sd.stats().
+typedef struct {
+    uint32_t calls, sectors;
+    uint32_t errors;            // transfers that failed
+    uint32_t nomem;             // of them, for want of memory (never, by design)
+    uint32_t hops;              // SPI transfers asked on a PSRAM stack, run on the hop
+    uint32_t hop_free;          // the hop's stack never used, bytes (0: no hop)
+} moy_sd_stats_t;
+const moy_sd_stats_t *moy_sd_stats(int reset);
 
 // What the card took given back (a failed mount's): the device, the sdspi
 // driver or the SDMMC slot; never the panel's bus.

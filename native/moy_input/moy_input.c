@@ -108,6 +108,7 @@ struct moy_input {
     uint32_t rep_due[MOY_INPUT_SOURCES][MOY_INPUT_BUTTONS];   // each held button's next repeat
     uint8_t rep[MOY_INPUT_BUTTONS];         // this frame's repeats and added steps
     int32_t krep_key[MOY_INPUT_SOURCES];    // the typing level each source repeats
+    uint32_t own_rep;                       // the sources that repeat their own keys, a bit a slot
     uint32_t krep_due[MOY_INPUT_SOURCES];
     int32_t krep_ev;                        // this frame's repeated key, and its count
     uint8_t krep;
@@ -1215,7 +1216,8 @@ void moy_input_begin_frame(moy_input_t *t, uint32_t now) {
     t->krep = 0;
     t->krep_ev = 0;
     for (uint8_t i = 0; i < t->nsrc; i++) {
-        uint32_t h = t->was[i];
+        bool own = (t->own_rep >> i) & 1u;
+        uint32_t h = own ? 0 : t->was[i];
         for (uint8_t b = 0; h >> b; b++) {
             if (!(h & (1u << b))) {
                 continue;
@@ -1229,7 +1231,7 @@ void moy_input_begin_frame(moy_input_t *t, uint32_t now) {
                 t->rep[b] = (uint8_t)n;
             }
         }
-        int32_t k = typing[i];
+        int32_t k = own ? 0 : typing[i];
         if (k != t->krep_key[i] || !clock) {
             t->krep_key[i] = k;
             t->krep_due[i] = later(t, now);
@@ -1267,6 +1269,40 @@ int32_t moy_input_ball_coast(int32_t *rate) {
         *rate = MOY_INPUT_BALL_COAST_RATE;
     }
     return MOY_INPUT_BALL_COAST;
+}
+
+int moy_input_set_own_repeat(moy_input_t *t, uint32_t h, bool own) {
+    int s = slot_of(t, h);
+    if (s < 0) {
+        return MOY_INPUT_STALE;
+    }
+    if (own) {
+        t->own_rep |= 1u << s;
+        return MOY_INPUT_OK;
+    }
+    if (t->own_rep & (1u << s)) {
+        t->own_rep &= ~(1u << s);
+        for (uint8_t b = 0; b < MOY_INPUT_BUTTONS; b++) {
+            t->rep_due[s][b] = later(t, t->now);    // a key held now starts its delay
+        }
+    }
+    return MOY_INPUT_OK;
+}
+
+bool moy_input_own_repeat(const moy_input_t *t, uint32_t h) {
+    int s = slot_of(t, h);
+    return s >= 0 && (t->own_rep & (1u << s)) != 0;
+}
+
+int moy_input_add_key_repeats(moy_input_t *t, int32_t ev, uint32_t n) {
+    ev = repeats_as(ev);
+    if (ev == 0 || n == 0) {
+        return MOY_INPUT_OK;
+    }
+    uint32_t v = (ev == t->krep_ev ? t->krep : 0) + n;
+    t->krep = (uint8_t)(v > MOY_INPUT_REP_MAX ? MOY_INPUT_REP_MAX : v);
+    t->krep_ev = ev;
+    return MOY_INPUT_OK;
 }
 
 uint32_t moy_input_repeats(const moy_input_t *t, uint8_t button) {

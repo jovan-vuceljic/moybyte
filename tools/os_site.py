@@ -87,7 +87,7 @@ PAGES_HEADERS = (("Access-Control-Allow-Origin", "*"), ("Cache-Control", "max-ag
 
 
 def newest(folder):
-    """The body digest of the add-on cart `folder`'s indexes name that was
+    """The body digest of the add-on cart in `folder` (pack_store.wanted) that was
     published last, or None."""
     best = None
     for digest, asset in pack_store.wanted(folder).items():

@@ -158,6 +158,10 @@ _SIGS = (
                               ctypes.POINTER(_I), ctypes.POINTER(ctypes.c_uint32)], _I),
     ("moy_httpc_read", [_I, ctypes.c_void_p, _Z], _I),
     ("moy_httpc_close", [_I], None),
+    ("moy_httpc_head_room", [_I], _Z),
+    ("moy_httpc_pool_count", [], ctypes.c_uint32),
+    ("moy_httpc_pool_flush", [], None),
+    ("moy_httpc_pool_reap", [], None),
     ("moy_net_vm_stop", [], None),
     ("moy_wc_on", [ctypes.c_void_p, ctypes.c_uint32], _I),
     ("moy_dns_reply", [ctypes.c_void_p, _Z, ctypes.c_uint32, ctypes.c_void_p, _Z], _Z),
@@ -764,6 +768,11 @@ def net_vm_stop():
 
 
 # -- the host's stand-ins for what an image links (tests only) -------------------
+
+def _http_head_room(h):
+    """The bytes handle `h`'s head buffer holds (moy_httpc_head_room)."""
+    return _lib().moy_httpc_head_room(int(h))
+
 
 def _trust(keys=None):
     """The keys ota_check trusts: `keys` ((modulus_hex, e) pairs), or the

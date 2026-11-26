@@ -46,6 +46,9 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifndef MOY_ON_BOARD
+#include <sys/statvfs.h>            // a board's libc has none
+#endif
 #endif
 
 // -- the store's lock (moy_vol.h, THE STORE'S LOCK) ------------------------------
@@ -188,6 +191,16 @@ void moy_store_lock_stats(moy_store_lock_stats_t *out, int reset) {
         memset(&s_stats, 0, sizeof s_stats);
     }
     moy_store_unlock();
+}
+
+static bool s_tmp_taken;
+
+bool moy_vol_tmp_first(void) {
+    moy_store_lock();
+    bool first = !s_tmp_taken;
+    s_tmp_taken = true;
+    moy_store_unlock();
+    return first;
 }
 
 // -- the volume table (moy_vol.h, THE VOLUME TABLE) --------------------------------
@@ -363,6 +376,7 @@ int ff_del_syncobj(FF_SYNC_t sobj) {
 
 struct moy_vol_file {
     struct moy_vol_file *next;      // the open list moy_vol_unwind walks
+    uint8_t wrote;                  // a write went in: its close is a change
     uintptr_t who;                  // the task that opened it
     size_t bytes;                   // as allocated
     uint8_t kind;
@@ -444,6 +458,7 @@ static int vol_open(const moy_vol_t *v, const char *path, int mode,
         return MOY_ENOMEM;
     }
     f->bytes = bytes;
+    f->wrote = 0;
     f->kind = v->kind;
     f->fs = v->fs;
     int rc = MOY_ENODEV;
@@ -1209,10 +1224,26 @@ int moy_vol_read(moy_vol_file_t *f, void *buf, size_t n, size_t *got) {
     return rc;
 }
 
+// What the volumes changed (moy_vol_changes): a written file's close and
+// every folder or name change that succeeded.
+static uint32_t s_changes;
+
+static int changed(int rc) {
+    if (rc == 0) {
+        __atomic_add_fetch(&s_changes, 1, __ATOMIC_RELAXED);
+    }
+    return rc;
+}
+
+uint32_t moy_vol_changes(void) {
+    return __atomic_load_n(&s_changes, __ATOMIC_RELAXED);
+}
+
 int moy_vol_write(moy_vol_file_t *f, const void *buf, size_t n) {
     moy_store_lock();
     int rc = vol_write(f, buf, n);
     moy_store_unlock();
+    f->wrote |= rc == 0;
     return rc;
 }
 
@@ -1231,10 +1262,11 @@ int moy_vol_seek(moy_vol_file_t *f, uint32_t at) {
 }
 
 int moy_vol_close(moy_vol_file_t *f) {
+    int wrote = f->wrote;
     moy_store_lock();
     int rc = vol_close(f);
     moy_store_unlock();
-    return rc;
+    return wrote ? changed(rc) : rc;
 }
 
 int moy_vol_stat(const moy_vol_t *v, const char *path, moy_vol_stat_t *st) {
@@ -1273,12 +1305,48 @@ int moy_vol_mkdir(const moy_vol_t *v, const char *path) {
     moy_store_lock();
     int rc = vol_mkdir(v, path);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }
 
 int moy_vol_remove(const moy_vol_t *v, const char *path) {
     moy_store_lock();
     int rc = vol_remove(v, path);
+    moy_store_unlock();
+    return changed(rc);
+}
+
+int moy_vol_room(const moy_vol_t *v, const char *dir, uint64_t *bytes) {
+    (void)dir;
+    int rc = MOY_ENODEV;
+    moy_store_lock();
+    switch (v->kind) {
+        #if MOY_VOL_LFS2
+        case MOY_VOL_KIND_LFS2: {
+            lfs2_t *l = v->fs;
+            lfs2_ssize_t used = lfs2_fs_size(l);
+            rc = lfs_err((int)used);
+            if (used >= 0) {
+                lfs2_size_t count = l->cfg->block_count;
+                *bytes = (lfs2_size_t)used < count
+                         ? (uint64_t)(count - (lfs2_size_t)used) * l->cfg->block_size : 0;
+            }
+            break;
+        }
+        #endif
+        #if MOY_VOL_POSIX && !defined(MOY_ON_BOARD)
+        case MOY_VOL_KIND_POSIX: {
+            struct statvfs sv;
+            errno = 0;
+            rc = statvfs(dir, &sv) == 0 ? 0 : px_err();
+            if (rc == 0) {
+                *bytes = (uint64_t)sv.f_bavail * sv.f_frsize;
+            }
+            break;
+        }
+        #endif
+        default:
+            break;
+    }
     moy_store_unlock();
     return rc;
 }
@@ -1287,12 +1355,12 @@ int moy_vol_rename(const moy_vol_t *v, const char *src, const char *dst) {
     moy_store_lock();
     int rc = vol_rename(v, src, dst);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }
 
 int moy_vol_replace(const moy_vol_t *v, const char *src, const char *dst) {
     moy_store_lock();
     int rc = vol_replace(v, src, dst);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }

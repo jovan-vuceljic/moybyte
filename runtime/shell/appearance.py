@@ -101,6 +101,7 @@ from theme_custom import (Custom, CUSTOM, DROP, MANIFEST, PETME128,
                           manifest, minified, name_ok, named, overlay,
                           read_look, sheet_files, wall_keys)
 from moy_store_base import cart_path
+import moy_store
 from binascii import crc32 as _crc32
 import ui_draw as _ui_draw
 import fontset as _fontset
@@ -198,6 +199,14 @@ _FONTS = {}
 _FULL = [False]         # a load found the slots full and reset them
 
 
+def _style_of(f):
+    """A `frame` value's style: classic for one that names none, None for
+    no `frame` at all (DROP)."""
+    if f is DROP:
+        return None
+    return f.get("style", "classic") if type(f) is dict else "classic"
+
+
 def _keep_splash(th):
     """The next boot's first light on theme roles `th` (console.keep_splash)."""
     from console import keep_splash
@@ -261,6 +270,14 @@ class Appearance:
         # bigger panel later honours it.
         self.font_scale = 1
         self._scales = None             # (what they were read for, the offered scales)
+        # THE ZOOMED GLASS (the browser page's, `zoom_glass`): its UI size is
+        # the whole number the page divides its viewport by, so the shell
+        # grows as one -- icons, chrome, hints and text -- and Settings'
+        # UI size row picks it (0: Auto, the page's pick). The text draws
+        # at 1 there, and there is no Text size row. None on a glass of
+        # fixed size.
+        self.zoom = None
+        self.zooms = (0, 1)
         offered = self.font_scales()
         self.font_scale = max([f for f in offered if f <= max(1, int(font_scale))] or [1])
         # The text-size floor (chrome.text_scale_floor): the font scale the
@@ -346,7 +363,7 @@ class Appearance:
         # Config save: its buffer, with no edits, reloads on it.
         self.file_gen = 0
         self._sheet_epoch = 0           # moves with every write of a package's sheet
-        self._styles = {}               # (source, store gen) -> frame style
+        self._styles = {}               # (source, store gen) -> its own frame style
 
     # -- wallpaper discovery -------------------------------------------------
 
@@ -574,7 +591,13 @@ class Appearance:
         elif kind == "font" or kind == "code_font":
             now = self._fonts_now(c, over)
             if kind == "font" and value is None:
-                over.pop("fonts", None)
+                # the source's own, a code font picked kept
+                own = self._own_fonts(c, look)
+                if "mono" in now and now["mono"] != own.get("mono"):
+                    own["mono"] = now["mono"]
+                    over["fonts"] = own
+                else:
+                    over.pop("fonts", None)
             elif kind == "font":
                 value = dict(value)
                 if "mono" in now:
@@ -708,10 +731,13 @@ class Appearance:
         `variant`; `store`, the active theme is an installed package;
         `from`, custom's source (None off custom, or once the file as saved
         is the source); `accent` an accent's A and `tint` a tint's name,
-        each None for the theme's own; `frame`, the style its windows draw;
+        each None for the theme's own; `frame`, the FRAMES style its windows
+        draw, None for the theme's own frame (one that names none: its look's),
+        and `own_frame`, the source's own the same way;
         `font`, the FONTS preset its `ui` font is, None for a font of its
         own; `code_font`, the CODE_FONTS preset its `mono` font is, the same
-        way, and `code_fonts`, the presets this image draws; `wallpaper`, the wallpaper shown; `picture`, for the theme's
+        way, and `code_fonts`, the presets this image draws; `own_font` and
+        `own_code_font`, the source's own the same way (`_own_preset`); `wallpaper`, the wallpaper shown; `picture`, for the theme's
         picture, "mine" (Paint's, copied by a pick) or "theme" (the
         package's own); `chrome`, the chrome scale, and `chromes`, the
         panel's choices. The page reads it when `look_gen` moves."""
@@ -722,35 +748,70 @@ class Appearance:
         if self.wallpaper_id == self.PICTURE:
             mine = c is not None and c.over.get("images", DROP) is not DROP
             pic = "mine" if mine else "theme"
+        font, code = self._font_preset(), self._code_font_preset()
         return {"theme": name, "variant": self.theme_variant,
                 "store": name not in THEME_NAMES and name != CUSTOM,
                 "from": lk.get("from"), "accent": lk.get("accent"),
                 "tint": lk.get("tint"), "frame": self._frame_style(c, lk),
-                "font": self._font_preset(), "code_font": self._code_font_preset(),
+                "own_frame": self._own_frame(c, lk),
+                "font": font, "code_font": code,
+                "own_font": self._own_preset(c, lk, "ui", font),
+                "own_code_font": self._own_preset(c, lk, "mono", code),
                 "code_fonts": self.code_fonts(), "wallpaper": self.wallpaper_id,
                 "picture": pic, "chrome": self.chrome_size(),
                 "chromes": tuple(self.ws.chrome_scales)}
 
     def _frame_style(self, c, lk):
         """The `style` of the active theme's `frame`: custom's own where a
-        change set it, else its source's, read once per source."""
-        if c is not None:
-            f = c.over.get("frame", DROP)
-            if f is DROP and "from" not in lk:
-                f = keys_of(c.theme)["frame"]
-            if f is not DROP:
-                return f.get("style", "classic") if type(f) is dict else "classic"
+        change set it, else its source's (`_own_frame`)."""
+        if c is not None and "frame" in c.over:
+            return _style_of(c.over["frame"])
+        return self._own_frame(c, lk)
+
+    def _own_frame(self, c, lk):
+        """The `style` of the source's own `frame` (custom's file as saved
+        where it has no `from`), a seed's or a package's read once per
+        source; None where it names none, so its windows draw its look's
+        frame (every seed's) and no style is in force."""
+        if c is not None and "from" not in lk:
+            return _style_of(keys_of(c.src if c.src is not None else c.theme)["frame"])
         src = lk.get("from") or self.theme_name
         key = (src, self._pkg_gen)
-        got = self._styles.get(key)
-        if got is None:
+        got = self._styles.get(key, DROP)
+        if got is DROP:
             b = self._source(src)
             if b is not None and src in THEME_NAMES:
                 b = _ui_draw.theme_custom(b, None, None)[1]
-            f = keys_of(b)["frame"] if b is not None else DROP
-            got = f.get("style", "classic") if type(f) is dict else "classic"
+            got = _style_of(keys_of(b)["frame"] if b is not None else DROP)
             self._styles = {key: got}
         return got
+
+    def _own_fonts(self, c, lk):
+        """The `fonts` custom's source names, role -> file, {} for none
+        (custom's file as saved where it has no `from`)."""
+        if "from" in lk:
+            src = self._source(lk["from"])
+            if src in THEME_NAMES:
+                return dict(_ui_draw.theme_fonts(src))
+        else:
+            src = c.src if c.src is not None else c.theme
+        f = keys_of(src)["fonts"] if src is not None else DROP
+        return dict(f) if type(f) is dict else {}
+
+    def _own_preset(self, c, lk, role, live):
+        """The preset (FONTS for `ui`, CODE_FONTS for `mono`) the source's
+        own `role` font is: `live`, the one drawn, where custom keeps the
+        source's file for the role; else the preset that file is, None for
+        a font of its own or one it leaves to its look."""
+        f = c.over.get("fonts", DROP) if c is not None else DROP
+        if type(f) is not dict:
+            return live
+        own = self._own_fonts(c, lk).get(role)
+        if f.get(role) == own:
+            return live
+        if role == "ui":
+            return {v["ui"]: k for k, v in self._FONT_VALUES.items()}.get(own)
+        return {v: k for k, v in self._CODE_FONT_VALUES.items()}.get(own)
 
     def _font_preset(self):
         """The FONTS preset the live `ui` font is, None for a font of the
@@ -964,7 +1025,9 @@ class Appearance:
         """Why `name` cannot be custom's name, else None: "grammar" (not the
         loader's name, §3), "seed", "custom", "cart" (a cart's folder has
         the stem), "taken" (an installed theme has it: NAME… replaces it
-        only when asked)."""
+        only when asked), "folder" (the store holds a folder of the stem
+        the roster lists no cart in, which the rename cannot take the place
+        of: one with no manifest, as a sync a board cut short leaves)."""
         if not name_ok(name):
             return "grammar"
         if name in THEME_NAMES:
@@ -976,6 +1039,15 @@ class Appearance:
             path = str(cart.get("path") or "").replace("\\", "/")
             if path.rsplit("/", 1)[-1] == folder:
                 return "taken" if cart.get("type") == "theme" else "cart"
+        ws = self.ws
+        store = getattr(ws, "store", None)
+        if store is not None and store.ready():
+            dest = cart_path(ws.carts_root, folder)
+            try:
+                if store.call(lambda: moy_store.exists(dest)):
+                    return "folder"
+            except Exception:  # noqa: BLE001 -- unreadable: the rename answers
+                pass
         return None
 
     def name_custom(self, name, replace=False):
@@ -1339,11 +1411,29 @@ class Appearance:
         desk takes (`Workstation.set_render_scale`)."""
         return self.live.look[0].get("render.scale", 1)
 
+    def zoom_glass(self, zoom, zooms):
+        """The glass is a page's that zooms: `zoom` the UI size chosen (0:
+        Auto), `zooms` the choices its viewport offers, Auto first (each
+        leaves the glass the handheld's smallest room)."""
+        self.zooms = tuple(zooms) or (0, 1)
+        self.zoom = zoom if zoom in self.zooms else 0
+        self.font_scale = 1
+        self._scales = None
+
+    def set_zoom(self, zoom):
+        """Settings' UI size: the choice the page applies (the frame's
+        `zoom`) and keeps for this browser, resizing the glass."""
+        if self.zoom is not None and zoom in self.zooms:
+            self.zoom = zoom
+
     def font_scales(self):
         """The font scales this glass offers (`layout_base.font_scales`): each
         whose room, the panel over the render scale and the font scale, holds
         the handheld's smallest layout; 1 alone without a distinct system
-        canvas, whose text does not scale."""
+        canvas, whose text does not scale; 1 alone on a zoomed glass, whose
+        UI size scales it (`zoom_glass`)."""
+        if self.zoom is not None:
+            return (1,)
         ws = self.ws
         key = (ws.bound_sys_canvas is None, ws.render_scale)
         kept = self._scales
@@ -1703,10 +1793,24 @@ class Appearance:
         refused, bars, _home = self._theme_layout(self.layout_theme() or self.theme_name)
         notes = ("the theme's layout was refused",) if refused else ()
         root = getattr(wm, "root_canvas", None) or ws.sys_canvas
-        return _shell_layout.resolve(
+        bars, notes = _shell_layout.resolve(
             bars, self._theme_layout(DEFAULT_THEME)[1], root.w, root.h,
             self.effective_chrome_scale(), wm.layout_catalogue(), wm.LAYOUT_EDGES,
             _ui_text_w, notes)
+        return self._radio_bars(bars), notes
+
+    def _radio_bars(self, bars):
+        """`bars` with no `wifi` widget where the console has no radio (a
+        browser page no Zero serves): the widget is not laid out at all, so no cell, no
+        glyph and no tap. (The boot's bars keep it: the radio is wired after
+        them, and the first `apply_layout` resolves with it known.)"""
+        if getattr(self.ws, "wifi", None) is not None:
+            return bars
+        out = []
+        for bar in bars:
+            out.append(bar[:2] + tuple(tuple(w for w in part if w != "wifi")
+                                       for part in bar[2:5]) + bar[5:])
+        return tuple(out)
 
     def boot_bars(self):
         """The default theme's bars resolved for this tier's WM: the bars a

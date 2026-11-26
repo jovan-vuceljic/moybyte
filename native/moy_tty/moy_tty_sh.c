@@ -13,6 +13,10 @@
 // A text app (moy_sh_app.h) opens in front of the face at the client's size;
 // a full-screen one is shown on the alternate screen, its grid's changed rows
 // sent as VT100 with its cursor, and the shell's screen comes back after.
+// Where there is no PSRAM it is shown STRAIGHT (MOY_TTY_STRAIGHT): the app
+// keeps no grid and its writes go to the client as they come, each step's
+// inside a synchronized update (DEC mode 2026), so a terminal that knows the
+// mode paints the step's redraw at once and one that does not ignores it.
 
 #include "moy_platform.h"
 
@@ -34,6 +38,13 @@
 #endif
 #define NAMES_BYTES 4096u               // a Tab's names
 #define ROW_BYTES 2048u
+#ifndef MOY_TTY_STRAIGHT                // a full-screen app shown straight
+#if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
+#define MOY_TTY_STRAIGHT 1
+#else
+#define MOY_TTY_STRAIGHT 0
+#endif
+#endif
 
 typedef struct {
     moy_tty_t *f;
@@ -43,6 +54,7 @@ typedef struct {
     uint32_t *rows;                     // a full-screen app's rows as last sent (hashes)
     int nrows;
     int cursor[3];                      // its cursor as last sent: row, column, shown
+    int synced;                         // a straight app's step began its update
     int polls;
 } sh_t;
 
@@ -202,6 +214,30 @@ static int app_run(void *ctx, const char *text, size_t n) {
     return moy_sh_run(((sh_t *)ctx)->s, text, n);
 }
 
+static const char ALT_SCREEN[] = "\x1b[?1049h\x1b[0m\x1b[H\x1b[2J";
+static const char SYNC_BEGIN[] = "\x1b[?2026h";
+static const char SYNC_END[] = "\x1b[?2026l";
+
+static void app_out(void *ctx, const char *p, size_t n) {
+    sh_t *h = ctx;
+    if (!h->synced) {
+        h->synced = 1;
+        moy_tty_raw(h->f, SYNC_BEGIN, sizeof SYNC_BEGIN - 1);
+    }
+    moy_tty_out(h->f, p, n);
+}
+
+static void sync_end(sh_t *h) {
+    if (h->synced) {
+        h->synced = 0;
+        moy_tty_raw(h->f, SYNC_END, sizeof SYNC_END - 1);
+    }
+}
+
+static int straight(const sh_t *h) {
+    return h->app != NULL && moy_sh_app_ops(h->app)->full && moy_sh_app_term(h->app) == NULL;
+}
+
 static int sh_app(void *ctx, moy_sh_t *s, int argc, char **argv) {
     sh_t *h = ctx;
     if (h->app != NULL || moy_sh_app_find(argv[0]) == NULL) {
@@ -209,13 +245,15 @@ static int sh_app(void *ctx, moy_sh_t *s, int argc, char **argv) {
     }
     int cols, rows, status;
     moy_tty_size(h->f, &cols, &rows);
-    h->app = moy_sh_app_open(s, cols, rows, 1, app_run, h, argc, argv, &status);
+    h->app = moy_sh_app_open(s, cols, rows, 1, app_run, MOY_TTY_STRAIGHT ? app_out : NULL, h,
+                             argc, argv, &status);
     return status;
 }
 
 static void app_end(sh_t *h) {
     moy_sh_app_t *a = h->app;
     int full = moy_sh_app_ops(a)->full;
+    sync_end(h);
     h->app = NULL;
     moy_sh_app_close(a);
     moy_tty_free(h->rows);
@@ -269,9 +307,18 @@ static uint32_t hash(const char *p, size_t n) {
 
 // A full-screen app's grid to the terminal: the rows that changed since the
 // last show (every row when `whole`), then its cursor where a row was sent or
-// the cursor changed. A still app sends nothing.
+// the cursor changed. A still app sends nothing. A straight app has sent its
+// step already: `whole` draws it, and its update ends.
 static void sh_show(void *sh, int whole) {
     sh_t *h = sh;
+    if (straight(h)) {
+        if (whole) {
+            moy_tty_raw(h->f, ALT_SCREEN, sizeof ALT_SCREEN - 1);
+            moy_sh_app_draw(h->app);
+        }
+        sync_end(h);
+        return;
+    }
     moy_term_t *t = h->app != NULL ? moy_sh_app_term(h->app) : NULL;
     if (t == NULL) {
         return;
@@ -290,8 +337,7 @@ static void sh_show(void *sh, int whole) {
     }
     int sent = whole;
     if (whole) {
-        static const char clear[] = "\x1b[?1049h\x1b[0m\x1b[H\x1b[2J";
-        moy_tty_raw(h->f, clear, sizeof clear - 1);
+        moy_tty_raw(h->f, ALT_SCREEN, sizeof ALT_SCREEN - 1);
     }
     for (int i = 0; i < h->nrows; i++) {
         int k = snprintf(row, 32, "\x1b[%d;1H", i + 1);
@@ -330,7 +376,7 @@ static void sh_resize(void *sh, int cols, int rows) {
     sh_t *h = sh;
     if (h->app != NULL) {
         moy_sh_app_resize(h->app, cols, rows);
-        sh_show(h, 1);
+        sh_show(h, !straight(h));               // a straight app drew itself whole
     }
 }
 

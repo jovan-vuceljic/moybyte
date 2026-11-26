@@ -340,17 +340,22 @@ AUTOPLAY = {"MOY_CHROME_ARGS": json.dumps(["--autoplay-policy=no-user-gesture-re
 
 
 def run(tmp_path, name, query, steps, base, profile, env=None, boot_ms=15000,
-        device=None, scheme=None):
+        device=None, scheme=None, ua=None, init=None):
     """One browsershot scenario against `base` in the Chrome profile
     `profile`: (its stdout, every `js` step's value in order). `device` is
     browsershot's phone/tablet shape ({"width", "height", "dpr", "mobile"});
-    `scheme` the browser's prefers-color-scheme ("dark" or "light")."""
+    `scheme` the browser's prefers-color-scheme ("dark" or "light"); `ua`
+    its user agent; `init` script run before every document it loads."""
     path = tmp_path / ("%s.json" % name)
     scenario = {"query": query, "boot_ms": boot_ms, "steps": steps}
     if device:
         scenario["device"] = device
     if scheme:
         scenario["scheme"] = scheme
+    if ua:
+        scenario["ua"] = ua
+    if init:
+        scenario["init"] = init
     path.write_text(json.dumps(scenario))
     r = subprocess.run(
         ["node", "browsershot.mjs", str(path), str(tmp_path / ("shots_" + name))],
@@ -413,3 +418,43 @@ def get_carts_taps(n=3):
         agree = centre(host.box("agree"))
         app.lic = None
         return {"cards": cards, "verb": verb, "agree": agree}
+
+
+def menu_pick(text, enter=True):
+    """Steps that open the console's system menu (its key, `super`), walk
+    its highlight to the row that reads `text` (a key a few frames apart,
+    as a hand presses it) and, with `enter`, choose it
+    with a real Enter -- a user's gesture, which the page's asks need
+    (page_core.html, THE ASKS). A js step's value is "MENU <rows>"."""
+    walk = ("window.__moyState().then(s => { var m = s.edit.menu || [], i = m.indexOf(%s), "
+            "d = i - (s.edit.menu_at || 0); if (i < 0) return 'MENU ' + JSON.stringify(m); "
+            "var c = d > 0 ? 275 : 274; return new Promise(function (ok) { "
+            "(function step(k) { if (k >= Math.abs(d)) return ok('MENU ' + JSON.stringify(m)); "
+            "send({type: 'kd', code: c, mods: 0}); setTimeout(function () { "
+            "send({type: 'ku', code: c, mods: 0}); setTimeout(function () { step(k + 1); }, 120); "
+            "}, 120); })(0); }); })" % json.dumps(text))
+    steps = [{"js": "cv.focus(), send({type: 'super'}), 'menu'"},
+             {"waitFor": "window.__moyState().then(s => s.edit.sysmenu)", "timeout": 5000},
+             {"js": walk}, {"wait": 400}]
+    if enter:
+        steps.append({"key": "Enter"})
+    return steps
+
+
+def settings_row(key, enter=True):
+    """Steps that walk Settings' focus down to the row whose key is `key`
+    (the state's `settings.focus`: a row's own key, `update_online`), a key
+    a few frames apart, and, with `enter`, choose it. A js step's value is
+    "ROW <the focused key>"."""
+    walk = ("(function () { return new Promise(function (ok) { (function step(k) { "
+            "window.__moyState().then(function (s) { var f = (s.settings || {}).focus; "
+            "if (f == %s || k > 40) return ok('ROW ' + JSON.stringify(f)); "
+            "send({type: 'kd', code: 275, mods: 0}); setTimeout(function () { "
+            "send({type: 'ku', code: 275, mods: 0}); setTimeout(function () { step(k + 1); }, 150); "
+            "}, 120); }); })(0); }); })()" % json.dumps(key))
+    steps = [{"waitFor": "window.__moyState().then(s => s.stack.includes('settings'))",
+              "timeout": 10000}, {"wait": 600}, {"js": walk}, {"wait": 400}]
+    if enter:
+        steps.append({"key": "Enter"})
+    return steps
+

@@ -74,8 +74,8 @@ def _store(tmp_path):
         "def _draw():\n    cls(7)\n")
     (root / "hop.moy" / "journal.jsonl").write_text("stray flat log\n")
     # moy_fs._write_atomic's last-known-good rotations, one per file it saves.
-    (root / "hop.moy" / "main.py.bak").write_text("def _draw():\n    cls(2)\n")
-    (root / "hop.moy" / "manifest.json.bak").write_text('{"title": "Hop"}')
+    (root / "hop.moy" / ".main.py.moybak").write_text("def _draw():\n    cls(2)\n")
+    (root / "hop.moy" / ".manifest.json.moybak").write_text('{"title": "Hop"}')
     (root / "hop.moy" / "pmem.bin").write_bytes(SAVES)
     (root / "sky.moy").mkdir()
     (root / "sky.moy" / "main.lua").write_text("function _draw() end\n")
@@ -185,11 +185,11 @@ def test_the_undo_journal_does_not_cross_the_wire(tmp_path):
 
 
 def test_the_atomic_write_backups_do_not_cross_the_wire(tmp_path):
-    """`<file>.bak` is moy_fs's crash-recovery rotation: the live file is
+    """`.<file>.moybak` is moy_fs's crash-recovery backup: the live file is
     already in the bundle, so every one of these is a second copy of content
     the browser has, on a transport whose size is the whole problem."""
     b = _pull(_store(tmp_path))
-    assert not [k for k in b if k.endswith(".bak")], sorted(b)
+    assert not [k for k in b if k.endswith(".moybak")], sorted(b)
     assert b["hop.moy/main.py"].startswith("def _draw()")
 
 
@@ -686,6 +686,24 @@ def test_a_parked_body_the_vms_heap_cannot_hold_is_busy_not_fatal(serving, monke
     monkeypatch.setattr(wh.moy_net, "web_take", take)
     got = _exchange(h, b'POST /run HTTP/1.1\r\nContent-Length: 15\r\n\r\n{"cart": "hop"}')
     assert b"200" in h_status(got) and seen == ["hop"]
+
+
+def test_an_answer_out_of_memory_says_its_route_and_frames(serving, capsys):
+    """A route that runs out of the VM's heap answers 500, and its serial
+    line names the request and where the allocation failed."""
+    class Full:
+        def busy(self):
+            return False
+
+        def answer(self, ok=None, message=None):
+            raise MemoryError("memory allocation failed, allocating 1256 bytes")
+
+    h = serving(official=Full())
+    got = _exchange(h, b"GET /official HTTP/1.1\r\nHost: x\r\n\r\n")
+    assert b"500" in h_status(got)
+    line = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("WEB ERR")]
+    assert line and line[0].startswith("WEB ERR MemoryError: GET /official at ")
+    assert "in answer" in line[0]
 
 
 class _Parking:
@@ -2191,3 +2209,36 @@ def test_the_goodbye_ends_with_the_switch_off(tmp_path):
         if h.closing or h.serving or h.joining:
             h.poll()
     assert nb.wc_state()[0] == wh.WebHost.OFF
+
+
+def test_a_backend_that_stepped_hints_the_live_socket(tmp_path, monkeypatch):
+    """A Zero's update, Wi-Fi and official carts backends that did work, or
+    just stopped, tell the live socket's page (moy_net.live_hint,
+    native/moy_net/moy_live.c's THE HINTS); a backend that does nothing
+    says nothing."""
+    said = []
+    monkeypatch.setattr(wh, "_HINT", said.append)
+
+    class Backend:
+        def __init__(self, steps):
+            self.steps = steps
+
+        def busy(self):
+            return self.steps > 0
+
+        def step(self, *_budget):
+            if self.steps <= 0:
+                return False
+            self.steps -= 1
+            return True
+
+    h = wh.WebHost(str(_store(tmp_path)))
+    h.update, h.wifi, h.official = Backend(1), Backend(1), Backend(2)
+    h.poll()
+    assert said == ["u", "o", "w"]
+    h.poll()
+    assert said[3:] == ["u", "o", "w"], "a backend that stopped says so once"
+    h.poll()
+    assert said[6:] == ["o"], "...and the official request stopped"
+    h.poll()
+    assert said[7:] == [], "one that does nothing says nothing"

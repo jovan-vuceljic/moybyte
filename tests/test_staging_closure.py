@@ -720,6 +720,21 @@ def test_every_zero_staging_group_says_what_the_board_does_with_it():
             "the Zero declares %s lazy with no reason" % entry.get("module"))
 
 
+@pytest.mark.parametrize("board", [ZERO, C3_ZERO], ids=["xiao_zero", "c3_zero"])
+def test_every_module_the_zero_makes_first_is_on_its_image(board):
+    """zero_host.serve imports LASTING before anything else allocates, so a
+    page session's heap keeps one free run; a name the image does not carry
+    is skipped without a word, and its namespace lands among the boot's
+    garbage again."""
+    tree = ast.parse((ROOT / "device" / "zero_host.py").read_text())
+    lasting = [ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
+               and [t.id for t in n.targets if isinstance(t, ast.Name)] == ["LASTING"]]
+    assert lasting and lasting[0], "zero_host names no LASTING modules"
+    staged = set(board_config.staged_modules(board, ROOT))
+    missing = [n for n in lasting[0] if n + ".py" not in staged]
+    assert not missing, "%s does not stage %s" % (board.name, missing)
+
+
 def test_the_zero_stages_the_sync_stack_and_nothing_that_draws():
     """The board's whole identity, as an invariant.
 

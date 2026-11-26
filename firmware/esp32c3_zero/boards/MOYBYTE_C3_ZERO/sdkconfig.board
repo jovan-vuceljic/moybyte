@@ -70,6 +70,11 @@ CONFIG_MBEDTLS_DYNAMIC_BUFFER=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
 CONFIG_MBEDTLS_DYNAMIC_FREE_CA_CERT=y
 CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
+# Its out-buffer is 2 KB where ESP-IDF's is 4: what this image writes over TLS
+# is the handshake's messages and a request's head (the http client's,
+# native/moy_net/moy_ota.h), and a longer write goes as more records. The
+# in-buffer stays 16 KB, the record a server may send whole.
+CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=2048
 
 # THE CA BUNDLE: ca_roots.pem beside this file, the roots the hosts this
 # image fetches from chain to, with a backup per CA family (the file names the
@@ -88,6 +93,14 @@ CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="../../../../boards/MOYBYTE_C3_ZER
 # ESP-IDF's four segments, so a burst still lands; the dynamic buffers that
 # carry a frame up are made per frame.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+
+# A CLOSED CONNECTION'S BLOCK GOES BACK IN SECONDS: lwIP keeps a closed TCP
+# connection's control block (208 bytes of this one heap) for twice the
+# maximum segment lifetime, two minutes at ESP-IDF's 60 s. A page's visit
+# closes a dozen, each made while that visit's larger buffers were live, so
+# for those two minutes they sat in the middle of the heap's free run. 5 s
+# is far past any segment's life on the networks this board serves.
+CONFIG_LWIP_TCP_MSL=5000
 
 # SYSTEM TASK STACKS: esp_timer's, FreeRTOS's timer service's, the idle
 # task's and mDNS's, each sized to its high-water mark under #276's session

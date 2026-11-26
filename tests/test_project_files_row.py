@@ -170,7 +170,7 @@ def test_the_row_lists_the_project_folder(tmp_path):
     (path / "images").mkdir()
     (path / "images" / "sky.moyimg").write_text("x")
     # the atomic-write machinery's leftovers are not files a person edits
-    (path / "manifest.json.bak").write_text("{}")
+    (path / ".manifest.json.moybak").write_text("{}")
 
     cl = _on_config(ws, ws.carts.reload(cart))
     _open_files(cl, ws)
@@ -181,7 +181,7 @@ def test_the_row_lists_the_project_folder(tmp_path):
     for name in ("sprites.moygfx", "sounds.json",
                  "scenes/opening.moyscene", "images/sky.moyimg"):
         assert name in rows, rows
-    assert not [r for r in rows if r.endswith(".bak")]
+    assert not [r for r in rows if r.endswith(".moybak")]
     _frame(ws)                                   # the panel draws
 
 

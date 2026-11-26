@@ -9,13 +9,20 @@
 //
 //   node browsershot.mjs scenario.json [outdir]
 //
+// {"choose": path} answers the file chooser the page opened (a js value,
+// "CHOOSER opened" or "CHOOSER none").
 // Same scenario vocabulary as pageshot.mjs where it makes sense --
-//   {"wait":ms} {"shot":"name"} {"click":[x,y]} {"move":[x,y]}
+//   {"wait":ms} {"shot":"name"} {"page":"name"} {"click":[x,y]} {"move":[x,y]}
 //   {"drag":[x0,y0,x1,y1,steps]} {"key":"a"} {"key":"z","mods":["ctrl"]}
+//   {"key":"v","mods":["ctrl"],"commands":["paste"]} (the browser's paste)
 //   {"key":"Meta"} (a modifier alone) {"click":[x,y],"mods":["shift"]}
 //   {"dblclick":[x,y]} (two clicks back to back, the second with Chrome's
 //                       clickCount 2, as a person's double click arrives)
 //   {"wheel":[x,y,dx,dy]} {"middle":[x0,y0,x1,y1,steps]} {"js":"..."} {"note":"..."}
+//   {"viewport":{"width","height","dpr","mobile"}}  the page's viewport moved
+//                                           (a resize, a rotation, a screen's dpr)
+//   {"js":"...","gesture":true}            the js run as a user's gesture (what
+//                                           requestFullscreen and the like need)
 //   {"file":"path|$ENVVAR","as":"__name"}   local bytes -> window.__name
 //                                           (an ArrayBuffer, for the drop paths)
 //   {"waitFor":"<js expression>","timeout":ms}   poll the expression (as
@@ -30,6 +37,9 @@
 //                                           whose address starts so (a window
 //                                           the page opened, or the first
 //                                           again), once there is one
+//   {"grant":["clipboardReadWrite",...]}    the page's origin granted those
+//                                           permissions (Browser.grantPermissions:
+//                                           the clipboard's read and write)
 //   {"init":"<js>"}                         run before every document the
 //                                           driven tab loads from then on (a
 //                                           stand-in for a device API), then
@@ -38,7 +48,7 @@
 // they are mapped through the canvas's on-screen rect for you.
 //
 // It serves dist/ itself and launches headless Chrome, so it is one command.
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
@@ -98,12 +108,23 @@ const EXTRA = (process.env.MOY_CHROME_FLAGS || "").split(/\s+/).filter(Boolean)
 // to report its port (every stable-site build from 2026-11-05 16:50). A Chrome
 // that exited, or would not start, is not retried.
 // Its audio is muted: a scenario that plays music never reaches the speakers.
+// Chrome dies with this process: a run killed from outside (a caller's
+// timeout sends SIGKILL, which no handler here sees) would otherwise leave it
+// running its page, and a page served by a board keeps asking that board for
+// as long as it runs. On Linux `setpriv --pdeathsig` execs Chrome (the same
+// pid, so `chrome.kill()` still reaches it) with the kernel told to kill it
+// when its parent goes.
+const PDEATH = process.platform === "linux" && existsSync("/usr/bin/setpriv");
 function launch(waitMs) {
-    const chrome = spawn(CHROME, [
+    const args = [
         "--headless=new", "--remote-debugging-port=0", "--user-data-dir=" + profile,
         "--no-first-run", "--no-default-browser-check", "--disable-gpu",
         "--window-size=1280,800", "--hide-scrollbars", "--mute-audio", ...EXTRA, "about:blank",
-    ], { stdio: ["ignore", "ignore", "pipe"] });
+    ];
+    const chrome = PDEATH
+        ? spawn("/usr/bin/setpriv", ["--pdeathsig", "KILL", CHROME, ...args],
+                { stdio: ["ignore", "ignore", "pipe"] })
+        : spawn(CHROME, args, { stdio: ["ignore", "ignore", "pipe"] });
     const url = new Promise((ok, err) => {
         let buf = "";
         // ON TIMEOUT, SAY WHAT CHROME SAID. Without this the message is "chrome
@@ -172,6 +193,9 @@ async function attach(targetId) {
         sessionId = sessions.get(targetId);
         await cdp("Page.enable");
         await cdp("Runtime.enable");
+        // The page's file chooser never opens a dialog here: it is caught
+        // (CHOOSERS), and a {"choose": path} step answers it.
+        await cdp("Page.setInterceptFileChooserDialog", { enabled: true });
     }
     sessionId = sessions.get(targetId);
     await send("Target.activateTarget", { targetId });
@@ -187,11 +211,12 @@ async function useTab(prefix, timeoutMs) {
     }
 }
 await attach((await send("Target.createTarget", { url: "about:blank" })).targetId);
-const logs = [];
+const logs = [], CHOOSERS = [];
 ws.addEventListener("message", (ev) => {
     const m = JSON.parse(ev.data);
     if (m.method === "Runtime.consoleAPICalled")
         logs.push(m.params.args.map((a) => a.value ?? a.description ?? "").join(" "));
+    if (m.method === "Page.fileChooserOpened") CHOOSERS.push(m.params);
     if (m.method === "Runtime.exceptionThrown")
         logs.push("EXCEPTION " + (m.params.exceptionDetails?.exception?.description
             || m.params.exceptionDetails?.text));
@@ -202,8 +227,9 @@ const scenario = JSON.parse(readFileSync(argv[0], "utf-8"));
 const outdir = resolve(argv[1] || join(HERE, "shots-browser"));
 mkdirSync(outdir, { recursive: true });
 
-const evaluate = async (expr) => {
-    const r = await cdp("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true });
+const evaluate = async (expr, gesture = false) => {
+    const r = await cdp("Runtime.evaluate", { expression: expr, returnByValue: true, awaitPromise: true,
+                                              userGesture: gesture });
     if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + " " + (r.exceptionDetails.exception?.description || ""));
     return r.result.value;
 };
@@ -213,15 +239,25 @@ const sleep = (ms) => new Promise((ok) => setTimeout(ok, ms));
 // The small tiers are where the on-screen controls live, and their layout (plus
 // the browser's own dynamic toolbar) is load-bearing -- a desktop-sized window
 // never exercises it.
-if (scenario.device) {
-    const d = scenario.device;
+// A desktop shape ("mobile": false) keeps the mouse.
+// A device's input: a phone's touch, which the page's controls take
+// (pointer:coarse), or none, as on a desk with no touch screen.
+async function viewport(d) {
+    const touch = d.mobile !== false;
     await cdp("Emulation.setDeviceMetricsOverride", {
-        width: d.width, height: d.height, deviceScaleFactor: d.dpr || 2,
-        mobile: d.mobile !== false,
+        width: d.width, height: d.height, deviceScaleFactor: d.dpr || 2, mobile: touch,
     });
-    await cdp("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 5 });
-    await cdp("Emulation.setEmitTouchEventsForMouse", { enabled: true, configuration: "mobile" });
+    await cdp("Emulation.setTouchEmulationEnabled", { enabled: touch, maxTouchPoints: touch ? 5 : 1 });
+    await cdp("Emulation.setEmitTouchEventsForMouse", { enabled: touch, configuration: "mobile" });
 }
+if (scenario.device) await viewport(scenario.device);
+// {"ua":"..."}: the browser's user agent (an iPhone's Safari, say).
+if (scenario.ua) await cdp("Emulation.setUserAgentOverride", { userAgent: scenario.ua });
+// {"cpu":N}: the page's CPU N times slower (a phone's, roughly).
+if (scenario.cpu) await cdp("Emulation.setCPUThrottlingRate", { rate: scenario.cpu });
+// {"init":"<js>"}: run before every document from the first (a stand-in for
+// a device's API, as the step of that name, with no reload).
+if (scenario.init) await cdp("Page.addScriptToEvaluateOnNewDocument", { source: scenario.init });
 // {"scheme":"dark"|"light"}: the browser's prefers-color-scheme, which a console
 // with no saved theme boots in (page_tail.js moyScheme).
 if (scenario.scheme) {
@@ -248,7 +284,11 @@ async function waitLive(timeoutMs) {
     }
     return status;
 }
-await cdp("Page.navigate", { url: `${ORIGIN}/${scenario.query || ""}` });
+// A scenario with no device clicks the desk at 1024x600, the glass every
+// scenario was written for: a page sizes its glass by its room otherwise.
+let query = scenario.query || "";
+if (!scenario.device && !/[?&]size=/.test(query)) query += (query.includes("?") ? "&" : "?") + "size=1024x600";
+await cdp("Page.navigate", { url: `${ORIGIN}/${query}` });
 const bootMs = scenario.boot_ms || 6000;
 const bootStatus = await waitLive(bootMs);
 console.log("boot -> " + (bootStatus || "(still booting after " + bootMs + "ms)"));
@@ -297,6 +337,15 @@ async function shot(name) {
     console.log(`shot ${name}: -> ${path}  ${st}`);
 }
 
+// {"page": name}: the whole viewport as the visitor sees it, the page's own
+// controls and margins included.
+async function pageShot(name) {
+    const r = await cdp("Page.captureScreenshot", { format: "png" });
+    const path = join(outdir, name + ".png");
+    writeFileSync(path, Buffer.from(r.data, "base64"));
+    console.log(`page ${name}: -> ${path}`);
+}
+
 // CDP's modifier bits, and each modifier's own key.
 const VK = { Enter: 13, Backspace: 8, Escape: 27, Tab: 9, Delete: 46,
              ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40,
@@ -313,6 +362,8 @@ for (const step of scenario.steps || []) {
             const got = await waitForExpr(step.waitFor, step.timeout || 10000);
             console.log("   waitFor ->", JSON.stringify(got));
         }
+        if (step.viewport) await viewport(step.viewport);
+        if (step.grant) await send("Browser.grantPermissions", { permissions: step.grant, origin: ORIGIN });
         if (step.open) await attach((await send("Target.createTarget", { url: step.open })).targetId);
         if (step.tab != null) await useTab(step.tab, step.timeout || 15000);
         if (step.init) {
@@ -389,7 +440,9 @@ for (const step of scenario.steps || []) {
             // CDP takes `text` only for printable chars typed alone; a NAMED
             // key (Enter, ArrowDown, ...) or a chord goes as rawKeyDown with
             // its virtual keycode. `mods` (["ctrl", "shift", "alt", "meta"])
-            // are pressed first and released after, as a hand does.
+            // are pressed first and released after, as a hand does. A chord's
+            // `commands` (["paste"], ["copy"]) are the editing commands the
+            // browser runs on it, which CDP's key events run only when named.
             const k = String(step.key);
             const alone = Object.keys(MODKEY).find((m) => MODKEY[m][0] === k);
             const mods = alone ? [alone] : (step.mods || []);
@@ -410,7 +463,9 @@ for (const step of scenario.steps || []) {
                 const up = k.length === 1 ? k.toUpperCase() : k;
                 const code = k.length === 1 ? (/[A-Z]/.test(up) ? "Key" + up : "Digit" + up) : k;
                 const vk = k.length === 1 ? up.charCodeAt(0) : (VK[k] || 0);
-                await cdp("Input.dispatchKeyEvent", { type: "rawKeyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: held });
+                const down = { type: "rawKeyDown", key: k, code, windowsVirtualKeyCode: vk, modifiers: held };
+                if (step.commands) down.commands = step.commands;
+                await cdp("Input.dispatchKeyEvent", down);
                 await cdp("Input.dispatchKeyEvent", { type: "keyUp", key: k, code, windowsVirtualKeyCode: vk, modifiers: held });
             }
             for (const m of mods.slice().reverse()) {
@@ -427,6 +482,16 @@ for (const step of scenario.steps || []) {
         // pasted into a scenario would be a fixture nobody could regenerate.
         // `$NAME` resolves from the environment, so a test can point one
         // scenario at a file it just built in a tmpdir.
+        // {"choose": path}: the file chooser the page opened, answered with
+        // the file at `path` (a "$ENV" name like "file"'s); {"choose": ""}
+        // says how many choosers opened, and answers none.
+        if (step.choose !== undefined) {
+            const p = step.choose.startsWith("$") ? (process.env[step.choose.slice(1)] || "")
+                : step.choose ? resolve(HERE, step.choose) : "";
+            const c = CHOOSERS.shift();
+            if (p && c) await cdp("DOM.setFileInputFiles", { files: [p], backendNodeId: c.backendNodeId });
+            console.log("   js ->", JSON.stringify("CHOOSER " + (c ? "opened" : "none")));
+        }
         if (step.file) {
             const p = step.file.startsWith("$")
                 ? (process.env[step.file.slice(1)] || "")
@@ -444,8 +509,9 @@ for (const step of scenario.steps || []) {
                 + ` "loaded ${b64.length}b64"`);
             console.log("   file ->", p);
         }
-        if (step.js) console.log("   js ->", JSON.stringify(await evaluate(step.js)));
+        if (step.js) console.log("   js ->", JSON.stringify(await evaluate(step.js, !!step.gesture)));
         if (step.shot) await shot(step.shot);
+        if (step.page) await pageShot(step.page);
     } catch (e) {
         failed++;
         console.log("STEP FAILED", JSON.stringify(step), "\n  ", e && e.message ? e.message : e);

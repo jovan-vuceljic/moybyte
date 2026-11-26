@@ -18,6 +18,7 @@ on-glass gates of docs/history/kernel_survival_2026-10.md section 6.9 own those.
 import hashlib
 import json
 import sys
+import time
 import types
 from pathlib import Path
 
@@ -822,6 +823,31 @@ def test_a_location_after_githubs_huge_csp_is_still_found():
         assert _get(srv.url("/a"))[2] == b"ok"
 
 
+def test_a_head_buffer_grows_only_while_a_head_needs_it():
+    """A handle's head buffer starts small and doubles for a long head: a
+    redirect's big head gives its room back before the next hop, so a board
+    with no PSRAM holds a small one beside the handshake's record buffer."""
+    first = 2048                                  # MOY_HTTPC_HEAD_FIRST
+    with Server() as srv:
+        srv.routes["/a"] = (302, {"Content-Security-Policy": CSP,
+                                  "Location": srv.url("/b")}, b"")
+        srv.routes["/b"] = (200, {}, b"ok")
+        srv.routes["/c"] = (200, {"X-Long": "y" * 6000}, b"long")
+        h, status, _clen = nb.http_open(srv.url("/a"), "t")
+        try:
+            assert status == 200 and nb._http_head_room(h) == first
+        finally:
+            nb.http_close(h)
+        h, status, _clen = nb.http_open(srv.url("/c"), "t")
+        try:
+            assert nb._http_head_room(h) == 4 * first
+            buf = bytearray(16)
+            assert buf[:nb.http_readinto(h, buf)] == b"long"
+        finally:
+            nb.http_close(h)
+        assert nb._http_head_room(h) == 0
+
+
 def test_a_relative_location_resolves_against_the_current_host():
     with Server() as srv:
         srv.routes["/a"] = (301, {"Location": "/b"}, b"")
@@ -882,6 +908,140 @@ def test_the_vm_stop_closes_what_the_vm_left_open():
                 nb.http_readinto(h, bytearray(4))
         h, _s, _c = nb.http_open(srv.url("/a"), "t")
         nb.http_close(h)
+
+
+# == THE POOL (moy_ota.h) ==========================================================
+
+@pytest.fixture
+def pool():
+    """The kernel's kept connections, none before and none left after."""
+    nb._lib().moy_httpc_pool_flush()
+    yield nb._lib()
+    nb._lib().moy_httpc_pool_flush()
+
+
+def test_a_request_asks_to_keep_the_connection(pool):
+    with Server({"/a": (200, {}, b"x")}) as srv:
+        _get(srv.url("/a"))
+        assert srv.seen[0][1]["Connection"] == "keep-alive"
+
+
+def test_fetches_to_one_host_ride_one_connection(pool):
+    with Server({"/a": (200, {}, b"first"), "/b": (200, {}, b"second")}, keep=True) as srv:
+        assert _get(srv.url("/a"))[2] == b"first"
+        assert pool.moy_httpc_pool_count() == 1
+        assert _get(srv.url("/b"))[2] == b"second"
+        assert _get(srv.url("/a"))[2] == b"first"
+        assert srv.conns == 1
+        assert pool.moy_httpc_pool_count() == 1
+
+
+def test_a_body_ends_at_its_length_on_a_kept_connection():
+    """The read stops at Content-Length rather than waiting for a close that
+    never comes (MOY_HTTPC_IO_MS would pass first)."""
+    body = bytes(range(256)) * 300
+    with Server({"/a": (200, {}, body)}, keep=True) as srv:
+        t0 = time.monotonic()
+        assert _get(srv.url("/a")) == (200, len(body), body)
+        assert time.monotonic() - t0 < 2
+    nb._lib().moy_httpc_pool_flush()
+
+
+def test_a_redirect_rides_the_kept_connection(pool):
+    with Server(keep=True) as srv:
+        srv.routes["/a"] = (302, {"Location": "/b"}, b"moved")
+        srv.routes["/b"] = (200, {}, b"there")
+        assert _get(srv.url("/a"))[2] == b"there"
+        assert srv.conns == 1
+
+
+def test_a_server_that_closes_leaves_nothing_kept(pool):
+    with Server({"/a": (200, {}, b"x")}) as srv:
+        _get(srv.url("/a"))
+        _get(srv.url("/a"))
+        assert srv.conns == 2
+        assert pool.moy_httpc_pool_count() == 0
+
+
+def test_a_body_left_unread_closes_its_connection(pool):
+    with Server({"/a": (200, {}, b"y" * 5000)}, keep=True) as srv:
+        h, _s, _c = nb.http_open(srv.url("/a"), "t")
+        nb.http_readinto(h, bytearray(10))
+        nb.http_close(h)
+        assert pool.moy_httpc_pool_count() == 0
+        _get(srv.url("/a"))
+        assert srv.conns == 2
+
+
+def test_a_kept_connection_the_server_dropped_is_made_again_silently(pool):
+    """The server reads the second request and closes with no answer: the
+    request is made again, once, on a fresh connection."""
+    with Server({"/a": (200, {}, b"again")}, keep=True, drop=True) as srv:
+        assert _get(srv.url("/a"))[2] == b"again"
+        assert _get(srv.url("/a"))[2] == b"again"
+        assert srv.conns == 2
+
+
+def test_a_kept_connection_the_server_closed_is_not_used(pool):
+    with Server({"/a": (200, {}, b"x")}, keep=True, idle=0.2) as srv:
+        _get(srv.url("/a"))
+        time.sleep(0.6)
+        assert pool.moy_httpc_pool_count() == 1
+        assert _get(srv.url("/a"))[2] == b"x"
+        assert srv.conns == 2 and len(srv.seen) == 2
+
+
+def test_the_pool_keeps_at_most_two_the_oldest_closed(pool):
+    srvs = [Server({"/a": (200, {}, b"x")}, keep=True) for _ in range(3)]
+    for srv in srvs:
+        srv.__enter__()
+    try:
+        for srv in srvs:
+            _get(srv.url("/a"))
+        assert pool.moy_httpc_pool_count() == 2
+        _get(srvs[0].url("/a"))                 # the first's was closed for the third's
+        _get(srvs[2].url("/a"))                 # the third's is still kept
+        assert [s.conns for s in srvs] == [2, 1, 1]
+    finally:
+        for srv in srvs:
+            srv.__exit__(None, None, None)
+
+
+def test_a_flush_closes_every_kept_connection(pool):
+    with Server({"/a": (200, {}, b"x")}, keep=True) as srv:
+        _get(srv.url("/a"))
+        pool.moy_httpc_pool_flush()
+        assert pool.moy_httpc_pool_count() == 0
+        _get(srv.url("/a"))
+        assert srv.conns == 2
+
+
+def test_the_pool_is_closed_by_the_last_lease_and_the_workers_end():
+    """moy_ota.h's THE POOL: the radio's book and the fetch worker flush it."""
+    net = ROOT / "native" / "moy_net"
+    wifi = (net / "moy_wifi.c").read_text()
+    at = wifi.index("void moy_wifi_book(uint32_t mask) {")
+    book = wifi[at:wifi.index("\n}\n", at)]
+    assert "} else if (mask == 0u) {\n        moy_httpc_pool_flush();" in book
+    fetch = (net / "moy_fetch.c").read_text()
+    assert "worker_ends()) {\n            moy_httpc_pool_flush();" in fetch
+
+
+
+def test_the_pool_is_a_board_fact(tmp_path):
+    """board.toml [net] http_pool is MOY_HTTPC_POOL; the C3, whose one heap is
+    internal, keeps none, and a board that says nothing takes moy_ota.h's."""
+    sys.path.insert(0, str(ROOT))
+    from tools import board_config
+    fw = ROOT / "firmware"
+    assert board_config.net_defines(fw / "esp32c3_zero") == [("MOY_HTTPC_POOL", 0)]
+    assert board_config.net_defines(fw / "lilygo_t_deck_plus_mainline") == []
+    d = tmp_path / "b"
+    d.mkdir()
+    for body in ("pool = 1\n", "http_pool = -1\n", "http_pool = true\n"):
+        (d / "board.toml").write_text('[board]\nota = "x"\n[net]\n' + body)
+        with pytest.raises(ValueError):
+            board_config.net_defines(d)
 
 
 # == the download, into the slot ==================================================

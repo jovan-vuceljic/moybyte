@@ -1219,7 +1219,7 @@ _CSIGS = (
     ("moy_chrome_strip_band", [_CP, _CI, _CI, _B], None),
     ("moy_chrome_strip_cell", [_CP, _CS, _CI, _CI, _CI, _CI, _CI, _CI, _CS, _B], None),
     ("moy_chrome_raster", [_CP, _CP, _CI, _CI, _CP, _CI], None),
-    ("moy_chrome_notice", [_CS, _CS, _B, _U32], None),
+    ("moy_chrome_notice", [_CS, _CS, _CS, _U32], None),
     ("moy_chrome_toast_arm", [_CS, _CS, _CS, _B, _U32], None),
     ("moy_chrome_note", [_CS, _CS, _CS, _U32], None),
     ("moy_chrome_overlay_draw", [_CP, _CI, _CI, _CP, _U32], _B),
@@ -1313,8 +1313,8 @@ def chrome_strip_cell(kind, rect, cs, dy, s, across):
                    int(cs), int(dy), _b(s), bool(across))
 
 
-def chrome_notice(title, sub, ok, until_ms):
-    _clib().moy_chrome_notice(_b(title), _b(sub), bool(ok), int(until_ms) & 0xFFFFFFFF)
+def chrome_notice(title, sub, icon, until_ms):
+    _clib().moy_chrome_notice(_b(title), _b(sub), _b(icon), int(until_ms) & 0xFFFFFFFF)
 
 
 def chrome_toast_arm(head, name, icon, secret, until_ms):

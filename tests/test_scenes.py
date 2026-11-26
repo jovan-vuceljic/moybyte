@@ -131,7 +131,7 @@ def test_save_scene_is_atomic(tmp_path):
     mc.save_scene(c, "main", LEVEL2_SCENE)
     assert f.read_text() == LEVEL2_SCENE
     # The backup is the REDO log (#154): the bytes the publish was writing, stamped.
-    bak = (scene_dir / "main.moyscene.bak").read_text()
+    bak = (scene_dir / ".main.moyscene.moybak").read_text()
     assert bak.startswith("#moyfs1 ") and bak.endswith(LEVEL2_SCENE)
 
 

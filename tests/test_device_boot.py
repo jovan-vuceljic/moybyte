@@ -260,7 +260,7 @@ def test_a_splash_that_never_composed_still_shows_the_logo():
 def _raises_session(fn):
     """The T-Deck's `with_sd_live` against an empty slot: the mount itself is
     what fails, before fn() is ever reached."""
-    return fn()
+    raise OSError("no card")
 
 
 def test_the_carts_load_through_the_boards_storage_session(capsys):
@@ -332,6 +332,30 @@ def test_a_cardless_board_keeps_a_writable_store_on_internal_flash(capsys):
     assert "Moybyte loaded 1 carts from flash" in out
     assert "using built-in carts" not in out, \
         "the embedded read-only floor is for when BOTH stores are gone"
+    assert boot.card_trouble is None, "an empty slot is said nowhere but the wire"
+
+
+def test_a_mounted_card_whose_store_fails_is_said_on_the_desk(capsys):
+    """The card mounted (the session ran the scan) and its store raised: the
+    console boots on internal flash and the desk is told (`card_trouble`)."""
+    boot, _, _ = _boot()
+    store = FakeStore(dead_root="/sd/moybyte/carts")
+
+    carts, root = boot.load_carts(store, [{"title": "s"}], session=lambda fn: fn(),
+                                  root="/sd/moybyte/carts", media="SD",
+                                  fallback_root="/moy/carts")
+
+    assert root == "/moy/carts" and boot.card_trouble == "errors"
+    assert "Moybyte SD carts unavailable: no card" in capsys.readouterr().out
+
+
+def test_an_internal_store_that_fails_is_no_card_trouble():
+    """With no second store the root is the internal one: its failure reaches
+    the read-only floor, and says nothing about a card."""
+    boot, _, _ = _boot()
+    boot.load_carts(FakeStore(raise_on="ensure_dirs"), [{"title": "s"}],
+                    root="/moy/carts", media="flash")
+    assert boot.card_trouble is None
 
 
 def test_the_fallback_store_runs_without_the_boards_session():
@@ -1080,3 +1104,11 @@ def test_bring_addon_moves_the_fitting_console_once(tmp_path):
     assert moy_seed.bring_addon(str(flash), str(card), want)
     assert not folder.exists() and (got / "moybyte_web.pack").read_bytes() == pack
     assert not moy_seed.bring_addon(str(flash), str(card), None), "an image naming no page"
+
+
+def test_a_fresh_boot_tells_the_desk_what_the_card_store_did():
+    """The boot's `card_trouble` reaches the desk beside the OTA verdict, on
+    a fresh boot only: a return start is the same boot's VM back."""
+    src = SPINE.read_text(encoding="utf-8")
+    tail = src.split("report_update(ws, lambda m: log(\"OTA\", m))", 1)[1]
+    assert tail.lstrip().startswith("ws.notices.card_trouble(boot.card_trouble)")

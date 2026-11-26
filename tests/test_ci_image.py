@@ -13,7 +13,7 @@ CI = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
 
 
 def test_the_image_is_the_runners_os_pinned_by_digest():
-    host_job = CI.split("\n  test:\n")[1].split("\n  classify-hardware-impact:")[0]
+    host_job = CI.split("\n  test:\n")[1]
     assert "runs-on: ubuntu-latest" in host_job     # ubuntu-26.04, by the job logs
     assert re.search(r"^FROM ubuntu:26\.04@sha256:[0-9a-f]{64}$", DOCKERFILE, re.M)
 

@@ -1,5 +1,6 @@
 // moy_sh_store: the console's commands the shell serves from the store while
-// no VM runs (moy_sh_board.h). Each is the console's command
+// no VM runs, and where the door does not serve them (the Zero's)
+// (moy_sh_board.h). Each is the console's command
 // (runtime/shell/sh_roles.py) over the same C the console calls, so the two
 // faces of a command cannot read a file two ways.
 
@@ -161,14 +162,15 @@ static char *value_of(int argc, char **argv, size_t *len) {
     return json;
 }
 
-static int settings_cmd(moy_sh_t *s, const char *root, int argc, char **argv) {
+static int settings_cmd(moy_sh_t *s, const char *root, int absent, int argc, char **argv) {
     const char *verb = argc > 1 ? argv[1] : "list";
     int list = argc == 1 || (argc == 2 && strcmp(verb, "list") == 0);
     int get = argc == 3 && strcmp(verb, "get") == 0;
     int set = argc >= 4 && strcmp(verb, "set") == 0;
     int unset = argc == 3 && strcmp(verb, "unset") == 0;
     if (argc == 2 && strcmp(verb, "reload") == 0) {
-        say(s, 2, "settings: reload: needs the console\n", 36);
+        sayf(s, 2, "settings: reload: %s\n",
+             absent ? "not served here" : "needs the console", "");
         return 1;
     }
     if (!list && !get && !set && !unset) {
@@ -388,7 +390,8 @@ static int pkg_remove(moy_sh_t *s, const char *root, int argc, char **argv) {
 }
 
 // pkg with no VM: `list` the carts the record holds, `remove` them. Every
-// other verb reads the indexes or the network and needs the console.
+// other verb reads the indexes or the network, the console's: MOY_SH_NOT_FOUND,
+// which says what the door said ("needs the console", "not served here").
 static int pkg_cmd(moy_sh_t *s, const char *root, int argc, char **argv) {
     char *words[MOY_SH_STORE_ARGS];
     int n = 0;
@@ -419,9 +422,9 @@ static int pkg_cmd(moy_sh_t *s, const char *root, int argc, char **argv) {
 
 // -- the table ------------------------------------------------------------------------
 
-int moy_sh_store_role(moy_sh_t *s, const char *root, int argc, char **argv) {
+int moy_sh_store_role(moy_sh_t *s, const char *root, int absent, int argc, char **argv) {
     if (argc > 0 && strcmp(argv[0], "settings") == 0) {
-        return settings_cmd(s, root, argc, argv);
+        return settings_cmd(s, root, absent, argc, argv);
     }
     if (argc > 0 && strcmp(argv[0], "pkg") == 0) {
         return pkg_cmd(s, root, argc, argv);

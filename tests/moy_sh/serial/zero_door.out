@@ -1,0 +1,28 @@
+> sh cron list
+SH cron: not served here
+SH end 1
+> sh python
+SH python: not served here
+SH end 1
+> sh perm grant moybyte.paint camera
+SH perm: not served here
+SH end 1
+> sh mkdir -p /sd/moybyte/system
+SH end 0
+> sh settings set volume 3
+SH end 0
+> sh settings get volume
+SH 3
+SH end 0
+> sh settings reload
+SH settings: reload: not served here
+SH end 1
+> sh pkg list
+SH end 0
+> sh pkg install kenny.jet
+SH pkg: not served here
+SH end 1
+> sh moybyte.hop/hop
+SH sh: 1: moybyte.hop/hop: not found
+SH end 127
+[exit 0]

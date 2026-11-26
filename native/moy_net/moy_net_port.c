@@ -821,6 +821,40 @@ void moy_conn_close(void *conn) {
     }
 }
 
+int moy_conn_alive(void *conn) {
+    conn_t *c = conn;
+    if (offline() || (c->tls && mbedtls_ssl_get_bytes_avail(&c->ssl) > 0)) {
+        return 0;
+    }
+    fd_set r;
+    FD_ZERO(&r);
+    FD_SET(c->fd, &r);
+    struct timeval tv = {0, 0};
+    return select(c->fd + 1, &r, NULL, NULL, &tv) == 0;
+}
+
+// The pool's reaper: one timer, made at its first arming, whose callback runs
+// on the esp_timer task. Armed under the pool's lock, so one task makes it.
+#include "esp_timer.h"
+static esp_timer_handle_t s_reap;
+
+static void reap(void *arg) {
+    (void)arg;
+    moy_httpc_pool_reap();
+}
+
+void moy_net_reap_after(uint32_t ms) {
+    if (s_reap == NULL) {
+        const esp_timer_create_args_t a = {.callback = reap, .name = "moy_httpc"};
+        if (esp_timer_create(&a, &s_reap) != ESP_OK) {
+            s_reap = NULL;
+            return;
+        }
+    }
+    esp_timer_stop(s_reap);
+    esp_timer_start_once(s_reap, (uint64_t)ms * 1000u);
+}
+
 // The inactive app slot, written as the copied-image path always has: each
 // 4 KB sector erased as the write first reaches it, the image checked whole
 // at close, and the bootloader pointed at it only by moy_slot_boot.
@@ -975,6 +1009,22 @@ void moy_conn_close(void *conn) {
         close(((conn_t *)conn)->fd);
         moy_net_free(conn);
     }
+}
+
+int moy_conn_alive(void *conn) {
+    int fd = ((conn_t *)conn)->fd;
+    if (offline()) {
+        return 0;
+    }
+    fd_set r;
+    FD_ZERO(&r);
+    FD_SET(fd, &r);
+    struct timeval tv = {0, 0};
+    return select(fd + 1, &r, NULL, NULL, &tv) == 0;
+}
+
+void moy_net_reap_after(uint32_t ms) {
+    (void)ms;
 }
 
 // The host's slot: memory the tests read back, `moy_slot_host_cap` bytes,

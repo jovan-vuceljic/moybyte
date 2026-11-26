@@ -12,7 +12,9 @@ GET /term the page asks why a socket failed; every frame sealed each way, a
 tampered or replayed one closing the socket 1008 "seal"; a dropped key
 cutting its open terminal 1008 "revoked", as a password change does and as
 its session's end does (unused past its time, its keys counting as use, or
-taken by newer sign-ins); keys in and their echo out,
+taken by newer sign-ins); another signed-in page's terminal taking the shell,
+the first closed 4001 "taken", and a request with no session taking nothing;
+keys in and their echo out,
 gathered into few frames; a resize the shell sees; Ctrl-C ending a command;
 `exit` closing the socket 1000 with its status; a page that closes freeing
 the session for the next; the face another transport holds refusing the page
@@ -22,6 +24,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 import shutil
 import socket
 import struct
@@ -47,7 +50,8 @@ SPINE = os.path.join(NATIVE, "moy_spine")
 WEB = os.path.join(NATIVE, "moy_web")
 FILES = "sd/moybyte/files"
 
-TTY_SOURCES = ("moy_tty.c", "moy_tty_sys.c", "moy_tty_sh.c", "moy_tty_ws.c", "moy_tty_sftp.c", "host/tty_main.c")
+TTY_SOURCES = ("moy_tty.c", "moy_tty_sys.c", "moy_tty_sh.c", "moy_tty_ws.c", "moy_tty_live.c",
+               "moy_tty_sftp.c", "host/tty_main.c")
 NET_SOURCES = [os.path.join(NET, n) for n in (
     "moy_http.c", "moy_net_port.c", "moy_sync.c", "moy_sync_apply.c", "moy_webhost.c",
     "moy_ota.c", "moy_webconsole.c", "moy_gpio.c", "moy_dns.c", "moy_net_host.c",
@@ -57,13 +61,14 @@ NET_SOURCES.append(os.path.join(STORE, "moy_journal.c"))
 pytestmark = pytest.mark.skipif(shutil.which("cc") is None, reason="needs a C compiler")
 
 
-def _build(out, extra=(), defines=()):
-    """The harness (tty_main) over the webhost; `extra` sources and
-    `defines` build a variant (tests/test_live_link.py's board twin)."""
+def _build(out, extra=(), defines=(), incs=()):
+    """The harness (tty_main) over the webhost; `extra` sources, `defines`
+    and include dirs `incs` build a variant (tests/test_live_link.py's board
+    twin)."""
     cc = shutil.which("cc")
     shell = [o for o in SH._objects(cc, str(out))
              if os.path.basename(o) not in ("sh_main.o", "board_main.o")]
-    inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL)]
+    inc = ["-I" + d for d in (TTY, NET, STORE, SPINE, WEB, SH.SH, SH.KERNEL) + tuple(incs)]
     flags = ["-std=gnu99", "-g", "-O1", "-fsanitize=address,undefined", "-w",
              "-D_GNU_SOURCE"] + ["-D" + d for d in defines] + inc
     objs, procs = [], []
@@ -105,16 +110,29 @@ class Host:
         env = dict(os.environ, MOY_SH_ROOT=str(tree), ASAN_OPTIONS="detect_leaks=0")
         if page:                                # (body hex, whole hex): the pack it names
             env["MOY_TTY_PAGE"] = " ".join(page)
-        self.proc = subprocess.Popen(
-            [exe, str(self.port), str(tree / "sd" / "moybyte" / "system") if sealed else "-",
-             str(tree / "sd" / "moybyte" / "carts")]
-            + ([str(tree / "sd" / "moybyte" / "files")] if files else []),
-            stdin=subprocess.PIPE, stdout=self.logf, stderr=subprocess.STDOUT, env=env)
+        self.argv = ([exe, str(self.port),
+                      str(tree / "sd" / "moybyte" / "system") if sealed else "-",
+                      str(tree / "sd" / "moybyte" / "carts")]
+                     + ([str(tree / "sd" / "moybyte" / "files")] if files else []))
+        self.env = env
+        self._start()
+
+    def _start(self):
+        at = len(self.log())
+        self.proc = subprocess.Popen(self.argv, stdin=subprocess.PIPE, stdout=self.logf,
+                                     stderr=subprocess.STDOUT, env=self.env)
         for _ in range(200):
-            if "listening" in self.log():
+            if "listening" in self.log()[at:]:
                 break
             time.sleep(0.05)
-        assert "listening" in self.log(), self.log()
+        assert "listening" in self.log()[at:], self.log()
+
+    def restart(self):
+        """A board reset: the process gone and started again on the same
+        port and store, its sessions forgotten and its paired keys kept."""
+        self.proc.kill()
+        self.proc.wait()
+        self._start()
 
     def log(self):
         # Its own handle: the child writes through logf's open file, whose
@@ -538,7 +556,8 @@ def test_a_command_whose_client_went_away_frees_the_face(host):
 
 def test_neofetch_twice_in_one_session_is_whole_both_times(host):
     """The spike's 379-byte stop: a hop's held output sent in pieces the
-    loopback dropped. Both runs end at the prompt, the same length."""
+    loopback dropped. Both runs end at the prompt, the same length, Moy
+    beside the rows."""
     ws = WS(host, cols=100, rows=30)
     ws.read_until(b"$ ")
     runs = []
@@ -547,6 +566,10 @@ def test_neofetch_twice_in_one_session_is_whole_both_times(host):
         runs.append(ws.read_until(b"$ ", 5.0))
     assert all(r.endswith(b"$ ") and b"host harness" in r for r in runs), runs
     assert len(runs[0]) == len(runs[1]), runs
+    # Moy in colour beside the rows: his body left of "Board" on 100 columns
+    shown = re.sub(r"\x1b\[[0-9;]*m", "", runs[0].decode()).split("\r\n")
+    board = next(ln for ln in shown if "Board: " in ln)
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
     ws.close()
 
 
@@ -606,6 +629,39 @@ def test_a_terminal_ends_when_newer_sign_ins_take_its_session(host):
     ws.read_until(b"\xff", 3.0)
     assert ws.closed == (1008, "revoked"), ws.closed
     wait_stat(host, "live", 0)
+
+
+def test_another_browser_s_terminal_takes_the_shell_and_the_first_is_told(host):
+    """The newest signed-in page has the shell: the one that held it closes
+    4001 "taken" (its page offers it back, never asks by itself), and the
+    newer one's prompt comes up once the old bridge has let go."""
+    ws = WS(host)
+    ws.read_until(b"$ ")
+    other = seal_client.Browser(host.send, name="Other on Host")
+    other.pair_token(host.token())
+    ws2 = WS(host, browser=other)
+    ws.read_until(b"\xff", 3.0)
+    assert ws.closed == (4001, "taken"), ws.closed
+    for _ in range(10):                 # the old bridge lets go at its next turn
+        got = ws2.read_until(b"$ ", 1.0)
+        if b"$ " in got:
+            break
+        assert ws2.closed == (1013, "busy"), ws2.closed
+        time.sleep(0.1)
+        ws2 = WS(host, browser=other)   # asked again, as the page does
+    assert b"$ " in got
+    ws2.close()
+
+
+def test_a_request_with_no_session_takes_no_one_s_shell(host):
+    ws = WS(host)
+    ws.read_until(b"$ ")
+    stranger = WS(host, target="/term?cols=80&rows=24")
+    assert stranger.status == 401, stranger.head
+    ws.keys(b"echo kept\r")
+    assert b"kept" in ws.read_until(b"kept\r\n", 3.0)
+    assert ws.closed is None
+    ws.close()
 
 
 def test_a_login_with_no_profile_starts_at_status_0(host):

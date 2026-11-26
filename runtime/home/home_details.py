@@ -60,7 +60,9 @@ class HomeDetails:
         input reaches them by: the system menu's card group, a long press
         on the card, a gamepad's X, the desk's buttons. Its favourite star,
         then CHANGE with COPY beside it, then SEND where the console has a
-        radio link (runtime/run/link_beam.py), then DEL, where
+        radio link (runtime/run/link_beam.py), SAVE (to this computer) in
+        the browser (`Workstation.page`) and POD (play on the console) where
+        a console serves the page, then DEL, where
         the active tab has them (`zone_verbs`)."""
         zone = self.zone_verbs()
         out = []
@@ -74,6 +76,13 @@ class HomeDetails:
             it = self.grid.selected()
             if it and it.get("path") and it.get("type") not in PSEUDO_TILE_TYPES:
                 out.append("send")
+        page = getattr(self.ws, "page", None)
+        if page is not None:
+            it = self.grid.selected()
+            if it and it.get("path") and it.get("type") not in PSEUDO_TILE_TYPES:
+                out.append("save")
+                if page.served:
+                    out.append("pod")
         for v in zone:
             if v == "delete":
                 out.append(v)
@@ -81,8 +90,8 @@ class HomeDetails:
 
     def _desk_verbs(self):
         """The desk home's buttons (step 18): the active tab's tap verb,
-        then the card's verbs but its star (the hero wears that) and SEND
-        (its menu's alone). On Make
+        then the card's verbs but its star (the hero wears that), SEND, SAVE
+        and POD (its menu's alone). On Make
         a real card's are its own, CHANGE first: NEW makes another cart,
         which the shelf's + tile and N keep. None off the desk."""
         if not (self._carousel() and self.grid.desk()):
@@ -90,7 +99,7 @@ class HomeDetails:
         zone = self.zone_verbs()
         out = [] if "change" in zone and self.grid.tab == "make" else \
             [v for v in zone[:1] if v in ("play", "open", "new")]
-        out.extend(v for v in self.card_verbs() if v not in ("favourite", "send"))
+        out.extend(v for v in self.card_verbs() if v not in ("favourite", "send", "save", "pod"))
         return out
 
     def _details_page(self):

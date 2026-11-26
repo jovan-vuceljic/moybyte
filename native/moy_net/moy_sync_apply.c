@@ -4,14 +4,15 @@
 // A path is an allowlist of shape: forward slashes only, at most 256
 // characters, no empty or dot segment, no backslash, NUL, CR or LF inside one,
 // and nothing the wire's skip rule keeps home (moy_store_skip), so a batch can
-// never name journal/ or a .bak. A whole file publishes through moy_fs's
-// crash-safe write; a chunked one stages in `<path>.tmp` and publishes by the
-// rename rotation that leaves the previous file as an unstamped `.bak`. On the
+// never name journal/ or a store backup. A whole file publishes through
+// moy_fs's crash-safe write; a chunked one stages in `<path>.tmp` and
+// publishes by the rename rotation that leaves the previous file as the
+// store's unstamped backup (moy_fs_bak_path). On the
 // carts root of a store of record, every text file that lands is a journal
 // commit (moy_journal_append), after the file is durable: a journal that
 // cannot be written costs a history entry, never the write. On the apps root
 // a file is `<id>/<key>` of one app's flat folder and lands as bytes alone
-// (moy_net.h's moy_sync_store_t), with no `.bak` left beside it.
+// (moy_net.h's moy_sync_store_t), with no backup left beside it.
 // A cart delete (`dc`) of a built-in is the console's own removal: a core
 // cart is refused, an optional one's removal recorded before it goes, and
 // the first file to land in a cart folder drops the folder's line
@@ -51,6 +52,7 @@ typedef struct {
     char full[PATH_CAP];            // the op's file
     char a[PATH_CAP], b[PATH_CAP];  // scratch paths: never on the VM's stack
     int fresh;                      // the op landed the first file of a cart folder
+    int room;                       // the volume holds the batch's writes (fits)
 } op_t;
 
 static const char *const SHELF[] = {"manifest.json", "sheet.json", "cover.png"};
@@ -115,6 +117,32 @@ static char *str_field(const char *op, const char *op_end, const char *key,
     *n = moy_json_str(v, ve, out);
     out[*n] = '\0';
     return out;
+}
+
+// The op's string member `key` decoded and NUL-ended, `*n` its length: where
+// it lies in the batch when the batch is the caller's to overwrite (`*cap` 0:
+// nothing to free), else str_field's block. NULL when the op has none.
+static char *text_of(const op_t *o, const char *op, const char *op_end,
+                     const char *key, size_t *n, size_t *cap) {
+    if (!o->s->spend) {
+        return str_field(op, op_end, key, n, cap);
+    }
+    const char *v, *ve;
+    if (!moy_json_get(op, op_end, key, &v, &ve)
+        || moy_json_kind(v, ve) != MOY_JSON_STR) {
+        return NULL;
+    }
+    char *out = (char *)v;          // the decode never passes its own reading
+    *n = moy_json_str(v, ve, out);
+    out[*n] = '\0';
+    *cap = 0;
+    return out;
+}
+
+static void text_free(char *t, size_t cap) {
+    if (cap) {
+        moy_store_free(t, cap);
+    }
 }
 
 static int truthy(const char *op, const char *op_end, const char *key) {
@@ -219,6 +247,20 @@ static int suffixed(char *dst, const char *src, const char *suf) {
     return 1;
 }
 
+// The store's backup of `src` (moy_fs_bak_path) into `dst`, PATH_CAP bytes.
+static int bak_of(char *dst, const char *src) {
+    size_t n;
+    char *b = moy_fs_bak_path(src, &n);
+    int ok = b != NULL && n <= PATH_CAP;
+    if (ok) {
+        memcpy(dst, b, n);
+    }
+    if (b != NULL) {
+        moy_store_free(b, n);
+    }
+    return ok;
+}
+
 static int at(const char *path, moy_vol_t *v, const char **rest) {
     return moy_vol_at(path, v, rest);
 }
@@ -262,11 +304,11 @@ static int rename_to(const char *src, const char *dst) {
     return rc ? rc : moy_vol_rename(&a, ra, rb);
 }
 
-// `<path>.tmp` published as `path`, the previous file rotated to `.bak`.
+// `<path>.tmp` published as `path`, the previous file rotated to its backup.
 static int publish_tmp(op_t *o) {
     const char *path = o->full;
     char *tmp = o->a, *bak = o->b;
-    if (!suffixed(tmp, path, ".tmp") || !suffixed(bak, path, ".bak")
+    if (!suffixed(tmp, path, ".tmp") || !bak_of(bak, path)
         || !moy_fs_exists(tmp)) {
         return MOY_ENODEV;          // the caller names it: no staged tmp
     }
@@ -370,11 +412,12 @@ static int write_part(op_t *o, int part, const void *data, size_t n,
     if (!suffixed(tmp, o->full, ".tmp")) {
         return MOY_EINVAL;
     }
-    if (part == 0) {
-        return bytes ? moy_fs_write_bytes(tmp, data, n)
-               : moy_fs_write(tmp, data, n);
+    int rc = part != 0 ? append(tmp, data, n)
+             : bytes ? moy_fs_write_bytes(tmp, data, n) : moy_fs_write(tmp, data, n);
+    if (rc != 0) {
+        moy_fs_remove(tmp);         // a file cut short at a part is never published
     }
-    return append(tmp, data, n);
+    return rc;
 }
 
 static int shelf_dirty(const op_t *o, int new_item) {
@@ -505,8 +548,9 @@ static int apply_one(op_t *o, const char *op, const char *op_end, int *shelf,
         if (o->root == MOY_SYNC_APPS) {
             // An app's folder holds its keys and nothing else: the rotated
             // previous file would read as a key of its own.
-            path_of(o, o->nseg, ".bak", o->b, PATH_CAP);
-            moy_fs_remove(o->b);
+            if (bak_of(o->b, o->full)) {
+                moy_fs_remove(o->b);
+            }
         }
         journal(o, NULL, 0);
         *shelf = shelf_dirty(o, new_item);
@@ -525,19 +569,24 @@ static int apply_one(op_t *o, const char *op, const char *op_end, int *shelf,
             why(out, "op too large");
             return 1;
         }
+        if (!o->room) {
+            oserr(out, MOY_ENOSPC);
+            return 1;
+        }
         size_t tn, tcap;
-        char *t = str_field(op, op_end, "b", &tn, &tcap);
+        char *t = text_of(o, op, op_end, "b", &tn, &tcap);
         if (t == NULL) {
             oserr(out, MOY_ENOMEM);
             return 1;
         }
-        unsigned char *raw = moy_store_alloc(tn / 4u * 3u + 3u);
+        // the bytes where their base64 lies (never past its own reading), or
+        // in a block of the store's beside the batch that must stay whole
+        size_t rcap = tcap ? tn / 4u * 3u + 3u : 0;
+        unsigned char *raw = rcap ? moy_store_alloc(rcap) : (unsigned char *)t;
         long rn = raw == NULL ? -2 : moy_b64_decode(t, tn, raw);
-        moy_store_free(t, tcap);
+        text_free(t, tcap);
         if (rn < 0) {
-            if (raw != NULL) {
-                moy_store_free(raw, tn / 4u * 3u + 3u);
-            }
+            text_free((char *)raw, raw != NULL ? rcap : 0);
             if (rn == -2) {
                 oserr(out, MOY_ENOMEM);
             } else {
@@ -548,7 +597,7 @@ static int apply_one(op_t *o, const char *op, const char *op_end, int *shelf,
         mkdirs(o);
         int rc = part < 0 ? moy_fs_write_bytes(full, raw, (size_t)rn)
                  : write_part(o, part, raw, (size_t)rn, 1);
-        moy_store_free(raw, tn / 4u * 3u + 3u);
+        text_free((char *)raw, rcap);
         if (rc != 0) {
             oserr(out, rc);
             return 1;
@@ -557,8 +606,13 @@ static int apply_one(op_t *o, const char *op, const char *op_end, int *shelf,
         o->fresh = new_item;
         return 0;
     }
+    const char *tv, *tve;
+    if (!o->room && moy_json_get(op, op_end, "t", &tv, &tve)) {
+        oserr(out, MOY_ENOSPC);
+        return 1;
+    }
     size_t tn = 0, tcap = 0;
-    char *t = str_field(op, op_end, "t", &tn, &tcap);
+    char *t = text_of(o, op, op_end, "t", &tn, &tcap);
     if (t == NULL) {
         why(out, "no text");
         return 1;
@@ -581,7 +635,7 @@ static int apply_one(op_t *o, const char *op, const char *op_end, int *shelf,
             oserr(out, rc);
         }
     }
-    moy_store_free(t, tcap);
+    text_free(t, tcap);
     if (rc != 0) {
         return 1;
     }
@@ -621,6 +675,34 @@ static void landed(op_t *o) {
     }
 }
 
+// Whether the volume under `dir` holds what the batch writes: each text twice
+// (its backup, then the file) and a block of slack per file, a block being
+// the most a small file wastes, with MOY_SYNC_ROOM_KEEP left over. A volume
+// that does not count its free bytes (moy_vol_room) holds everything, and
+// its own refusal, should one come, is the op's.
+#define ROOM_BLOCK 4096u
+static int fits(const char *dir, const char *ops, const char *ops_end) {
+    moy_json_iter_t it;
+    moy_json_iter(&it, ops, ops_end);
+    const char *k, *ke, *v, *ve, *t, *te;
+    uint64_t need = 0;
+    while (moy_json_next(&it, &k, &ke, &v, &ve)) {
+        if (moy_json_kind(v, ve) != MOY_JSON_OBJ) {
+            continue;
+        }
+        if (has(v, ve, "b", &t, &te) || has(v, ve, "t", &t, &te)) {
+            need += 2u * ((uint64_t)(te - t) + ROOM_BLOCK);
+        }
+    }
+    moy_vol_t vol;
+    const char *rest;
+    uint64_t room;
+    if (need == 0 || at(dir, &vol, &rest) != 0 || moy_vol_room(&vol, rest, &room) != 0) {
+        return 1;
+    }
+    return room >= need + MOY_SYNC_ROOM_KEEP;
+}
+
 void moy_sync_apply(const moy_sync_store_t *s, int root, const char *ops,
                     const char *ops_end, moy_sync_result_t *res) {
     memset(res, 0, sizeof(*res));
@@ -633,6 +715,7 @@ void moy_sync_apply(const moy_sync_store_t *s, int root, const char *ops,
     o->dir = root == MOY_SYNC_FILES ? s->files
              : root == MOY_SYNC_CARTS ? s->carts
              : root == MOY_SYNC_APPS ? s->apps : NULL;
+    o->room = o->dir == NULL || fits(o->dir, ops, ops_end);
     moy_json_iter_t it;
     moy_json_iter(&it, ops, ops_end);
     const char *k, *ke, *v, *ve;

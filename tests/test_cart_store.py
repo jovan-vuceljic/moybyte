@@ -36,6 +36,11 @@ ROOT = Path(__file__).resolve().parent.parent
 BASE = "https://carts.example/repo"
 
 
+def _bak_path(path):
+    from runtime import moy_fs
+    return moy_fs._native.bak_path(path)
+
+
 def _store(tmp_path):
     root = tmp_path / "moybyte" / "carts"
     root.mkdir(parents=True)
@@ -298,6 +303,48 @@ def test_an_install_on_a_heap_with_no_block_for_its_buffers_takes_smaller_ones(
     monkeypatch.setattr(ci, "bytearray", lambda n=0: placed(n + ci.MIN_CHUNK), raising=False)
     with pytest.raises(MemoryError):
         ci.chunk_buffer(4096)
+
+
+def test_an_install_holds_no_buffer_once_its_files_are_in(tmp_path):
+    """The prompt's manifest and the landing's record are parsed after the
+    download, where a C3's heap beside a page's session had 11 KB free in
+    pieces and no room for them beside the download's buffers: the install
+    gives both buffers back before its `ask`, and lands all the same."""
+    root = _store(tmp_path)
+    repo = Repo(BASE)
+    repo.add("jet", extra={"level.bin": os.urandom(5000)})
+    cart = _cart(repo, "jet")
+    held = []
+
+    def ask(stage):
+        held.append((job.scratch, job.sink.buf))
+
+    job = ci.Install(cart, ci.plan(cart, "esp32s3", 2), MemNet(repo.routes()), root,
+                     _session, (), step_ms=50, ask=ask)
+    while job.step():
+        pass
+    assert held == [(None, None)]
+    assert job.error is None and job.path == root + "/jet.moy"
+
+
+def test_an_install_out_of_memory_says_where_on_serial(tmp_path, capsys):
+    """An install that runs out of memory says so in the kid's words, and
+    serial gets the frames it was in and the heap it had."""
+    root = _store(tmp_path)
+    repo = Repo(BASE)
+    repo.add("jet")
+    cart = _cart(repo, "jet")
+
+    def ask(stage):
+        raise MemoryError("memory allocation failed, allocating 1624 bytes")
+
+    job = ci.Install(cart, ci.plan(cart, "esp32s3", 2), MemNet(repo.routes()), root,
+                     _session, (), step_ms=50, ask=ask)
+    while job.step():
+        pass
+    assert job.error == ci.NO_MEMORY
+    assert "in ask" in job.detail and "in step" in job.detail
+    assert "jet.moy: out of memory" in capsys.readouterr().out
 
 
 def test_an_external_file_is_never_fetched_without_its_licence(tmp_path):
@@ -800,7 +847,7 @@ def test_a_copy_put_there_another_way_offers_an_update(tmp_path):
     repo.add("jet")
     _install(_cart(repo, "jet"), root, MemNet(repo.routes()))
     (Path(root).parent / ci.RECORD_NAME).unlink()
-    (Path(root).parent / (ci.RECORD_NAME + ".bak")).unlink()
+    Path(_bak_path(str(Path(root).parent / ci.RECORD_NAME))).unlink()
     assert _state(repo, root, "jet") == "update"
 
 
@@ -934,7 +981,7 @@ def test_the_record_reads_its_backup_when_the_file_is_torn(tmp_path):
     assert "jet.moy" in ci.load_record(root)
     assert path.read_text() == good                       # healed in place
     path.write_text('{"version": 1, "carts": []}')       # the wrong shape
-    (Path(str(path) + ".bak")).unlink()
+    (Path(_bak_path(str(path)))).unlink()
     assert ci.load_record(root) == {}
 
 
@@ -1129,7 +1176,7 @@ def _frames(ws, app, n=40):
         ws.frame(1 / 30)
         # ...and the covers the shelf fetches once it shows.
         if app.phase not in ("checking", "licence_fetch", "connecting", "getting") \
-                and not app._covers and app._tail is None:
+                and not app._covers and not app._jobs and app._tail is None:
             ws.mark_dirty()
             ws.frame(1 / 30)
             return
@@ -1776,8 +1823,11 @@ def test_a_cover_that_does_not_come_leaves_the_card_as_it_is(tmp_path, fault):
 
 
 def test_the_shelf_shows_before_its_covers_come(tmp_path):
-    """The shelf is up the frame its index is read; the covers follow, one a
-    frame, under the radio's lease, which goes once the last has landed."""
+    """The shelf is up the frame its index is read, each card that has a
+    cover coming showing the "on its way" picture; the covers follow under
+    the radio's lease, which goes once the last has landed."""
+    from runtime import uitree as ui
+    from runtime.getcarts_app import WAIT
     rock = (_VECTORS / "rgb_filter2.png").read_bytes()
     repo, _jet, net = _covered_shelf((rock, rock))
     ws, app = _app_ws(tmp_path, net, [repo.url("index.json")])
@@ -1790,6 +1840,8 @@ def test_the_shelf_shows_before_its_covers_come(tmp_path):
     assert app.phase == "list"
     assert len(app._covers) == 2 and "carts" in ws.leases.holders()
     assert not any(app.thumbs.values())
+    pics = {r["name"]: r["pic"] for r in app.models["carts"]}
+    assert pics == {"Jet Pot": ui.image.own(WAIT), "Rock Run": ui.image.own(WAIT), "Dungeon": None}
     _frames(ws, app)
     assert not app._covers and "carts" not in ws.leases.holders()
     assert sum(1 for v in app.thumbs.values() if v) == 2
@@ -1804,6 +1856,76 @@ def test_a_second_check_fetches_only_the_covers_it_has_not_drawn(tmp_path):
     assert app.phase == "list"
     assert net.opened.count(repo.url("carts/jet/cover.png")) == 1
     assert net.opened.count(repo.url("index.json")) == 2
+
+
+def test_the_covers_come_in_the_shelf_s_order(tmp_path):
+    """The covers come top card first, the shelf's order (its names'), not
+    the index's."""
+    names = ("rgb_filter0.png", "rgb_filter1.png", "rgb_filter2.png", "rgb_filter3.png")
+    repo = Repo("https://mit.example/carts", "Test MIT carts")
+    for i, (n, title) in enumerate(zip(names, ("Delta", "Alpha", "Charlie", "Bravo"))):
+        repo.add("c%d" % i, name=title, cover=(_VECTORS / n).read_bytes())
+    net = MemNet(repo.routes())
+    ws, app = _app_ws(tmp_path, net, [repo.url("index.json")])
+    _open(ws, app)
+    got = [u for u in net.opened if u.endswith("/cover.png")]
+    want = [repo.url("carts/%s/cover.png" % c) for c in ("c1", "c3", "c2", "c0")]
+    assert [r["cart"]["name"] for r in app.rows] == ["Alpha", "Bravo", "Charlie", "Delta"]
+    assert got == want
+
+
+def test_the_cards_in_view_get_their_covers_first(tmp_path):
+    """A card the shelf shows (`cells_tile`) has its cover fetched before
+    the cards above it that are scrolled out of view."""
+    names = ("rgb_filter0.png", "rgb_filter1.png", "rgb_filter2.png", "rgb_filter3.png")
+    repo = Repo("https://mit.example/carts", "Test MIT carts")
+    for i, (n, title) in enumerate(zip(names, ("Alpha", "Bravo", "Charlie", "Delta"))):
+        repo.add("c%d" % i, name=title, cover=(_VECTORS / n).read_bytes())
+    net = MemNet(repo.routes())
+    ws, app = _app_ws(tmp_path, net, [repo.url("index.json")])
+    app.engine.cells_tile = lambda i, out: i >= 2
+    _open(ws, app)
+    got = [u for u in net.opened if u.endswith("/cover.png")]
+    assert got == [repo.url("carts/%s/cover.png" % c) for c in ("c2", "c3", "c0", "c1")]
+
+
+def test_a_reopen_fetches_no_cover_again(tmp_path):
+    """A cover fetched once is the engine's for the boot: the app closed and
+    opened again draws it with no fetch."""
+    repo, jet, net = _covered_shelf()
+    ws, app = _app_ws(tmp_path, net, [repo.url("index.json")])
+    _open(ws, app)
+    app.close()
+    _open(ws, app)
+    assert net.opened.count(repo.url("carts/jet/cover.png")) == 1
+    assert app.thumbs[sha(jet)] is True
+
+
+def test_a_cart_on_the_console_shows_its_copy_s_cover_with_no_fetch(tmp_path):
+    """A cart the console holds names its copy's cover (`image.cart`), which
+    the engine draws from the shell's cover cache: no fetch, no decode of
+    its own."""
+    from runtime import uitree as ui
+    repo, jet, net = _covered_shelf()
+    ws, app = _app_ws(tmp_path, net, [repo.url("index.json")])
+    _open(ws, app)
+    app._tap_row([row["cart"]["name"] for row in app.rows].index("Jet Pot"))
+    ws.mark_dirty()
+    ws.frame(1 / 30)
+    _tap(ws, app, "btn", "GET")
+    _frames(ws, app)
+    assert app.phase == "done", app.why
+    net2 = MemNet(repo.routes())
+    ws2, app2 = _app_ws(tmp_path, net2, [repo.url("index.json")])
+    _open(ws2, app2)
+    (cart,) = [c for c in ws2.carts.all if str(c.get("path", "")).endswith("/jet.moy")]
+    assert repo.url("carts/jet/cover.png") not in net2.opened
+    pics = {r["name"]: r["pic"] for r in app2.models["carts"]}
+    assert pics["Jet Pot"] == ui.image.cart(cart["path"])
+    _frames(ws2, app2)
+    held = [got[1] for k, got in app2.engine.pics.carts.items() if k[0] == pics["Jet Pot"]]
+    assert held and all(img is ws2.covers.cover_for(cart, 1 if img.w > 64 else 2) for img in held)
+    assert not any(k[0] == pics["Jet Pot"] for k in app2.engine.pics.cache)
 
 
 def test_an_installed_cart_brings_its_cover_to_the_shelf(tmp_path):

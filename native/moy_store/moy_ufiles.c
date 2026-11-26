@@ -774,7 +774,7 @@ static int project_list(const char *root, const char *kind, entries_t *out) {
     for (size_t i = 0; i < raw.n && rc == 0; i++) {
         const char *n = raw.e[i].name;
         size_t nl = strlen(n);
-        if (ends(n, nl, ".bak") || ends(n, nl, ".tmp")) {
+        if (moy_fs_bak_name(n, nl) || ends(n, nl, ".tmp")) {
             continue;
         }
         if (!raw.e[i].dir) {

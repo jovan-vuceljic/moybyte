@@ -178,8 +178,7 @@ def test_my_consoles_hands_a_board_its_console_over_the_link(tmp_path):
         password = ("document.getElementById('pinf').value = %s, "
                     "document.getElementById('pinb').click(), 1" % json.dumps(PASSWORD))
         export = ("window.__zip = null, pzDownload = function (n, b) { window.__zip = b; }, "
-                  "document.getElementById('pzc').value = %s, "
-                  "document.getElementById('pze').click(), 1" % json.dumps(CART))
+                  "asks([{do: 'save', cart: %s}]), 1" % json.dumps(CART))
         steps = [
             {"note": "the site is down: My consoles opens from its service worker"},
             {"waitFor": "typeof render == 'function' && navigator.serviceWorker.controller",

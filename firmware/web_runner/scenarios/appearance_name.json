@@ -4,7 +4,7 @@
   {"waitFor": "(async () => { const a = await window.__moyState(); await new Promise(r => setTimeout(r, 300)); const s = await window.__moyState(); return a.frames === s.frames && (s.edit.sysmenu); })()", "timeout": 15000},
   {"click": [77, 126]},
   {"waitFor": "(async () => { const a = await window.__moyState(); await new Promise(r => setTimeout(r, 300)); const s = await window.__moyState(); return a.frames === s.frames && (s.stack.includes('settings')); })()", "timeout": 15000},
-  {"click": [443, 233]},
+  {"click": [443, 193]},
   {"waitFor": "(async () => { const a = await window.__moyState(); await new Promise(r => setTimeout(r, 300)); const s = await window.__moyState(); return a.frames === s.frames && (s.stack.includes('appearance')); })()", "timeout": 15000},
   {"note": "ACCENT's second swatch (coral): the look is custom, and its Name row (Keep as a theme) appears below the fold. The keys walk the focus there from Accent, one row a press (Tint, Wallpaper, Window style, Font, Code font, Chrome size, Name), the page scrolling it into view, and ENTER opens the field: no tap aimed at a row a fling left somewhere"},
   {"click": [859, 359]},

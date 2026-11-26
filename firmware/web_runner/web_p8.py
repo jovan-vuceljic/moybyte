@@ -35,6 +35,12 @@ import json
 import p8_import
 import p8_writer
 
+# What the converter says it is doing, in order, each as it starts: the
+# console shows the one it last heard while the cart converts.
+READING = "Reading the cart"
+CHECKING = "Checking what it uses"
+WRITING = "Writing the cart"
+
 
 class P8Problem(Exception):
     """An import that cannot happen, with a sentence a kid can read."""
@@ -85,16 +91,19 @@ def _why(exc):
     return str(exc) or type(exc).__name__
 
 
-def convert(path, name, out_dir):
+def convert(path, name, out_dir, said=None):
     """A dropped `.p8` / `.p8.png` at `path` -> a `.moy` folder at `out_dir`.
 
     Returns the writer's summary dict, or raises `P8Problem` with a sentence.
     `out_dir` is chosen by the caller (the worker, through the store's own
     collision-safe naming) so importing a cart twice behaves like importing a
-    zip twice."""
+    zip twice. `said(stage)`, where given, hears each stage as it starts
+    (READING, CHECKING, WRITING)."""
+    say = said or (lambda stage: None)
     problem = problem_with(path, name)
     if problem:
         raise P8Problem(problem)
+    say(READING)
     try:
         sections = p8_import.read_p8(path)
     except SystemExit as exc:
@@ -112,6 +121,7 @@ def convert(path, name, out_dir):
         # those now rather than refusing up front, and a raise that reaches the
         # worker is a dead console, not a message.
         raise P8Problem("that cart did not decode (%s)" % (_why(exc),))
+    say(CHECKING)
     problem = p8_writer.sections_problem(sections)
     if problem:
         raise P8Problem(problem)
@@ -122,11 +132,12 @@ def convert(path, name, out_dir):
     if verdict["verdict"] == "refused":
         raise P8Problem("that cart will not run here: "
                         + "; ".join(verdict["reasons"]))
+    say(WRITING)
     return p8_writer.write_cart(sections, out_dir,
                                 p8_writer.cart_title(sections, name))
 
 
-def import_p8_json(path, name, out_dir):
+def import_p8_json(path, name, out_dir, said=None):
     """The worker's whole entry point: convert, tidy up, report.
 
     One JSON string out, because that is the only thing that crosses the wasm
@@ -135,7 +146,7 @@ def import_p8_json(path, name, out_dir):
     message, exactly like a failed export, because the console is fine and it
     was the ask that was not."""
     try:
-        summary = convert(path, name, out_dir)
+        summary = convert(path, name, out_dir, said)
     except P8Problem as exc:
         _rm(path)
         return json.dumps({"ok": False, "report": [str(exc)]})
@@ -146,3 +157,14 @@ def import_p8_json(path, name, out_dir):
     _rm(path)
     return json.dumps({"ok": True, "title": summary["title"],
                        "report": p8_writer.report_lines(summary)})
+
+
+def convert_json(path, name, said):
+    """`import_p8_json` in the converter's own VM (worker.js, THE CONVERTER):
+    the cart written at web_vfs.CONVERTED in that VM's VFS, which the console
+    takes the files from, its folder as `out`. A VM converts one cart and
+    ends, so the folder is its first."""
+    import web_vfs
+    r = json.loads(import_p8_json(path, name, web_vfs.CONVERTED, said))
+    r["out"] = web_vfs.CONVERTED
+    return json.dumps(r)

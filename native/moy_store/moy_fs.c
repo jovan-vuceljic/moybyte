@@ -17,8 +17,8 @@ typedef struct {
     char *root;             // keep-allocated, len + 1
     size_t len;
     uint8_t state;
-    char *mpath;            // the marker's path while MARK_SET
-    size_t mlen;
+    char *mpath;            // the marker's path while MARK_SET: mcap bytes, kept
+    size_t mlen, mcap;
     uint32_t chars, crc;
 } root_t;
 
@@ -58,6 +58,20 @@ static int fits(const char *p, size_t n, uint32_t chars, uint32_t crc) {
     uint32_t c, k;
     moy_fs_stamp(p, n, &c, &k);
     return c == chars && k == crc;
+}
+
+// A stamp taken a piece at a time: the bytes, the code points, the crc32.
+typedef struct {
+    size_t n;
+    uint32_t chars, crc;
+} sum_t;
+
+static void sum_add(sum_t *s, const char *p, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        s->chars += ((uint8_t)p[i] & 0xc0u) != 0x80u;
+    }
+    s->crc = moy_fs_crc32(s->crc, p, n);
+    s->n += n;
 }
 
 void moy_buf_free(moy_buf_t *b) {
@@ -281,8 +295,35 @@ static int read_head(const char *path, char *line, size_t *n) {
     return rc;
 }
 
-static int write_parts(const char *path, const void *a, size_t an,
-                       const void *b, size_t bn) {
+// One buffer as a source of one piece (moy_fs_publish_from's).
+typedef struct {
+    moy_fs_src_t s;
+    const char *p;
+    size_t n;
+    int given;
+} flat_t;
+
+static size_t flat_next(moy_fs_src_t *s, const char **p) {
+    flat_t *f = (flat_t *)s;
+    if (f->given) {
+        return 0;
+    }
+    f->given = 1;
+    *p = f->p;
+    return f->n;
+}
+
+static void flat_rewind(moy_fs_src_t *s) {
+    ((flat_t *)s)->given = 0;
+}
+
+static flat_t flat(const void *data, size_t n) {
+    flat_t f = { { flat_next, flat_rewind }, data, n, 0 };
+    return f;
+}
+
+// `head` (hn bytes) and then the source's pieces, as the file at `path`.
+static int write_src(const char *path, const char *head, size_t hn, moy_fs_src_t *src) {
     moy_vol_t v;
     const char *rest;
     moy_vol_file_t *f;
@@ -293,18 +334,22 @@ static int write_parts(const char *path, const void *a, size_t an,
     if (rc != 0) {
         return rc;
     }
-    if (an) {
-        rc = moy_vol_write(f, a, an);
+    if (hn) {
+        rc = moy_vol_write(f, head, hn);
     }
-    if (rc == 0 && bn) {
-        rc = moy_vol_write(f, b, bn);
+    src->rewind(src);
+    const char *p;
+    size_t n;
+    while (rc == 0 && (n = src->next(src, &p)) != 0) {
+        rc = moy_vol_write(f, p, n);
     }
     int crc_ = moy_vol_close(f);
     return rc ? rc : crc_;
 }
 
 int moy_fs_write(const char *path, const void *data, size_t n) {
-    return write_parts(path, data, n, NULL, 0);
+    flat_t f = flat(data, n);
+    return write_src(path, NULL, 0, &f.s);
 }
 
 int moy_fs_exists(const char *path) {
@@ -366,27 +411,43 @@ int moy_fs_write_bytes(const char *path, const void *data, size_t n) {
     if (rc == 0) {
         rc = rename2(tmp, path, 1);
     }
+    if (rc != 0) {
+        moy_fs_remove(tmp);         // no staging file outlives a refused write
+    }
     moy_store_free(tmp, tn);
     return rc;
 }
 
 // -- the marker -----------------------------------------------------------------
 
+// The marker's path lives in one block made with its root and grown only for
+// a longer path: made again at every save, it was a small block that lasts,
+// made while a batch's buffer was live.
+#define MARK_PATH_KEEP 160u
+
 static void drop_mark(root_t *r) {
+    r->mlen = 0;
+}
+
+static void free_mark(root_t *r) {
     if (r->mpath != NULL) {
-        moy_store_free(r->mpath, r->mlen + 1u);
+        moy_store_free(r->mpath, r->mcap);
     }
     r->mpath = NULL;
-    r->mlen = 0;
+    r->mlen = r->mcap = 0;
 }
 
 static void set_mark(root_t *r, const char *path, size_t plen, uint32_t chars,
                      uint32_t crc) {
-    drop_mark(r);
-    r->mpath = moy_store_keep(plen + 1u);
-    if (r->mpath == NULL) {
-        r->state = MARK_NONE;
-        return;
+    if (plen + 1u > r->mcap) {
+        free_mark(r);
+        size_t cap = plen + 1u > MARK_PATH_KEEP ? plen + 1u : MARK_PATH_KEEP;
+        r->mpath = moy_store_keep(cap);
+        if (r->mpath == NULL) {
+            r->state = MARK_NONE;
+            return;
+        }
+        r->mcap = cap;
     }
     memcpy(r->mpath, path, plen);
     r->mlen = plen;
@@ -429,6 +490,8 @@ int moy_fs_root(const char *root) {
         }
         memcpy(r.root, root, len);
         r.len = len;
+        r.mpath = moy_store_keep(MARK_PATH_KEEP);   // with the root; a save makes none
+        r.mcap = r.mpath != NULL ? MARK_PATH_KEEP : 0;
     }
     // The newest goes first, then a stable sort by length, longest first: an
     // insertion at the first root no longer than it.
@@ -439,11 +502,11 @@ int moy_fs_root(const char *root) {
     if (nroots == MOY_FS_ROOTS) {           // the shortest falls off
         root_t *last = &roots[nroots - 1];
         if (k == nroots) {
-            drop_mark(&r);
+            free_mark(&r);
             moy_store_free(r.root, r.len + 1u);
             return 0;
         }
-        drop_mark(last);
+        free_mark(last);
         moy_store_free(last->root, last->len + 1u);
         nroots--;
     }
@@ -455,7 +518,7 @@ int moy_fs_root(const char *root) {
 
 void moy_fs_roots_clear(void) {
     for (int i = 0; i < nroots; i++) {
-        drop_mark(&roots[i]);
+        free_mark(&roots[i]);
         moy_store_free(roots[i].root, roots[i].len + 1u);
     }
     nroots = 0;
@@ -509,9 +572,39 @@ void moy_fs_unmark(const char *path) {
     }
 }
 
+// -- the backup's name -------------------------------------------------------------
+
+size_t moy_fs_bak_into(const char *path, char *out, size_t cap) {
+    const char *slash = strrchr(path, '/');
+    size_t dn = slash != NULL ? (size_t)(slash - path) + 1u : 0u, pn = strlen(path);
+    size_t en = sizeof(MOY_FS_BAK_EXT) - 1u, bn = pn + 1u + en + 1u;
+    if (bn <= cap) {
+        memcpy(out, path, dn);
+        out[dn] = '.';
+        memcpy(out + dn + 1u, path + dn, pn - dn);
+        memcpy(out + pn + 1u, MOY_FS_BAK_EXT, en + 1u);
+    }
+    return bn;
+}
+
+char *moy_fs_bak_path(const char *path, size_t *n) {
+    size_t bn = moy_fs_bak_into(path, NULL, 0);
+    char *s = moy_store_alloc(bn);
+    if (s != NULL) {
+        moy_fs_bak_into(path, s, bn);
+        *n = bn;
+    }
+    return s;
+}
+
+int moy_fs_bak_name(const char *name, size_t n) {
+    size_t en = sizeof(MOY_FS_BAK_EXT) - 1u;
+    return n > en + 1u && name[0] == '.' && memcmp(name + n - en, MOY_FS_BAK_EXT, en) == 0;
+}
+
 int moy_fs_bak_stamp(const char *path, uint32_t *chars, uint32_t *crc) {
     size_t bn, n;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     char *line = moy_store_alloc(HEAD_MAX);
     int ok = 0;
     if (bak != NULL && line != NULL && read_head(bak, line, &n) == 0) {
@@ -575,20 +668,60 @@ int moy_fs_read_stamped(const char *path, moy_buf_t *out) {
     return 0;
 }
 
-static int read_bak(const char *path, moy_buf_t *out) {
+// The backup `bak`'s text as a read takes it: stamped whole with `want`'s
+// stamp (NULL: no stamp is expected), or, for a file that is `gone`, the
+// store's unstamped copy (the sync's rotation, moy_sync_apply.c).
+// MOY_FS_NONE otherwise.
+static int take_bak(const char *bak, const uint32_t *want, int gone, moy_buf_t *out) {
+    moy_buf_t b;
+    if (moy_fs_read_file(bak, (size_t)-1, &b) != 0) {
+        return MOY_FS_NONE;
+    }
+    const char *nl = memchr(b.p, '\n', b.n);
+    size_t hn = nl ? (size_t)(nl - b.p) + 1u : b.n;
+    uint32_t chars, crc;
+    if (!parse_stamp(b.p, hn, &chars, &crc)) {
+        if (!gone || b.n == 0) {
+            moy_buf_free(&b);
+            return MOY_FS_NONE;
+        }
+        *out = b;
+        return 0;
+    }
+    if (want == NULL || chars != want[0] || crc != want[1]
+        || !fits(b.p + hn, b.n - hn, chars, crc)) {
+        moy_buf_free(&b);
+        return MOY_FS_NONE;         // another save's, or torn
+    }
+    moy_buf_t r = { moy_store_alloc(b.n - hn + 1u), b.n - hn };
+    if (r.p == NULL) {
+        moy_buf_free(&b);
+        return MOY_ENOMEM;
+    }
+    memcpy(r.p, b.p + hn, r.n);
+    moy_buf_free(&b);
+    *out = r;
+    return 0;
+}
+
+// The save a read of `path` expects (stamp_for), from its backup. `gone`:
+// the file could not be read.
+static int read_bak(const char *path, moy_buf_t *out, int gone) {
+    uint32_t want[2];
+    int known = stamp_for(path, &want[0], &want[1]);
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak == NULL) {
         return MOY_ENOMEM;
     }
-    int rc = moy_fs_read_stamped(bak, out);
+    int rc = take_bak(bak, known ? want : NULL, gone, out);
     moy_store_free(bak, bn);
     return rc;
 }
 
 void moy_fs_forget_bak(const char *path) {
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak != NULL) {
         moy_fs_remove(bak);
         moy_store_free(bak, bn);
@@ -629,23 +762,41 @@ static void mark_publish(const char *path, size_t plen, uint32_t chars, uint32_t
     }
 }
 
-int moy_fs_publish_bak(const char *path, const char *data, size_t n) {
-    uint32_t chars, crc;
-    moy_fs_stamp(data, n, &chars, &crc);
+// The stamp of a source's text, a piece at a time.
+static void src_stamp(moy_fs_src_t *src, uint32_t *chars, uint32_t *crc) {
+    sum_t s = {0};
+    const char *p;
+    size_t n;
+    src->rewind(src);
+    while ((n = src->next(src, &p)) != 0) {
+        sum_add(&s, p, n);
+    }
+    *chars = s.chars;
+    *crc = s.crc;
+}
+
+static int publish_bak(const char *path, moy_fs_src_t *src, uint32_t chars, uint32_t crc) {
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak == NULL) {
         return MOY_ENOMEM;
     }
     char head[32];
     int hn = snprintf(head, sizeof head, STAMP "%lu %lu\n",
                       (unsigned long)chars, (unsigned long)crc);
-    int rc = write_parts(bak, head, (size_t)hn, data, n);
+    int rc = write_src(bak, head, (size_t)hn, src);
     if (rc != 0) {
         moy_fs_remove(bak);         // free the half-written backup
     }
     moy_store_free(bak, bn);
     return rc;
+}
+
+int moy_fs_publish_bak(const char *path, const char *data, size_t n) {
+    uint32_t chars, crc;
+    moy_fs_stamp(data, n, &chars, &crc);
+    flat_t f = flat(data, n);
+    return publish_bak(path, &f.s, chars, crc);
 }
 
 int moy_fs_publish_mark(const char *path, const char *data, size_t n) {
@@ -658,12 +809,30 @@ int moy_fs_publish_mark(const char *path, const char *data, size_t n) {
     return moy_fs_write(path, data, n);
 }
 
-int moy_fs_publish(const char *path, const char *data, size_t n) {
+// A save that fails on a file that was not there (a full volume's refusal)
+// leaves none of it: not the file cut short, not its backup, not the marker
+// that names it. One that fails over an older text keeps the scheme's own
+// state, whose backup a read heals from.
+int moy_fs_publish_from(const char *path, moy_fs_src_t *src) {
     uint32_t chars, crc;
-    moy_fs_stamp(data, n, &chars, &crc);
+    src_stamp(src, &chars, &crc);
+    int was = moy_fs_exists(path);
     mark_publish(path, strlen(path), chars, crc);
-    int rc = moy_fs_publish_bak(path, data, n);
-    return rc != 0 ? rc : moy_fs_write(path, data, n);
+    int rc = publish_bak(path, src, chars, crc);
+    if (rc == 0) {
+        rc = write_src(path, NULL, 0, src);
+    }
+    if (rc != 0 && !was) {
+        moy_fs_remove(path);
+        moy_fs_forget_bak(path);
+        moy_fs_unmark(path);
+    }
+    return rc;
+}
+
+int moy_fs_publish(const char *path, const char *data, size_t n) {
+    flat_t f = flat(data, n);
+    return moy_fs_publish_from(path, &f.s);
 }
 
 static void heal(const char *path, const moy_buf_t *b) {
@@ -685,7 +854,7 @@ int moy_fs_read_in(const char *path, moy_vol_here_t *here, const char *name,
     }
     moy_buf_t rec;
     if (rc != 0) {
-        if (read_bak(path, &rec) != 0) {
+        if (read_bak(path, &rec, 1) != 0) {
             return rc;              // the original error
         }
         heal(path, &rec);
@@ -696,7 +865,7 @@ int moy_fs_read_in(const char *path, moy_vol_here_t *here, const char *name,
     if (!stamp_for(path, &chars, &crc) || fits(out->p, out->n, chars, crc)) {
         return 0;
     }
-    if (read_bak(path, &rec) != 0) {
+    if (read_bak(path, &rec, 0) != 0) {
         moy_fs_unmark(path);        // a torn backup: keep the file we can read
         return 0;
     }
@@ -710,6 +879,209 @@ int moy_fs_read_in(const char *path, moy_vol_here_t *here, const char *name,
     moy_fs_forget_bak(path);
     moy_fs_unmark(path);
     return 0;
+}
+
+// -- the read into the caller's memory ----------------------------------------------
+//
+// moy_fs_read_in's story, told over files instead of buffers: what it reads
+// whole and then checks, this reads in passes, each through the caller's
+// memory or PIECE bytes of the stack. The answers and the files left are
+// its; the backup is read once more to check it before it is trusted (as
+// read_bak checks it before handing it back), and a heal copies it into the
+// file before its text is poured, where heal wrote the copy it held.
+
+#define PIECE 128u
+
+static int open_at(const char *path, int mode, moy_vol_file_t **f) {
+    moy_vol_t v;
+    const char *rest;
+    int rc = resolve(path, &v, &rest);
+    return rc ? rc : moy_vol_open(&v, rest, mode, f);
+}
+
+// `n` bytes of `f`, or as many as it has left in *got.
+static int read_full(moy_vol_file_t *f, char *p, size_t n, size_t *got) {
+    *got = 0;
+    while (*got < n) {
+        size_t k = 0;
+        int rc = moy_vol_read(f, p + *got, n - *got, &k);
+        if (rc != 0) {
+            return rc;
+        }
+        if (k == 0) {
+            break;
+        }
+        *got += k;
+    }
+    return 0;
+}
+
+// The file at `path` from `skip` bytes in, poured into `k` and summed into
+// `s`: 0 or an errno value, *refused where the sink refused.
+static int pour(const char *path, uint32_t skip, moy_fs_sink_t *k, sum_t *s, int *refused) {
+    moy_vol_file_t *f;
+    memset(s, 0, sizeof *s);
+    *refused = 0;
+    int rc = open_at(path, MOY_VOL_READ, &f);
+    if (rc != 0) {
+        return rc;
+    }
+    uint32_t size = 0;
+    rc = moy_vol_size(f, &size);
+    if (rc == 0 && skip) {
+        rc = moy_vol_seek(f, skip);
+    }
+    size_t want = size > skip ? size - skip : 0;
+    if (rc == 0) {
+        rc = k->begin(k, want);
+        *refused = rc != 0;
+    }
+    while (rc == 0) {
+        char probe = 0;
+        size_t got = 0, m = 0;
+        if (s->n >= want) {         // as long as it said, unless it grew since
+            rc = moy_vol_read(f, &probe, 1, &got);
+            if (rc != 0 || got == 0) {
+                break;
+            }
+            want = s->n + 4096u;
+        }
+        char *p = k->room(k, &m);
+        if (p == NULL || m == 0) {
+            rc = MOY_ENOMEM;
+            *refused = 1;
+            break;
+        }
+        if (got) {
+            *p = probe;
+        } else {
+            rc = moy_vol_read(f, p, m < want - s->n ? m : want - s->n, &got);
+            if (rc != 0) {
+                break;
+            }
+        }
+        sum_add(s, p, got);
+        k->took(k, got);
+        if (got == 0) {
+            break;
+        }
+    }
+    int crc_ = moy_vol_close(f);
+    return rc ? rc : crc_;
+}
+
+// The backup `bak` as take_bak takes it, read over and never held: 0 and
+// where its text starts (*skip: past its stamp line, or 0 for the store's
+// unstamped copy of a file that is gone, `cmp` NULL), or MOY_FS_NONE. With
+// `cmp`, *same says whether that text starts with the `cmp_n` bytes the file
+// `cmp` holds.
+static int bak_text(const char *bak, const uint32_t *want, uint32_t *skip,
+                    const char *cmp, size_t cmp_n, int *same) {
+    char *line = moy_store_alloc(HEAD_MAX);
+    if (line == NULL) {
+        return MOY_ENOMEM;
+    }
+    size_t hn = 0;
+    uint32_t chars = 0, crc = 0;
+    int rc = read_head(bak, line, &hn);
+    int stamped = rc == 0 && parse_stamp(line, hn, &chars, &crc);
+    moy_store_free(line, HEAD_MAX);
+    if (rc != 0 || hn == 0) {
+        return MOY_FS_NONE;         // none, or made and the power went before its stamp
+    }
+    if (!stamped) {
+        *skip = 0;
+        return cmp == NULL ? 0 : MOY_FS_NONE;
+    }
+    if (want == NULL || chars != want[0] || crc != want[1]) {
+        return MOY_FS_NONE;         // another save's
+    }
+    *skip = (uint32_t)hn;
+    moy_vol_file_t *f, *g = NULL;
+    if (open_at(bak, MOY_VOL_READ, &f) != 0) {
+        return MOY_FS_NONE;
+    }
+    rc = *skip ? moy_vol_seek(f, *skip) : 0;
+    int differs = cmp == NULL || open_at(cmp, MOY_VOL_READ, &g) != 0;
+    sum_t s = {0};
+    char a[PIECE], b[PIECE];
+    while (rc == 0) {
+        size_t got = 0;
+        rc = moy_vol_read(f, a, sizeof a, &got);
+        if (rc != 0 || got == 0) {
+            break;
+        }
+        if (!differs && s.n < cmp_n) {
+            size_t m = cmp_n - s.n < got ? cmp_n - s.n : got, have = 0;
+            differs = read_full(g, b, m, &have) != 0 || have != m || memcmp(a, b, m) != 0;
+        }
+        sum_add(&s, a, got);
+    }
+    moy_vol_close(f);
+    if (g != NULL) {
+        moy_vol_close(g);
+    }
+    if (rc != 0 || s.chars != chars || s.crc != crc) {
+        return MOY_FS_NONE;         // torn: refused, never published
+    }
+    if (cmp != NULL) {
+        *same = !differs && s.n >= cmp_n;
+    }
+    return 0;
+}
+
+// heal's copy, from the backup's text: best effort.
+static void heal_from(const char *bak, uint32_t skip, const char *path) {
+    moy_vol_file_t *f, *h;
+    if (open_at(bak, MOY_VOL_READ, &f) != 0) {
+        return;
+    }
+    if ((skip == 0 || moy_vol_seek(f, skip) == 0) && open_at(path, MOY_VOL_WRITE, &h) == 0) {
+        char a[PIECE];
+        size_t got = 0;
+        while (moy_vol_read(f, a, sizeof a, &got) == 0 && got > 0
+               && moy_vol_write(h, a, got) == 0) {
+        }
+        moy_vol_close(h);
+    }
+    moy_vol_close(f);
+}
+
+int moy_fs_read_into(const char *path, moy_fs_sink_t *k) {
+    sum_t got;
+    int refused, same = 0;
+    uint32_t skip = 0;
+    int rc = pour(path, 0, k, &got, &refused);
+    if (refused) {
+        return rc;
+    }
+    uint32_t want[2];
+    int known = stamp_for(path, &want[0], &want[1]);
+    if (rc == 0 && (!known || (got.chars == want[0] && got.crc == want[1]))) {
+        return 0;
+    }
+    size_t bn;
+    char *bak = moy_fs_bak_path(path, &bn);
+    int r = bak == NULL ? MOY_ENOMEM
+            : bak_text(bak, known ? want : NULL, &skip, rc ? NULL : path, got.n, &same);
+    if (rc != 0 || (r == 0 && same)) {
+        // the file cannot be read, or a truncated publish: finish it
+        if (r == 0) {
+            sum_t s;
+            heal_from(bak, skip, path);
+            int r2 = pour(bak, skip, k, &s, &refused);
+            rc = r2 == 0 || refused || rc == 0 ? r2 : rc;   // else the file's own error
+        }
+    } else if (r != 0) {
+        moy_fs_unmark(path);        // a torn backup: keep the file we can read
+    } else {
+        moy_fs_forget_bak(path);    // someone else published here
+        moy_fs_unmark(path);
+    }
+    if (bak != NULL) {
+        moy_store_free(bak, bn);
+    }
+    return rc;
 }
 
 // Whether `a` and `b` name entries of one folder.
@@ -735,7 +1107,7 @@ int moy_fs_claim(const char *path, const char *dest, uint32_t chars,
         return 0;
     }
     size_t bn;
-    char *bak = join(path, strlen(path), ".bak", &bn);
+    char *bak = moy_fs_bak_path(path, &bn);
     if (bak == NULL) {
         return 0;
     }
@@ -756,6 +1128,5 @@ int moy_store_skip(const char *name, size_t n, int history) {
             return 1;
         }
     }
-    return n >= 4 && (memcmp(name + n - 4, ".bak", 4) == 0
-                      || memcmp(name + n - 4, ".tmp", 4) == 0);
+    return moy_fs_bak_name(name, n) || (n >= 4 && memcmp(name + n - 4, ".tmp", 4) == 0);
 }

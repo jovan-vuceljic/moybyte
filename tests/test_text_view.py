@@ -106,6 +106,15 @@ def test_sgr_escapes_take_no_column():
     assert [(r[2], r[3]) for r in runs] == [(0, 0), (1, 7), (4, 0), (6, 2)]
 
 
+def test_reverse_video_is_a_bit_of_its_runs_tone():
+    """SGR 7 sets a run's reverse bit (moy_ui_text.h's MOY_UI_TONE_REV, bit
+    24) over the ink and ground it reverses; 27 and a reset clear it."""
+    w = _C.text_runs("a\x1b[7mb\x1b[31mc\x1b[27md\x1b[7;48;5;3me\x1b[0mf", ui_draw.SYN_SGR)
+    rev, danger, ground = 1 << 24, 7, 4 << 16
+    assert [w[k + 3] for k in range(0, len(w), 4)] == [
+        0, rev, rev | danger, danger, rev | danger | ground, 0]
+
+
 def _md_runs(line):
     """The C's Markdown runs as (text, tone name)."""
     w = _C.text_runs(line, ui_draw.SYN_MARKDOWN)

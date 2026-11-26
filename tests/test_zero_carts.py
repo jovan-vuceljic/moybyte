@@ -248,6 +248,7 @@ def test_a_zero_with_no_browser_console_installs_the_one_its_release_has(
     from test_web_addon import _names
     monkeypatch.setitem(sys.modules, "moy_net", nb)
     monkeypatch.setattr(ci, "INDEX_KEYS", TEST_KEYS)
+    monkeypatch.setattr(zero_host, "_PAGE", [None, 0])   # what way_back last said
     seeds = tmp_path / "seeds"
     shutil.copytree(str(SEEDS / "moybyte.files.moy"), str(seeds / "moybyte.files.moy"))
     digest, routes = _release(tmp_path, seeds=seeds)
@@ -289,6 +290,7 @@ def test_a_zero_with_no_browser_console_installs_the_one_its_release_has(
     finally:
         nb._bake({})
         nb.page_at("")
+        nb.page_say("", 0)      # the host library's root sentence, way_back's
 
 
 def test_a_boot_clears_the_stage_an_install_a_reset_cut_left(tmp_path):
@@ -363,6 +365,8 @@ class _Worker:
         self.asked = []
         self.readable = {}              # url: bytes this page may read (CORS)
         self.fetched = []
+        self.hint = None                # the live socket's 'o', where the board hints
+        self.went = False
 
     def tick(self):
         import base64
@@ -400,8 +404,12 @@ class _Worker:
                         with open(path, "wb") as f:
                             f.write(data)
                 self.link.event_json(json.dumps({"id": j["id"], "kept": 1}))
-        if self.host.official.busy():
-            self.host.official.step(0)           # the board's poll: one slice
+        # the board's poll: one slice, and its hint on the live socket when
+        # it did work or just stopped (moy_webhost.WebHost._stepped)
+        went = self.host.official.busy() and self.host.official.step(0)
+        if (went or self.went) and self.hint is not None:
+            self.hint()
+        self.went = went
 
 
 @pytest.fixture
@@ -513,6 +521,30 @@ def test_get_on_a_zero_s_page_asks_the_board_and_brings_its_copy_over(page, zero
     assert {"action": "agree"} in posts, "a built-in's prompt asks nothing"
 
 
+def test_a_page_whose_board_hints_asks_on_the_hint_and_not_on_a_clock(page, zero, monkeypatch):
+    """With the live socket's hints (carts_link.pushed), a request in hand
+    asks /official after its POST and then when the board says its answer
+    changed, never on a clock: the install lands on hints alone."""
+    ws, app, worker, proot, landed = page
+    carts_link = sys.modules[type(ws.cart_board).__module__]
+    monkeypatch.setattr(carts_link, "PUSHED_POLL_MS", 10 ** 9)
+    carts_link.pushed(True)
+    try:
+        worker.hint = carts_link.hint
+        ws.spine.open_app(app)
+        _frames(ws, worker, lambda: app.phase == "list")
+        i = [r["cart"]["folder"] for r in app.rows].index(HARPOON)
+        app._tap_row(i)
+        app._press("GET")
+        _frames(ws, worker, lambda: app.phase == "done")
+        assert landed == [HARPOON]
+        gets = sum(1 for m, _b in worker.asked if m == "GET")
+        posts = sum(1 for m, _b in worker.asked if m == "POST")
+        assert gets <= carts_link._PUSH["hints"] + posts, (gets, posts, carts_link._PUSH)
+    finally:
+        carts_link.pushed(False)
+
+
 def test_remove_on_a_zero_s_page_is_the_board_s_and_a_core_cart_offers_none(page, zero):
     ws, app, worker, proot, landed = page
     ws.spine.open_app(app)
@@ -530,6 +562,26 @@ def test_remove_on_a_zero_s_page_is_the_board_s_and_a_core_cart_offers_none(page
     assert landed == ["moybyte.calc.moy"]
     rows = dict((r["cart"]["folder"], r["state"]) for r in app.rows)
     assert rows["moybyte.calc.moy"] == "get"
+
+
+def test_a_removal_on_a_page_whose_board_hints_ends_on_its_answers(page, zero, monkeypatch):
+    """A removal the board does inside its POST (nothing steps after it, so
+    nothing is hinted) still ends on the GET that follows a POST."""
+    ws, app, worker, proot, landed = page
+    carts_link = sys.modules[type(ws.cart_board).__module__]
+    monkeypatch.setattr(carts_link, "PUSHED_POLL_MS", 10 ** 9)
+    carts_link.pushed(True)
+    try:
+        worker.hint = carts_link.hint
+        ws.spine.open_app(app)
+        _frames(ws, worker, lambda: app.phase == "list")
+        folders = [r["cart"]["folder"] for r in app.rows]
+        app._tap_row(folders.index("moybyte.calc.moy"))
+        app._remove()
+        _frames(ws, worker, lambda: app.phase == "list" and app.cur is None)
+        assert landed == ["moybyte.calc.moy"]
+    finally:
+        carts_link.pushed(False)
 
 
 def test_a_board_that_will_not_install_says_why_and_changes_nothing(page, zero):

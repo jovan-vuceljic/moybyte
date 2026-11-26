@@ -166,6 +166,43 @@ def _typed(text):
     return [{"key": c} for c in text]
 
 
+def _neofetch(tag):
+    """neofetch run, its lines taken once its Shell row is up."""
+    return (_typed("clear; neofetch") + [{"key": "Enter"}, _says("Shell: moy_sh"),
+                                         _lines(tag)])
+
+
+def _beside(lines, word):
+    """Whether Moy stands left of the row that holds `word`: his 15 columns
+    (an ink in them), three blank, the row from the 18th."""
+    rows = [re.sub("\x1b\\[[0-9;]*m", "", ln) for ln in lines or []]
+    row = next((ln for ln in rows if word in ln), "")
+    return row.find(word) >= 18 and row[:18].strip() != "" and row[15:18] == "   "
+
+
+def _lost(key):
+    """`key` down, then the window's blur before its up: HELD before the
+    blur, LOST after it, each {held buttons, typing level}."""
+    held = ("window.__moyState().then(s => '%s ' + JSON.stringify("
+            "{held: s.held, typing: s.typing}))")
+    return [{"js": "cv.dispatchEvent(new KeyboardEvent('keydown', {key: %s})), 'down'"
+                   % json.dumps(key)},
+            {"wait": 300}, {"js": held % "HELD"},
+            {"js": "window.dispatchEvent(new Event('blur')), 'blur'"},
+            {"wait": 300}, {"js": held % "LOST"}]
+
+
+def _late(key, ms=1000):
+    """`key` down, and its up behind a main-thread task of `ms`: the page
+    delivers the up late, as a busy phone's or a loaded machine's does."""
+    k = json.dumps(key)
+    return [{"js": "cv.dispatchEvent(new KeyboardEvent('keydown', {key: %s})), 'down'" % k},
+            {"wait": 150},
+            {"js": "(() => { const t = performance.now(); while (performance.now() - t < %d) {} "
+                   "cv.dispatchEvent(new KeyboardEvent('keyup', {key: %s})); return 'up'; })()"
+                   % (ms, k)}]
+
+
 def _sides(host, tmp_path, out):
     """Each side's own account, for a failure to say which one stuck: the
     shell's host (its STATS: sessions, live, bytes each way), serve.py's log
@@ -173,6 +210,46 @@ def _sides(host, tmp_path, out):
     return "\n".join(["", "-- the shell's host:", host.log()[-1500:],
                       "-- serve.py:", (tmp_path / "serve.log").read_text()[-1500:],
                       "-- the page:", out[-2500:]])
+
+
+_GRANT = {"grant": ["clipboardReadWrite", "clipboardSanitizedWrite"]}
+
+
+# Ctrl+V as a hand presses it: the browser runs its paste on it.
+_PASTE = {"key": "v", "mods": ["ctrl"], "commands": ["paste"]}
+
+
+def _menu(tag):
+    """Whether the system menu shows, under `tag`."""
+    return {"js": "window.__moyState().then(s => '%s ' + JSON.stringify(s.edit.sysmenu))" % tag}
+
+
+def _alt_tap_opens_the_menu(tag):
+    """The page's console key: Alt with a key is a chord and opens nothing, a
+    lone Alt tap opens the system menu (`<tag>_OPEN`) and Esc closes it."""
+    return [{"key": "b", "mods": ["alt"]}, {"wait": 300}, _menu(tag + "_CHORD"),
+            {"key": "Alt"},
+            {"waitFor": "window.__moyState().then(s => s.edit.sysmenu)", "timeout": 5000},
+            _menu(tag + "_OPEN"), {"key": "Escape"},
+            {"waitFor": "window.__moyState().then(s => !s.edit.sysmenu)", "timeout": 5000}]
+
+
+# The system menu's Full screen, chosen: the page's own fullscreen, which its
+# keyboard lock holds in.
+_FULL = (web_e2e.menu_pick("Full screen")
+         + [{"js": "new Promise(ok => setTimeout(ok, 800)).then(() => window.__moyState())"
+                   ".then(s => 'LOCK ' + JSON.stringify({fs: !!document.fullscreenElement, "
+                   "locked: window.__moyLocked, said: s.page.fs}))"}])
+
+
+def _assert_alt_tap(js, tag):
+    assert _tagged(js, tag + "_CHORD") is False, js
+    assert _tagged(js, tag + "_OPEN") is True, js
+
+
+def _clipboard_holds(text):
+    """The browser's clipboard holding `text` (the page's origin granted it)."""
+    return {"js": "navigator.clipboard.writeText(%s).then(() => 'held')" % json.dumps(text)}
 
 
 def _play(tmp_path, name, base, steps, after="", profile="chrome", env=None):
@@ -186,11 +263,22 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
     host = _board(tty_exe, short)
     server, base = _serve(tmp_path, host.port)
     try:
-        steps = ([{"note": "paired by the token, the Terminal connects"}, _until(_SHELL),
-                  _prompt("PAIRED"), _lines("OPEN")]
+        steps = ([_GRANT, {"note": "paired by the token, the Terminal connects"},
+                  _until(_SHELL), _prompt("PAIRED"), _lines("OPEN")]
                  + _typed("echo web-$((6*7))") + [{"key": "Enter"}, _says("web-42"),
                                                    _lines("ECHO")]
-                 + [{"shot": "term_board"}])
+                 + _neofetch("NF") + [{"shot": "term_board"}]
+                 # the board's vi over the socket: Esc leaves INSERT, `:wq` saves
+                 + _typed("vi v.txt") + [{"key": "Enter"}, _says("v.txt"), {"key": "i"},
+                                         _says("-- INSERT --")] + _typed("over the socket")
+                 + [{"key": "Escape"}, _until("ln => ln.includes('[+]')")]
+                 + _typed(":wq") + [{"key": "Enter"}, _until(_SHELL)]
+                 + _typed("cat v.txt") + [{"key": "Enter"}, _says("over the socket"),
+                                          _lines("VI")]
+                 # the browser's paste, whole, into the board's shell
+                 + [_clipboard_holds("echo sealed-$((6*7))\necho sealed-two\n"),
+                    _PASTE, _says("sealed-two"), _lines("PASTE")]
+                 + _alt_tap_opens_the_menu("BOARD"))
         out, js = _play(tmp_path, "term_board", base, steps, after=_qr_fragment(host))
         paired = _tagged(js, "PAIRED")
         assert paired and paired["keys"] == 1 and "#" not in paired["url"], (
@@ -199,6 +287,11 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
         assert "web-42" in "\n".join(_tagged(js, "ECHO")), (
             str(js) + _sides(host, tmp_path, out))
         assert int(host.stats()["in"]) > 0, "no key crossed the sealed socket"
+        assert _after(js, "VI", "cat v.txt") == ["over the socket"], js
+        assert _after(js, "PASTE", "echo sealed-$((6*7))")[:1] == ["sealed-42"], js
+        assert _after(js, "PASTE", "echo sealed-two") == ["sealed-two"], js
+        _assert_alt_tap(js, "BOARD")
+        assert _beside(_tagged(js, "NF"), "Board: host harness"), _tagged(js, "NF")
         # the same profile, no token: the stored key signs in, nothing typed;
         # then the board goes away, and the next connect says so
         gone = threading.Thread(target=_end_when, args=(host, "2"), daemon=True)
@@ -260,7 +353,8 @@ def test_a_page_pairs_by_the_console_s_password(tty_exe, tmp_path, short):
                   _asks("p => p.said === %s" % json.dumps(wrong)), _prompt("WRONG"),
                   _password(PASSWORD), _until(_SHELL), _prompt("PAIRED"), _lines("OPEN")]
                  + _typed("echo pw-ok") + [{"key": "Enter"}, _says("pw-ok"),
-                                           _lines("ECHO")])
+                                           _lines("ECHO")]
+                 + _neofetch("NF"))
         out, js = _play(tmp_path, "term_password", base, steps)
         assert _tagged(js, "ASK")["shown"] == "flex", js
         assert _tagged(js, "WRONG")["said"] == wrong, js
@@ -268,6 +362,9 @@ def test_a_page_pairs_by_the_console_s_password(tty_exe, tmp_path, short):
         assert paired["shown"] == "none" and paired["keys"] == 1, (
             str(paired) + _sides(host, tmp_path, out))
         assert "pw-ok" in "\n".join(_tagged(js, "ECHO")), js
+        # the page laid the Terminal out while it asked: that size reached
+        # the board's shell when the socket opened, and Moy stands beside
+        assert _beside(_tagged(js, "NF"), "Board: host harness"), _tagged(js, "NF")
     finally:
         server.terminate()
         host.end()
@@ -303,36 +400,56 @@ def test_a_page_says_how_long_a_board_holding_wrong_tries_off_waits(tty_exe, tmp
         host.end()
 
 
-def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
-    """The site's console: the session's root is the store's folder (/moy in
-    the page), home its files; a run past its budget gives the tab back."""
-    web_e2e.require("site_shell")
+def _site(tmp_path):
+    """serve.py over dist_site/: (the process, its base)."""
     port = web_e2e.free_port()
     p = subprocess.Popen([sys.executable, "serve.py", str(port), "dist_site"], cwd=RUNNER,
                          stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     base = "http://127.0.0.1:%d" % port
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(base + "/index.html", timeout=1).read(64)
+            break
+        except OSError:
+            time.sleep(0.1)
+    return p, base
+
+
+def test_the_site_s_terminal_runs_the_shell_on_the_browser_s_store(tmp_path):
+    """The site's console: the session's root is the store's folder (/moy in
+    the page), home its files; a run past its budget gives the tab back; a
+    key let go late types once (the browser's repeat is the only one), and
+    a key held as the page loses the keyboard goes up; neofetch draws Moy
+    beside its rows."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
     try:
-        for _ in range(50):
-            try:
-                urllib.request.urlopen(base + "/index.html", timeout=1).read(64)
-                break
-            except OSError:
-                time.sleep(0.1)
         steps = ([{"note": "the site's shell", "wait": 1500}]
                  + _typed("pwd; ls /") + [{"key": "Enter"}, {"wait": 600}, _lines("LS")]
                  + _typed("sleep 30") + [{"key": "Enter"}, {"wait": 4500}, _lines("SLEPT")]
                  + _typed("echo back") + [{"key": "Enter"}, {"wait": 600}, _lines("BACK")]
+                 + _typed("echo late-") + _late("i") + _typed("-key")
+                 + [{"key": "Enter"}, {"wait": 600}, _lines("LATE")]
+                 + _lost("ArrowDown")
                  + _typed("cd; printf 'import sys\\nprint(sys.argv)\\n' > p.py; python p.py web;"
                           " printf '#!python\\nprint(6 * 7)\\n' > q.py; ./q.py")
-                 + [{"key": "Enter"}, {"wait": 1200}, _lines("PY")])
+                 + [{"key": "Enter"}, {"wait": 1200}, _lines("PY")]
+                 + _neofetch("NF"))
         _out, js = _play(tmp_path, "term_site", base, steps)
         ls = "\n".join(_tagged(js, "LS"))
         assert "/files" in ls and "carts/" in ls and "files/" in ls, ls
+        # the typed line in the palette's accent (base 12), as on the desk
+        assert "\x1b[38;2;41;173;255mpwd; ls /" in ls, ls
         slept = "\n".join(_tagged(js, "SLEPT"))
         assert "[stopped: a command in the browser runs for 3 s at most]" in slept, slept
         assert "back" in "\n".join(_tagged(js, "BACK"))
+        late = _tagged(js, "LATE")
+        assert any(ln.strip() == "late-i-key" for ln in late), late
+        assert "down" in _tagged(js, "HELD")["held"], _tagged(js, "HELD")
+        assert _tagged(js, "LOST") == {"held": [], "typing": 0}, _tagged(js, "LOST")
         py = "\n".join(_tagged(js, "PY"))
         assert "['p.py', 'web']" in py and "42" in py, py
+        assert _beside(_tagged(js, "NF"), "@moybyte"), _tagged(js, "NF")
     finally:
         p.terminate()
 
@@ -490,3 +607,95 @@ def test_the_site_s_terminal_runs_a_wasi_command_on_the_page_s_engine(tmp_path):
         assert _after(js, "AGAIN", "cat /files/Documents/m.txt") == ["hello", "web"], js
     finally:
         server.terminate()
+
+
+def test_the_site_s_terminal_takes_esc_and_the_browser_s_clipboard(tmp_path):
+    """The site's Terminal: Esc is vi's (INSERT left, `:wq` saves), the
+    browser's paste (Ctrl+V) types a multi-line text whole, and a mouse's
+    drag over the log then Ctrl+Shift+C puts its text on the browser's
+    clipboard; a lone Alt tap is the console's key (the OS keeps Super), and
+    a fullscreen locks Super and Esc for the page."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        steps = ([_GRANT, {"note": "the site's shell", "wait": 1500}, _until(_SHELL)]
+                 + _typed("vi /files/v.txt") + [{"key": "Enter"}, _says("v.txt")]
+                 + [{"key": "i"}, _says("-- INSERT --")] + _typed("hi esc")
+                 + [{"key": "Escape"}, _until("ln => ln.includes('[+]')")]
+                 + _typed(":wq") + [{"key": "Enter"}, {"wait": 600}]
+                 + _typed("cat /files/v.txt") + [{"key": "Enter"}, {"wait": 600}, _lines("VI")]
+                 + [_clipboard_holds("echo pasted-$((6*7))\necho pasted-two\n"),
+                    _PASTE, _says("pasted-two"), _lines("PASTE")]
+                 + _typed("echo copy-me") + [{"key": "Enter"}, _says("copy-me")]
+                 # the log's rows as the site's desk lays the Terminal's window
+                 + [{"move": [262, 223]}, {"drag": [262, 223, 330, 237, 6]},
+                    {"shot": "term_selected"}, {"key": "c", "mods": ["ctrl", "shift"]},
+                    {"waitFor": "window.__moyClipped !== undefined", "timeout": 5000},
+                    {"js": "navigator.clipboard.readText().then(t => 'COPIED ' + "
+                           "JSON.stringify(t))"}]
+                 + _alt_tap_opens_the_menu("SITE")
+                 + _FULL)
+        _out, js = _play(tmp_path, "term_clip", base, steps)
+        assert _after(js, "VI", "cat /files/v.txt") == ["hi esc"], js
+        assert _after(js, "PASTE", "echo pasted-$((6*7))")[:1] == ["pasted-42"], js
+        assert _after(js, "PASTE", "echo pasted-two") == ["pasted-two"], js
+        assert _tagged(js, "COPIED") == "files$ echo copy-me\ncopy-me", js
+        _assert_alt_tap(js, "SITE")
+        assert _tagged(js, "LOCK") == {"fs": True, "locked": 1, "said": True}, js
+    finally:
+        p.terminate()
+
+
+def test_the_site_s_notes_takes_the_browser_s_paste_whole(tmp_path):
+    """A multi-line paste (Ctrl+V) into a note in the site's console lands
+    whole, which the note keeps: the Terminal of the page reloaded reads it
+    in the note's file."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        steps = ([_GRANT, {"note": "Notes", "wait": 2500}, {"key": "n"}, {"wait": 400}]
+                 + _typed("pasted") + [{"key": "Enter"}, {"wait": 800},
+                                       _clipboard_holds("first line\nsecond line\n"),
+                                       _PASTE, {"wait": 800},
+                                       {"shot": "notes_paste"}, {"key": "Escape"},
+                                       {"wait": 3000}])
+        web_e2e.run(tmp_path, "notes_paste", "?dev=1&desktop=1&cart=Notes", steps, base,
+                    tmp_path / "notes", boot_ms=30000)
+        steps = ([{"note": "the Terminal", "wait": 1500}, _until(_SHELL)]
+                 + _typed("cat /files/Documents/pasted.md") + [{"key": "Enter"}, {"wait": 800},
+                                                               _lines("NOTE")])
+        _out, js = _play(tmp_path, "notes_read", base, steps, profile="notes")
+        assert _after(js, "NOTE", "cat /files/Documents/pasted.md") == [
+            "first line", "second line"], js
+    finally:
+        p.terminate()
+
+
+def _focus(tag):
+    return {"js": "window.__moyState().then(s => '%s ' + JSON.stringify("
+                  "{focus: s.focus, menu: s.edit.sysmenu}))" % tag}
+
+
+def test_alt_tab_walks_the_site_s_windows_in_its_fullscreen(tmp_path):
+    """In the page's own fullscreen (the system menu's Full screen), whose
+    keyboard lock gives it the chord, Alt+Tab brings the window behind
+    forward, Alt+Shift+Tab walks back, and neither is the lone Alt tap that
+    opens the system menu."""
+    web_e2e.require("site_shell")
+    p, base = _site(tmp_path)
+    try:
+        steps = ([{"note": "the Editor and the Terminal on the desk", "wait": 1500},
+                  _until(_SHELL)] + _FULL + [_focus("FRONT"),
+                  {"key": "Tab", "mods": ["alt"]}, {"wait": 400}, _focus("ALT_TAB"),
+                  {"key": "Tab", "mods": ["alt", "shift"]}, {"wait": 400}, _focus("BACK"),
+                  {"shot": "alt_tab"}])
+        _out, js = web_e2e.run(tmp_path, "alt_tab",
+                               "?dev=1&desktop=1&edit=moybyte.star_catcher.moy&tab=code"
+                               "&cart=Terminal", steps, base, tmp_path / "chrome",
+                               boot_ms=30000)
+        assert _tagged(js, "LOCK")["locked"] == 1, js
+        assert _tagged(js, "FRONT") == {"focus": "terminal", "menu": False}, js
+        assert _tagged(js, "ALT_TAB") == {"focus": "menu", "menu": False}, js
+        assert _tagged(js, "BACK") == {"focus": "terminal", "menu": False}, js
+    finally:
+        p.terminate()

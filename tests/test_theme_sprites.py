@@ -474,3 +474,26 @@ def test_a_console_tier_draws_the_themes_buttons(tmp_path):
     px = indices_of(cv)
     assert px[4 * 48 + 4] == BG                      # the fixture's rounded corner
     assert px[4 * 48 + 20] == th["edge"]             # its border
+
+
+def test_the_first_dot_on_a_smooth_icon_changes_that_dot_alone(tmp_path):
+    """Painting a smooth slot turns it into pixels FROM WHAT IT SHOWS (its
+    mask at the zoom), so the first dot changes that dot and nothing else
+    (issue 269: it turned into the pixel set's own, different drawing)."""
+    from runtime import host_app
+    ws = host_app.build_workstation(str(tmp_path / "carts"))
+    assert ws.look.edit_file()
+    doc = ws.editor_app.theme
+    for slot in range(len(doc.flags)):
+        mask = doc.mask(slot)
+        if mask is None or doc.flags[slot]:
+            continue
+        doc.select(slot)
+        doc.begin_edit()
+        tile = doc.tile(slot)
+        assert [i for i in range(256) if tile[i] != doc.sheet.clear] \
+            == [i for i in range(256) if mask[i]], slot
+        doc.end_edit()
+        break
+    else:
+        pytest.fail("no smooth slot with a mask")

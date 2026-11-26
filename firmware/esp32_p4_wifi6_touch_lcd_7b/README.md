@@ -273,7 +273,12 @@ dist/p4/moybyte_p4.bin`; board.toml's `[flash]` has why that rate and stub.)
   read, or a card whose store cannot be made all boot on the internal store with
   one `SD: ...` line; `card_store.STATUS` carries the verdict for the dev channel
   (`py __import__("card_store").STATUS`), since a boot line printed before a
-  serial host attaches can be dropped. ONE store per boot, chosen before anything
+  serial host attaches can be dropped. With a card in the slot the desk says it
+  too, once a boot, in a dialog with OK (`Notices.card_trouble`): a card that
+  mounted and whose store then failed ("Your card has errors": its carts stay on
+  it, copy them on a computer, then reformat it or try another card), and a
+  filesystem the build cannot read ("This card can't be read": reformat it as
+  FAT32 or exFAT). An empty slot says nothing. ONE store per boot, chosen before anything
   is written: a card put in later is picked up at the next boot, and the internal
   store stays as it was. The OTA directory (`/moy/update`) and the BLE bond store
   stay on the internal VFS — they are the device's, not the card's.

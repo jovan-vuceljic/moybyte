@@ -238,6 +238,81 @@ def test_every_row_changes_by_keys_alone(tmp_path, kw):
     assert look.theme_name == names[2]
 
 
+def _words(app, rows):
+    return [r.word for r in _state(app, rows)]
+
+
+def _frame_px(ws):
+    """The Appearance window's title strip and the rows over it, as the
+    glass shows them: its top-left 160 x 24 and three pixels round it."""
+    win = [w for w in ws.wm.windows.values() if w.kind == "appearance"][0]
+    cv = ws.glass_canvas
+    buf = bytes(cv._buf)
+    return b"".join(buf[(y * cv.w + win.x - 3) * 2:(y * cv.w + win.x + 160) * 2]
+                    for y in range(win.y - 3, win.y + 24))
+
+
+@pytest.mark.parametrize("variant", ["light", "dark"])
+def test_window_style_names_the_themes_own_frame_and_comes_back_to_it(tmp_path, variant):
+    """A seed names no `frame`: its windows draw its look's, which WINDOW
+    STYLE calls Default, not Classic; a style picked keeps Default in the
+    cycle, and Default puts the theme's own frame back (issue 269)."""
+    ws = _ws(tmp_path, **DESK)
+    ws.look.set_theme("moy", persist=False, variant=variant)
+    app = _open(ws)
+    own = _frame_px(ws)
+    assert app.choices()["frame"] is None and app.choices()["own_frame"] is None
+    _focus(ws, app, "Window style")
+    assert _state(app, "frame") == "" and _words(app, "frames")[0] == page.OWN
+    _press(ws, app, "right")
+    assert ws.look.theme_name == "custom" and app.choices()["frame"] == "classic"
+    assert _words(app, "frames") == [page.OWN] + list(page.FRAME_NAMES)
+    assert _frame_px(ws) != own
+    _press(ws, app, "left")
+    assert app.choices()["frame"] is None and _state(app, "frame") == ""
+    assert _frame_px(ws) == own
+    ws.look.commit()
+    assert "frame" not in _custom(tmp_path)
+
+
+def test_window_style_offers_no_default_where_the_theme_names_a_style(tmp_path):
+    """night names `classic`: the row is the five styles, a pick on custom
+    included, and Classic is the way back."""
+    ws = _ws(tmp_path, **DESK)
+    use_theme(ws, "night", "dark", store=True)
+    app = _open(ws)
+    assert app.choices()["frame"] == app.choices()["own_frame"] == "classic"
+    _focus(ws, app, "Window style")
+    _press(ws, app, "right")
+    assert app.choices()["frame"] == "tab" and app.choices()["own_frame"] == "classic"
+    assert _words(app, "frames") == list(page.FRAME_NAMES)
+
+
+def test_font_comes_back_to_the_themes_own_and_keeps_a_code_font_picked(tmp_path):
+    """moy's `ui` font is its look's, no preset: FONT reads Default, a pick
+    keeps Default in the cycle, and Default puts moy's own face back, the
+    code font picked before it kept."""
+    ws = _ws(tmp_path, **DESK)
+    ws.look.set_theme("moy", persist=False, variant="dark")
+    app = _open(ws)
+    face = ui_draw.font("ui")[1:]                 # its metrics: a reload takes another id
+    assert app.choices()["font"] is None and app.choices()["own_code_font"] == "jbmono"
+    _focus(ws, app, "Code font")
+    _press(ws, app, "left")
+    assert ws.look.theme_name == "custom" and app.choices()["code_font"] == "petme128"
+    assert _words(app, "codes") == ["PetMe128", "JetBrains Mono"]
+    _focus(ws, app, "Font")
+    assert _state(app, "font") == "" and _words(app, "fonts")[0] == page.OWN
+    _press(ws, app, "right")
+    assert app.choices()["font"] == "tiny5" and app.choices()["own_font"] is None
+    assert _words(app, "fonts") == [page.OWN] + list(page.FONT_NAMES)
+    _press(ws, app, "left")
+    assert app.choices()["font"] is None and _state(app, "font") == ""
+    assert ui_draw.font("ui")[1:] == face and app.choices()["code_font"] == "petme128"
+    ws.look.commit()
+    assert _custom(tmp_path)["fonts"] == {"mono": "petme128"}
+
+
 def test_code_font_sets_the_code_tabs_face_and_font_keeps_it(tmp_path):
     """CODE FONT (docs/history/look_2026-10.md step 23): the `mono` role's preset,
     JetBrains Mono where the image carries the font set; FONT changes the
@@ -686,9 +761,9 @@ def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     _frame(ws)
     assert _rows(app)[-2:] == ["name_ask", "edit"]
     _name(ws, app)
-    _type(ws, app, "BubbleGum!")                # capitals and ! are not the grammar
-    assert app.name_text == "ubbleum"
-    _type(ws, app, [8] * 7 + list("bubblegum"))
+    _type(ws, app, "Bubble Gum!")               # a capital folds, a space is a -, ! never lands
+    assert app.name_text == "bubble-gum"
+    _type(ws, app, [8] * 10 + list("bubblegum"))
     assert app.name_text == "bubblegum"
     _type(ws, app, [13])
     assert not app.naming and not ws.input.text_mode
@@ -698,6 +773,24 @@ def test_name_shows_on_custom_only_and_keeps_it_by_keys(tmp_path, kw):
     assert app.themes()[0] == "bubblegum" and "custom" not in app.themes()
     assert (tmp_path / "carts" / "bubblegum.moy" / "theme.json").exists()
     assert not (tmp_path / "carts" / "custom.moy").exists()
+
+
+def test_the_first_change_moves_no_window(tmp_path):
+    """The first change makes `custom` and switches to it, a relayout that
+    rebuilds every window: each stands where it stood (issue 269, Tint
+    moved the Appearance window back to where it opens)."""
+    ws = _ws(tmp_path, **DESK)
+    _open(ws)
+    wm = ws.wm
+    win = [w for w in wm.windows.values() if w.kind == "appearance"][0]
+    wm._move_window(win, 60, 120)
+    _frame(ws)
+    was = (win.x, win.y, win.w, win.h)
+    assert ws.look.change("tint", "grey") == 0
+    _frame(ws, 3)
+    assert ws.look.theme_name == "custom"
+    win = [w for w in wm.windows.values() if w.kind == "appearance"][0]
+    assert (win.x, win.y, win.w, win.h) == was
 
 
 def test_a_theme_set_elsewhere_closes_name(tmp_path):
@@ -732,6 +825,28 @@ def test_name_refuses_with_the_reason_and_arms_replace(tmp_path):
     _type(ws, app, "\r")
     assert not app.naming and ws.look.theme_name == "mine"
     assert ws.look.choices()["tint"] is None    # off custom: the package's own
+
+
+@pytest.mark.parametrize("kw", [{}, DESK], ids=["320x240", "desk"])
+def test_name_refuses_a_folder_the_roster_lists_no_cart_in(tmp_path, kw):
+    """A folder of the name with no manifest (what a sync a board cut short
+    leaves) is no cart the roster lists, but the rename cannot take its
+    place: NAME says a folder has the name, not that it cannot save, and the
+    folder is left as it was (issue 269)."""
+    ws = _ws(tmp_path, **kw)
+    stray = tmp_path / "carts" / "bubblegum.moy"
+    stray.mkdir(parents=True)
+    (stray / "icons.moygfx").write_bytes(b"0" * 64)
+    app = _open(ws)
+    _to_custom(ws, app)
+    _name(ws, app)
+    _type(ws, app, "bubblegum\r")
+    assert app.naming and app.why == "folder"
+    assert _state(app, "name_note") == page.NAME_WHY["folder"]
+    assert ws.look.theme_name == "custom"
+    assert sorted(p.name for p in stray.iterdir()) == ["icons.moygfx"]
+    _type(ws, app, [8] * 9 + list("bubbles\r"))
+    assert not app.naming and ws.look.theme_name == "bubbles"
 
 
 def test_b_and_cancel_back_out_of_name(tmp_path):

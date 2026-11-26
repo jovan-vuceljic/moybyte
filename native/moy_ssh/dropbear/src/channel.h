@@ -107,6 +107,10 @@ void channel_connect_done(int result, int sock, void* user_data, const char* err
 
 void chaninitialise(const struct ChanType *chantypes[]);
 void chancleanup(void);
+#if DROPBEAR_MOY
+void moy_channels_end(const char *msg);
+void moy_channel_refuse(struct Channel *channel, const char *msg);
+#endif
 void setchannelfds(fd_set *readfds, fd_set *writefds, int allow_reads);
 void channelio(const fd_set *readfd, const fd_set *writefd);
 struct Channel* getchannel(void);

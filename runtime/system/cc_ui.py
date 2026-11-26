@@ -19,7 +19,7 @@ KINDS = ("text", "button", "toggle", "slider")      # status_items' row kinds, i
 _ROW = ui.model(key="id", id="", kind=ui.enum(*KINDS, init="text"), label="", value="", flag=False, v=0,
                 lo=0, hi=1)
 _decl = dict(cc=True, power=False, battery="Battery", vol=0, vlo=0, vhi=1, vicon="volume", bri=0, blo=0, bhi=1,
-             wicon="wifi", net="Off")
+             wicon="wifi", net="Off", light=True, radio=True)
 for _k in range(CAP):
     _decl["app%d" % _k] = ""
     _decl["on%d" % _k] = False
@@ -84,8 +84,9 @@ def page():
         with ui.group("", shown="cc || power", look="card"):
             ui.info("{battery}", icon="battery", shown="power")
             ui.slider("Volume", "vol", "{vlo}", "{vhi}", look="steps", icon="{vicon}", on="louder")
-            ui.slider("Brightness", "bri", "{blo}", "{bhi}", look="steps", icon="spark", on="brighter")
-            ui.link("wifi", "{net}", icon="{wicon}", shown="cc")
+            ui.slider("Brightness", "bri", "{blo}", "{bhi}", look="steps", icon="spark", on="brighter",
+                      shown="light")
+            ui.link("wifi", "{net}", icon="{wicon}", shown="cc && radio")
         for k in range(CAP):
             with ui.group("{app%d}" % k, shown="on%d && !pg%d" % (k, k)):
                 ui.rows("r%d" % k, by="kind", cases=_CASES)

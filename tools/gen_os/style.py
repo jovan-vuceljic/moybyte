@@ -4,6 +4,7 @@
 #   generate_theme    the theme loader's tables: limits, rules, pairs, luminance, seeds
 #   _recolour         the accent-and-tint derivation's tables (accents, tints, classes)
 #   generate_strings  the string table (strings/en.json)
+#   generate_palette  moy_sh_palette.c: the palette alone, for an image without the toolkit
 #   outputs           every generated file and its text (the drift test reads it)
 """Write the toolkit's tables from their data (docs/history/kernel_toolkit_2026-10.md
 §2.1): native/moy_ui's `style.json` in, its `moy_ui_tables.h` and
@@ -1057,6 +1058,22 @@ def load_strings(d):
         return json.load(f)["strings"]
 
 
+def generate_palette():
+    """moy_sh_palette.c: the console's palette alone (moy_theme_moy64, as
+    moy_ui_tables.c defines it), which the shell links on an image without
+    the toolkit, so that its colours are the console's there too."""
+    c = [header("native/moy_gfx/libmoy/moy_data.c", "//") + "\n",
+         "// moy_theme_moy64 where native/moy_ui, which defines it, is not linked",
+         "// (native/moy_sh/micropython.cmake).",
+         "#include <stdint.h>\n",
+         "const uint32_t moy_theme_moy64[64] = {"]
+    m = _moy64()
+    for i in range(0, 64, 8):
+        c.append("    %s," % ", ".join("0x%06x" % ((r << 16) | (g << 8) | b) for r, g, b in m[i:i + 8]))
+    c.append("};")
+    return "\n".join(c) + "\n"
+
+
 def outputs(ui_dir=DIR, str_dir=STR_DIR):
     """[(path, text)] of every generated file."""
     h, c = generate(load(ui_dir), ui_dir)
@@ -1064,4 +1081,5 @@ def outputs(ui_dir=DIR, str_dir=STR_DIR):
     return [(os.path.join(ui_dir, "moy_ui_tables.h"), h),
             (os.path.join(ui_dir, "moy_ui_tables.c"), c),
             (os.path.join(str_dir, "moy_str_table.h"), sh),
-            (os.path.join(str_dir, "moy_str_table.c"), sc)]
+            (os.path.join(str_dir, "moy_str_table.c"), sc),
+            (os.path.join(ROOT, "native", "moy_sh", "moy_sh_palette.c"), generate_palette())]

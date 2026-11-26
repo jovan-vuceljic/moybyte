@@ -34,8 +34,30 @@ UNLOCK, NOTICE, NOTE, LOADING, TIP, SAVER = 0, 1, 2, 3, 4, 5
 _PAGES = 6
 
 
+# A notice's kind and its tile's icon: "ok" a check, "busy" work going on
+# (the Music app's opening one), any other a warning.
+NOTICE_ICONS = {"ok": "check", "busy": "pulse"}
+
+
+def notice_icon(kind):
+    """The icon on the tile of a notice of `kind`."""
+    return NOTICE_ICONS.get(kind, "warn")
+
+
 STOP_POLL_MS = 50               # how often Stop & play looks for the music's end
 STOP_QUIET_MS = 3000            # and how long it waits for it
+
+# The card's trouble on the desk (`Notices.card_trouble`): a title, and its
+# lines as (line, tone) rows.
+CARD_TROUBLE = {
+    "errors": ("Your card has errors", (
+        ("Moybyte is using its own memory for now. Your carts are still on the card.", "plain"),
+        ("Copy what you need from the card on a computer, then reformat it or try "
+         "another card.", "dim"))),
+    "format": ("This card can't be read", (
+        ("Moybyte is using its own memory for now.", "plain"),
+        ("Reformat the card as FAT32 or exFAT on a computer.", "dim"))),
+}
 
 
 def _in_box(px, py, b):
@@ -126,13 +148,15 @@ class Notices:
         For things the MACHINE did on its own -- the achievement toast next door
         is for things the kid did. It expires on a timer with no input, because a
         notice that needs dismissing is a modal, and a modal in front of a kid who
-        just wanted to play is worse than the message is worth."""
+        just wanted to play is worse than the message is worth. `kind` names
+        its tile (`notice_icon`): "busy" is work going on, which its sayer
+        says again while it goes on and takes down (`withdraw`) when done."""
         ws = self.ws
         ws.notice_up = (str(title), str(sub), kind)
         ws._notice_until = _ticks_ms() + int(ms)
         ws.frame_state.dirty = True
         # The kernel's copy, which a run it drives draws over its frames.
-        _ch._moy_play().chrome_notice(ws.notice_up[0], ws.notice_up[1], kind == "ok",
+        _ch._moy_play().chrome_notice(ws.notice_up[0], ws.notice_up[1], notice_icon(kind),
                                       ws._notice_until)
 
     def withdraw(self, title):
@@ -145,7 +169,7 @@ class Notices:
         ws.notice_up = None
         ws._notice_until = _ticks_ms()
         ws.frame_state.dirty = True
-        _ch._moy_play().chrome_notice(up[0], up[1], up[2] == "ok", ws._notice_until)
+        _ch._moy_play().chrome_notice(up[0], up[1], notice_icon(up[2]), ws._notice_until)
 
     def notice_active(self, now=None):
         ws = self.ws
@@ -174,6 +198,19 @@ class Notices:
         else:
             self.notice(_ui_draw.s("notice.undone"), _ui_draw.s("notice.still_on") % u.version_label(), "warn")
         return True
+
+    def card_trouble(self, kind):
+        """Say on the desk, once a boot, why the console is on its internal
+        store while a card is in the slot (the boot's `card_trouble`,
+        runtime/boot/boot_carts.py): "errors", a card that mounted and whose
+        store failed; "format", a filesystem this build cannot read. None
+        (no card, or a card that works) says nothing. A dialog with OK, not
+        the timed notice: what to do with the card takes longer to read than
+        a notice stays up. True when it said something."""
+        words = CARD_TROUBLE.get(kind)
+        if words is None:
+            return False
+        return self.ws.confirm.tell(words[0], words[1])
 
     def room(self, which, x, y, w, h):
         """Page `which`'s room (x, y, w, h), the tuple kept while it stands:
@@ -270,8 +307,8 @@ class Notices:
 
     def _draw_notice(self):
         """The system notice: the unlock banner's card at the top centre of
-        the content, its tile a check (a warning's, the warning sign), the
-        title in `value` over the line under it. The card's rect."""
+        the content, its tile its kind's icon (`notice_icon`), the title in
+        `value` over the line under it. The card's rect."""
         ws = self.ws
         notice = ws.notice_up
         if notice is None:      # expired between the frame's check and its draw
@@ -281,7 +318,7 @@ class Notices:
         title, sub, kind = notice
         top = lay.cy + (12 if _desk_class() else 6 * lay.fs)
         return self.paint_banner(NOTICE, self.room(NOTICE, 0, top, cv.w, cv.h - top), title, sub or "",
-                                 "check" if kind == "ok" else "warn")
+                                 notice_icon(kind))
 
     def _draw_toast(self):
         """The unlock banner over whatever is up (`ach.toast`), at the top

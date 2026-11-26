@@ -112,6 +112,14 @@ def test_a_join_that_fails_answers_its_error_and_ready():
     assert (st, urls, err) == (zero_improv.READY, [], zero_improv.UNABLE)
 
 
+def test_a_claim_answers_the_url_with_a_fresh_claim():
+    board = Board()
+    board.save("Bench", "pw")
+    urls, err = Z.Improv(Port(board)).claim()
+    assert err is None and urls[0].startswith("http://192.168.1.7/#id=") \
+        and urls[0].endswith("&claim=c0ffee"), urls
+
+
 def test_a_board_in_setup_answers_ready():
     assert Z.Improv(Port(Board())).state() == (zero_improv.READY, [])
 
@@ -196,6 +204,31 @@ def test_a_tree_is_read_from_the_lines_the_board_prints():
 
 def test_the_internal_heap_is_the_free_sum_and_the_largest_block():
     assert Z.internal_heap([(200, 100, 64, 10), (80, 40, 32, 5)]) == (140, 64)
+
+
+def test_free_reads_the_internal_row():
+    text = ("              total       used       free\n"
+            "internal      262144     200000      62144\n"
+            "python        131072      65536      65536\n")
+    assert Z.free_internal(text) == (262144, 200000, 62144)
+    assert Z.free_internal("free: no figures here\n") is None
+
+
+def test_a_drift_is_the_fall_of_the_last_rounds_best_from_the_first():
+    assert Z.drift([100], 10) == (0, False)
+    assert Z.drift([100, 90, 98, 95], 10) == (2, False)    # one round caught mid-request
+    assert Z.drift([100, 95, 90, 85, 80, 75], 10) == (15, True)
+    assert Z.drift([100, 104, 110], 10) == (-10, False)
+
+
+def test_an_ssh_client_takes_its_password_from_its_environment(tmp_path):
+    s = Z.Ssh("192.0.2.7", "bench-pw", str(tmp_path / "home"))
+    argv = s.argv("ls", tty=False)
+    assert argv[0] == "ssh" and argv[-2:] == ["moy@192.0.2.7", "ls"]
+    assert "bench-pw" not in " ".join(argv)
+    assert s.env()["MOY_SSH_PW"] == "bench-pw" and s.env()["SSH_ASKPASS"] == s.askpass
+    assert "-tt" in s.argv(tty=True)
+    assert "bench-pw" not in open(s.askpass).read()
 
 
 def test_percentiles_are_nearest_rank():

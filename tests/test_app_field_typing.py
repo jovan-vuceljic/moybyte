@@ -473,6 +473,29 @@ def test_notes_holds_text_mode_only_while_its_field_does(tmp_path):
     assert not ws.sysmenu.open, "a cancel is not the console's key"
 
 
+def test_a_paste_from_outside_lands_in_a_note_whole(tmp_path):
+    """A paste from outside the console (a browser page's clipboard,
+    ConsoleDriver.paste) reaches a note's editor through the console's
+    clipboard and its Paste: its lines whole, in one frame."""
+    ws = build_ws(tmp_path)
+    drv = host_app.ConsoleDriver(ws)
+    assert select_on_home(ws, "Notes") is not None
+    ws.open()
+    for _ in range(3):
+        drv.frame(DT)
+    _type(drv, "n")
+    _type(drv, "pasted")
+    _type(drv, "\r")
+    for _ in range(3):
+        drv.frame(DT)
+    ed = ws.run.player.ns["ed"]
+    assert ed is not None and ws.input.text_mode
+    drv.paste("first line\nsecond line\n")
+    for _ in range(2):
+        drv.frame(DT)
+    assert ed.text() == "first line\nsecond line\n"
+
+
 # -- a uitree app -------------------------------------------------------------------
 #
 # A uitree App's page draws through its engine's host, which it answers as its

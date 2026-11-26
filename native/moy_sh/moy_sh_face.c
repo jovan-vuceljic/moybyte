@@ -15,14 +15,14 @@
 #include "moy_text.h"
 
 #define ECHO "\x1b[2m"
-#define TYPED "\x1b[0;36m"
+#define TYPED moy_term_accent((char[MOY_TERM_ACCENT_BYTES]){0})  // the block's own
 #define PLAIN "\x1b[0m"
 #define MIN_COLS 8
 #define RUN_MORE 1
 #define RUN_EXIT 2
 #define NAMES_BYTES 8192u               // a completion's names, all of them
 #define LOG_ROWS_MAX 96                 // a text view's rows at most (MOY_UI_TEXT_ROWS)
-#define PROMPT_ROW (MOY_SH_FACE_LINE * 2 + 32)
+#define PROMPT_ROW (MOY_SH_FACE_LINE * 2 + 48)
 
 // The T-Deck's keyboard: whether its matrix types `c`, plain or with Sym
 // (native/moy_input/moy_kbd.c). Weak, so a build without the driver links.
@@ -56,12 +56,16 @@ struct moy_sh_face {
     int enter;                          // a typed Enter owed to the row's focused key
     int swallow;                        // the Ctrl-C that stopped a run, still latched
     int inline_runs;                    // runs never park (moy_sh_face_inline)
+    int sized;                          // a frame has laid the grid out
+    int queued;                         // the line submitted before it, run at that frame
     int32_t key;                        // the key typed last frame
     // the log: the grid's lines as the last frame took them
     uint32_t gen;
     int stale;
     const moy_term_t *showing;          // the grid the log took last: the shell's or an app's
     int32_t count;
+    uint32_t first;                     // the number of the grid's oldest line at the take
+    int32_t sel[4];                     // the selection: (line, column) to (line, column); sel[0] -1 none
     char *ring;                         // the getter's rows, `nslots` of `slot` bytes
     size_t slot, nslots, next;
     char prompt_row[PROMPT_ROW];
@@ -112,6 +116,7 @@ moy_sh_face_t *moy_sh_face_new(const char *root) {
     f->cols = 40;
     f->rows = 12;
     f->stale = 1;
+    f->sel[0] = -1;
     return f;
 }
 
@@ -122,6 +127,7 @@ void moy_sh_face_close_session(moy_sh_face_t *f) {
     }
     f->count = 0;
     f->stale = 1;
+    f->sel[0] = -1;
     f->more = 0;
     f->ncand = 0;
 }
@@ -351,6 +357,10 @@ static void settle(moy_sh_face_t *f) {
 
 void moy_sh_face_submit(moy_sh_face_t *f) {
     settle(f);
+    if (!f->sized) {
+        f->queued = 1;                  // its output takes the grid the first frame sizes
+        return;
+    }
     if (moy_sh_face_screen(f) == NULL || busy(f)) {
         return;
     }
@@ -872,11 +882,15 @@ int moy_sh_face_take(moy_sh_face_t *f) {
     if (!f->stale && g == f->gen && t == f->showing) {
         return 0;
     }
+    uint32_t v[3];
+    moy_term_take(t, v);
+    if (t != f->showing || v[0] != f->first) {
+        f->sel[0] = -1;                 // its lines moved under it
+    }
     f->showing = t;
     f->gen = g;
     f->stale = 0;
-    uint32_t v[3];
-    moy_term_take(t, v);
+    f->first = v[0];
     int32_t count = (int32_t)(v[1] & 0x3FFFFFFFu);
     int c[3];
     moy_term_cursor(t, c);
@@ -1161,6 +1175,12 @@ int moy_sh_face_draw(moy_sh_face_t *f, moy_ui_ctx_t *c, const moy_ui_sink_t *s,
             opt[MOY_UI_TXO_CARET_COL] = cur[1];
         }
     }
+    if (f->sel[0] >= 0) {
+        opt[MOY_UI_TXO_SEL_R0] = f->sel[0];
+        opt[MOY_UI_TXO_SEL_C0] = f->sel[1];
+        opt[MOY_UI_TXO_SEL_R1] = f->sel[2];
+        opt[MOY_UI_TXO_SEL_C1] = f->sel[3];
+    }
     moy_ui_span_t marks[2] = {span(""), span("")};
     moy_ui_lines_t L = {f, f->count, log_get};
     int32_t got[2] = {0, 0};
@@ -1192,12 +1212,21 @@ int moy_sh_face_draw(moy_sh_face_t *f, moy_ui_ctx_t *c, const moy_ui_sink_t *s,
     moy_ui_lines_t P = {f, 1, prompt_get};
     at(c, band);
     moy_ui_api_text_view(c, s, span("prompt"), &P, popt, marks, NULL, got);
-    if (f->scr != NULL && (cols != f->cols || rows != f->rows)) {
-        if (moy_term_resize(moy_sh_screen_term(f->scr), (int)cols, (int)rows) == 0) {
+    if (cols != f->cols || rows != f->rows) {
+        if (f->scr == NULL
+                || moy_term_resize(moy_sh_screen_term(f->scr), (int)cols, (int)rows) == 0) {
             f->cols = cols;
             f->rows = rows;
             f->stale = 1;
             out |= MOY_SH_FACE_AGAIN;
+        }
+    }
+    if (!f->sized) {
+        f->sized = 1;
+        if (f->queued) {
+            f->queued = 0;
+            moy_sh_face_submit(f);
+            out |= MOY_SH_FACE_AGAIN | MOY_SH_FACE_DAMAGE;
         }
     }
     return out;
@@ -1243,6 +1272,32 @@ int moy_sh_face_history(const moy_sh_face_t *f, int i, const char **line) {
 void moy_sh_face_size(const moy_sh_face_t *f, int32_t *cols, int32_t *rows) {
     *cols = f->cols;
     *rows = f->rows;
+}
+
+void moy_sh_face_select(moy_sh_face_t *f, int32_t r0, int32_t c0, int32_t r1, int32_t c1) {
+    if (r0 < 0 || r1 < 0 || r0 >= f->count || r1 >= f->count) {
+        f->sel[0] = -1;
+        return;
+    }
+    if (r1 < r0 || (r1 == r0 && c1 < c0)) {
+        int32_t r = r0, c = c0;
+        r0 = r1;
+        c0 = c1;
+        r1 = r;
+        c1 = c;
+    }
+    f->sel[0] = r0;
+    f->sel[1] = c0 > 0 ? c0 : 0;
+    f->sel[2] = r1;
+    f->sel[3] = c1 > 0 ? c1 : 0;
+}
+
+int moy_sh_face_selection(const moy_sh_face_t *f, int32_t out[4]) {
+    if (f->sel[0] < 0) {
+        return 0;
+    }
+    memcpy(out, f->sel, sizeof f->sel);
+    return 1;
 }
 
 int32_t moy_sh_face_lines(const moy_sh_face_t *f) {

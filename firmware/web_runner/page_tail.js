@@ -34,7 +34,7 @@ var stateWait=[];
 window.__moyState=function(){return new Promise(function(ok){stateWait.push(ok);
 WORKER.postMessage({t:"state"});});};
 function onWorker(m){
-if(m.t==="status"){sEl.textContent=m.s;}
+if(m.t==="status"){sEl.textContent=m.s;pinSaid(m.s);if(m.s==="live")ldDone();else ldSay(m.s);}
 else if(m.t==="assets"){assetsJSON=m.json;assetsBusy=false;
 if(assetsWait.length){var ws=assetsWait;assetsWait=[];
 for(var i=0;i<ws.length;i++)ws[i][0](JSON.parse(m.json));}
@@ -46,6 +46,8 @@ gotAssets=true;}
 // Keep only the NEWEST frame. A superseded framebuffer goes straight back to the
 // worker's pool -- it is a transferable, so holding it here would starve the
 // ping-pong and force a fresh 1.2MB allocation on the next painted frame.
+else if(m.t==="clip"){clipOut(m.s);}
+else if(m.t==="ask"){asks(m.a);}
 else if(m.t==="frame"){
 if(pendingFB&&WORKER)WORKER.postMessage({t:"fbret",b:pendingFB},[pendingFB]);
 pendingFrame=m.s;pendingFB=m.fb||null;}
@@ -57,8 +59,8 @@ pzMode(m.mode,m.s);if(m.mode==="board")linkState("signed-in",m.s);}
 else if(m.t==="keep"){pzKeep();}
 else if(m.t==="carts"){pzFill(m.names);}
 else if(m.t==="exported"){pzDownload(m.name,m.buf);}
-else if(m.t==="imported"){window.__moyImported=m.s;pzSay(m.s,!m.ok);if(m.ok)pzAsk();
-if(m.report)p8Report(m.report,m.ok,m.dir);}
+else if(m.t==="imported"){window.__moyImported=m.s;if(m.ok)pzAsk();
+if(m.report)p8Report(m.report,m.ok,m.dir);else pzSay(m.s,!m.ok);}
 else if(m.t==="update"){updBound(m);}
 else if(m.t==="edited"){window.__moyEdited=m.s;pzSay(m.s,!m.ok);}
 else if(m.t==="pair"){pinAsk(m);linkState("sign-in",m.wait||m.why||"");}
@@ -71,18 +73,18 @@ else if(m.t==="pick"){pkAsk(m);}
 else if(m.t==="unpick"){pkDone(m.id);}
 else if(m.t==="installed"){window.__moyInstalled=m.folder;}
 else if(m.t==="state"){var sw=stateWait;stateWait=[];
-var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;}
+var so=JSON.parse(m.json);if(so&&typeof so==="object"){so.sink=m.sink||null;so.loop=m.loop||null;so.live=m.live||null;so.hints=m.hints||null;so.p8=m.p8||null;}
 for(var si=0;si<sw.length;si++)sw[si](so);}
-else if(m.t==="pcm"){playPCM(m);}
-else if(m.t==="wperf"){console.log("[moy worker] "+m.s);}
+else if(m.t==="pcm"){if(HUD.on){var p0=PT();playPCM(m);hudPcm(PT()-p0);}else playPCM(m);}
+else if(m.t==="wperf"){console.log("[moy worker] "+m.s);HUD.w="worker "+m.s.split(" | ").slice(0,2).join("  ");if(HUD.on)drawHud();}
 // THE SEAM the pump that sees failures calls. Nothing counts failures yet --
 // the sync push still requeues forever on a board that has gone -- and when
 // something does, it says so HERE rather than growing a second panel of its
 // own. `kind` is the whole contract: "lost" adds the unsynced-work warning,
 // anything else is a restart somebody asked for.
 else if(m.t==="lost"){linkLost(m.kind||"lost",m.head||"the console is not answering",
-m.body||"",m.risk!==false);}
-else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");
+m.body||"",m.risk!==false,m.go||"");}
+else if(m.t==="error"){console.error("[moy]",m.s);linkState("failed","the console crashed");ldDone();
 sEl.textContent="console crash (see devtools)";sEl.style.color="#ff004d";
 // Under the title: the message's tail (an abort's reason; a traceback's
 // raising line and exception), then the first frames that threw it.
@@ -104,7 +106,8 @@ ce.textContent=cl.join("\n");ce.style.display="block";}}
 // the same way: the board refuses pins.
 var PINEL=document.getElementById("pin"),PINF=document.getElementById("pinf"),
 PINB=document.getElementById("pinb"),PINM=document.getElementById("pinm"),
-PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr");
+PINP=document.getElementById("pinp"),PINR=document.getElementById("pinr"),
+PINH=document.getElementById("pinh");
 var KEYS="moybyte.keys";
 // THE CLAIM (worker.js, THE SIGN-IN): a board takes its password from the
 // browser holding the claim its Improv answer carried (its first, or a new
@@ -112,8 +115,11 @@ var KEYS="moybyte.keys";
 // from the url's # (the URL Improv answered, which any Improv client opens)
 // or from My consoles over the link (a `claim` request); `CHOOSE` while the
 // prompt asks for a new password rather than the console's.
-var CLAIM=null,CHOOSE=false,CLAIMQ=null;
-function claimed(m){if(m.ok)CLAIM=null;else if(PINM)PINM.textContent=m.why||"";
+var CLAIM=null,CHOOSE=false,CLAIMQ=null,TAKEN=false;
+// A refusal takes the busy card down: a console signed in runs on (the link
+// says why), one that is not asks again (the worker's {t:"pair"}, with why).
+function claimed(m){if(m.ok){CLAIM=null;pinBusy("pairing this browser with it...");}
+else if(PINEL&&PINEL.className==="busy"){PINEL.className="";PINEL.style.display="none";}
 if(CLAIMQ){try{CLAIMQ.w.postMessage({moylink:1,re:CLAIMQ.id,kind:"claim",ok:!!m.ok,
 said:m.why||""},CLAIMQ.o);}catch(e){}CLAIMQ=null;}}
 function keysStored(){try{return JSON.parse(localStorage.getItem(KEYS)||"{}")||{};}
@@ -141,7 +147,14 @@ catch(e){/* no history: the token is spent on its first use either way */}
 return {keys:keysStored(),token:tok,board:bid,name:browserName()};};
 // The worker's word that pairing is needed: `pw` a password can do it, `why`
 // what went wrong last ("" the first time), `wait` the backoff's sentence.
+// `taken`: another browser took the board, and the card's one button takes
+// it back (worker.js, TAKEN).
 function pinAsk(m){if(!PINEL)return;
+PINEL.className="";TAKEN=!!m.taken;PINF.style.display=TAKEN?"none":"";
+PINH.textContent=TAKEN?"disconnected":"pair this browser";
+PINB.textContent=TAKEN?"take it back":"pair";
+if(TAKEN){PINP.textContent=m.why;PINM.textContent="";PINR.style.display="";
+PINEL.style.display="flex";PINB.disabled=false;return;}
 PINM.textContent=m.wait||m.why||"";
 CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
@@ -149,24 +162,41 @@ if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters:
 PINB.disabled=false;try{PINF.value="";PINF.focus();}catch(e){}return;}
 PINP.textContent=m.cable?(m.pw?"Type the console's password, or pair this board by cable: "
 +"plug it in and choose Manage by cable in My consoles.":"Pair this board by cable: plug it "
-+"in and choose Manage by cable in My consoles."):m.pw?"Scan the code on the console's WEB "
++"in and choose Manage by cable in My consoles."):asApp()?(m.pw?"Type the console's password. "
++"(A code scanned with the camera opens Safari, not this app.)":"Set a password on the console "
++"(passwd), then close and open this app again to type it. (A code scanned with the camera opens Safari, not this app.)")
+:m.pw?"Scan the code on the console's WEB "
 +"CONSOLE screen, or type the console's password.":"Scan the code on the console's WEB "
 +"CONSOLE screen. To type a password instead, set one on the console (passwd).";
 PINR.style.display=m.pw?"":"none";
 PINEL.style.display="flex";PINB.disabled=false;
 if(m.pw){try{PINF.value="";PINF.focus();}catch(e){}}}
-function pinSubmit(){var v=PINF.value||"";
+function pinSubmit(){if(TAKEN){TAKEN=false;PINEL.style.display="none";
+WORKER.postMessage({t:"takeback"});return;}
+var v=PINF.value||"";
 if(!v){PINM.textContent="type the console's password";return;}
 if(CHOOSE){if(v.length<8||v.length>64){PINM.textContent="a password is 8 to 64 characters";return;}
-PINM.textContent="setting the password...";PINB.disabled=true;
+pinSetting();
 WORKER.postMessage({t:"claim",claim:CLAIM.claim,id:CLAIM.id,pw:v,name:browserName()});
 PINF.value="";return;}
-PINM.textContent="pairing...";PINB.disabled=true;
+pinBusy("pairing this browser with it...");
 WORKER.postMessage({t:"password",pw:v,name:browserName()});PINF.value="";}
-// Paired: the key is this browser's from now on, and the page starts again
-// signed in with it.
+// The card while the worker sets a password or pairs: it says what it does
+// and asks nothing; the worker's next {t:"pair"} (a refusal) asks again.
+function pinBusy(said){if(!PINEL)return;PINEL.className="busy";
+PINH.textContent="setting up this browser";
+PINP.textContent="The console checks the password with this browser. On a small "
++"board that takes a few seconds; the console starts when it is done.";
+PINR.style.display="none";PINB.disabled=true;PINM.textContent=said;PINEL.style.display="flex";}
+function pinSetting(){pinBusy("setting the console's password...");}
+// The boot's own words on a busy card, which goes once the console is live.
+function pinSaid(s){if(!PINEL||PINEL.className!=="busy")return;
+if(s==="live"){PINEL.className="";PINEL.style.display="none";}else PINM.textContent=s;}
+// Paired: the key is this browser's from now on. A boot that waited at the
+// pairing goes on (the worker's), a console that ran starts again with it.
 function keyGot(m){keySave(m.id,m.kid,m.key);
-if(m.reload){PINM.textContent="paired";location.reload();}}
+if(PINEL&&PINEL.className==="busy")pinBusy("paired: starting the console...");
+if(m.reload)location.reload();}
 if(PINB)PINB.addEventListener("click",pinSubmit);
 if(PINF)PINF.addEventListener("keydown",function(e){
 if(e.key==="Enter"){e.preventDefault();pinSubmit();}});
@@ -187,29 +217,30 @@ for(var i=0;i<LINK.length;i++){try{LINKW.postMessage(m,LINK[i]);}catch(e){}}}
 if(LINK&&LINKW){addEventListener("message",function(e){var m=e.data;
 if(e.source!==LINKW||LINK.indexOf(e.origin)<0||!m||m.moylink!==1||typeof m.id!=="number")return;
 if(m.kind==="claim"&&WORKER&&!CLAIMQ&&typeof m.claim==="string"&&typeof m.password==="string"){
-CLAIMQ={w:e.source,o:e.origin,id:m.id};
+CLAIMQ={w:e.source,o:e.origin,id:m.id};pinSetting();
 WORKER.postMessage({t:"claim",claim:m.claim,id:typeof m.board==="string"?m.board:"",
 pw:m.password,name:browserName()});return;}
 e.source.postMessage(m.kind==="pack"?{moylink:1,re:m.id,kind:"pack",ok:false,
 said:"the console is running"}:{moylink:1,re:m.id,kind:"unknown"},e.origin);});
 linkState("booted","");}
-// ---- persistence row (#193) -------------------------------------------------
-// The worker decides the MODE (board vs browser-local) and this only reports it.
-// The row appears in EVERY mode, including board-served. It used to be hidden
-// there, on the reading that "the console owns the carts" -- but the 2026-08-25
-// owner call this cited says something narrower: a board-served page uses the
-// BOARD's store and never a second one, which is about where carts LIVE, not
-// about which direction they may travel. That call names ".moy export/import
-// and the p8 converter" as ordinary parts of the picture. A board-served page
+// ---- where the carts are kept (#193), export and import ----------------------
+// The worker decides the MODE (board vs browser-local) and this only reports it,
+// in every mode, board-served included: a board-served page uses the BOARD's
+// store and never a second one, which is about where carts LIVE, not about
+// which direction they may travel (owner, 2026-08-29: ".moy export/import and
+// the p8 converter" are ordinary parts of the picture). A board-served page
 // already writes to the board's store on every edit, through the same sync
-// push an import rides -- so importing there was never a new kind of write,
-// and exporting is a read. (Owner correction, 2026-08-29.)
-var pzEl=document.getElementById("pz"),pzS=document.getElementById("pzs"),
-pzC=document.getElementById("pzc"),pzE=document.getElementById("pze"),
-pzI=document.getElementById("pzi"),PZMODE=null;
-function pzSay(s,warn){pzS.textContent=s;pzS.className=warn?"warn":"";}
-function pzMode(mode,s){PZMODE=mode;pzSay(s,mode==="none");
-pzEl.style.display="flex";pzAsk();}
+// push an import rides, and exporting is a read. The rows are the console's
+// (page_link.py): Download, Add a file.
+var PZMODE=null;
+// What the console says of the page's carts: a notice (page_link.py).
+function pzSay(s,warn){send({type:"page",say:[s,"",warn?"bad":"ok"]});}
+// Where the page keeps the carts: Settings' Carts row, in a word; a page
+// that keeps nothing past this tab says so as it starts.
+var KEPT={site:"In this browser",board:"On the console",none:"In this tab only"};
+function pzMode(mode,s){PZMODE=mode;window.__moyKept=s;
+send({type:"page",kept:KEPT[mode]||""});
+if(mode==="none")send({type:"page",say:[s,"Your work is lost when it closes.","bad"]});pzAsk();}
 function pzAsk(){if(WORKER)WORKER.postMessage({t:"carts"});}
 // The worker decided this page keeps its carts HERE, in OPFS -- which the
 // browser may evict under disk pressure unless the origin is asked to be made
@@ -223,25 +254,20 @@ if(!st||typeof st.persist!=="function")return;
 Promise.resolve().then(function(){return st.persist();})
 .then(function(okd){if(WORKER)WORKER.postMessage({t:"kept",state:okd?"granted":"denied"});})
 .catch(function(){});}
-function pzFill(names){var keep=pzC.value;pzC.innerHTML="";
-for(var i=0;i<names.length;i++){var o=document.createElement("option");
-o.value=names[i];o.textContent=names[i];pzC.appendChild(o);}
-if(keep&&names.indexOf(keep)>=0)pzC.value=keep;}
+// The cart folders, for a harness (the worker's {t:"carts"}).
+function pzFill(names){window.__moyCarts=names;}
 // A .moy zip is bytes the page never inspects -- the worker built it from the
 // live VFS, which is the same folder a board reads.
 function pzDownload(name,buf){var url=URL.createObjectURL(new Blob([buf],{type:"application/zip"}));
 var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
 document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},4000);
-pzSay("exported "+name,false);}
-pzE.addEventListener("click",function(){if(!WORKER||!pzC.value)return;
-pzSay("exporting "+pzC.value+"...",false);WORKER.postMessage({t:"export",cart:pzC.value});});
-pzC.addEventListener("mousedown",pzAsk);
-function pzImport(file){if(!WORKER||!file)return;pzSay("importing "+file.name+"...",false);
+window.__moySaved=name;pzSay("Saved "+name,false);}
+// An import is work going on: its notice's tile says so (a PICO-8 cart's
+// converter says its stages over it, worker.js THE CONVERTER).
+function pzImport(file){if(!WORKER||!file)return;send({type:"page",say:["Importing "+file.name,"","busy"]});
 file.arrayBuffer().then(function(buf){
 WORKER.postMessage({t:"import",name:file.name,buf:buf},[buf]);})
-.catch(function(e){pzSay("could not read that file",true);console.error(e);});}
-pzI.addEventListener("change",function(){if(pzI.files&&pzI.files[0])pzImport(pzI.files[0]);
-pzI.value="";});
+.catch(function(e){pzSay("Could not read that file",true);console.error(e);});}
 // Drop a .moy zip or a PICO-8 cart (.p8 / .p8.png, #194) anywhere on the page.
 // In every mode, once the worker has reported one. On a board-served page the
 // new cart lands in the VFS like any other change and the sweep ships it to the
@@ -260,47 +286,37 @@ if(f)pzImport(f);});
 // refused. The lines come from tools/p8_writer.report_lines so the CLI and the
 // browser say the same things; this only paints them, and offers the one action
 // the page cannot infer -- opening the new cart in the editor.
-var P8=document.getElementById("p8"),P8T=document.getElementById("p8t"),
-P8E=document.getElementById("p8e"),P8X=document.getElementById("p8x"),p8Cart=null;
-function p8Report(lines,ok,dir){p8Cart=ok?(dir||null):null;
-P8T.innerHTML="";
-for(var i=0;i<lines.length;i++){var p=document.createElement("p");
-if(i===0)p.className="head";p.textContent=lines[i];P8T.appendChild(p);}
-P8.className=ok?"":"bad";
-P8E.style.display=p8Cart?"":"none";
-P8.style.display="block";
+// The report is the console's card: on a cart that converted, its Open plays
+// it (page_link.py's `offer`).
+function p8Report(lines,ok,dir){var rows=[];
+for(var i=1;i<lines.length;i++)rows.push([lines[i],ok?"plain":"danger"]);
+if(ok&&dir)send({type:"page",offer:[lines[0],dir].concat(rows)});
+else send({type:"page",tell:[lines[0]].concat(rows)});
 // Readable by a harness without scraping the DOM, the same way __moyImported is.
-window.__moyReport=lines.join(" | ");}
-if(P8X)P8X.addEventListener("click",function(){P8.style.display="none";});
-if(P8E)P8E.addEventListener("click",function(){if(!WORKER||!p8Cart)return;
-pzSay("opening "+p8Cart+" in the editor...",false);
-WORKER.postMessage({t:"edit",cart:p8Cart});});
+window.__moyReport=lines.join(" | ");
+window.__moyCard={kind:ok&&dir?"offer":"tell",title:lines[0]};}
 // ---- Get Carts' file question (#124) ------------------------------------------
 // The console needs a file this page cannot fetch (its host sends no CORS
 // header) and asks for the player's own copy. The answer goes back as bytes;
 // the CONSOLE holds it to the index's size and sha256, here nothing is
 // checked, so there is one check and it is the one every console runs.
-var PK=document.getElementById("pk"),PKH=document.getElementById("pkh"),
-PKB=document.getElementById("pkb"),PKN=document.getElementById("pkn"),
-PKI=document.getElementById("pki"),PKX=document.getElementById("pkx"),pkId=null;
+// The console's Get Carts page says what it needs; the choosing is the
+// page's file chooser, an ask like the rows' (THE ASKS): opened at once while
+// the gesture that asked is live, else at the player's next tap.
+var pkId=null;
 function pkAsk(m){pkId=m.id;
-PKH.textContent="Get Carts needs "+m.name;
-PKB.textContent="This page can't fetch it from "+(m.host||"its host")
-+". Choose your own copy ("+m.size+" bytes); the console checks it is the right one.";
-PKN.textContent=m.name;PK.style.display="block";
 // Readable by the browser harness, the way __moyReport is.
-window.__moyPick={id:m.id,name:m.name,size:m.size};}
+window.__moyPick={id:m.id,name:m.name,size:m.size};
+var a={do:"pick"};if(askLive(a))askDo(a);else askArm(a);}
 function pkDone(id){if(id!==undefined&&id!==pkId)return;
-pkId=null;PK.style.display="none";window.__moyPick=null;}
+pkId=null;window.__moyPick=null;if(ASKED&&ASKED.do==="pick"){ASKED=null;window.__moyAsked=null;}}
 // The file goes to the worker TRANSFERRED: a WAD is megabytes.
 function pkSend(file){if(!WORKER||pkId===null||!file)return;var id=pkId;pkDone(id);
 file.arrayBuffer().then(function(buf){
 WORKER.postMessage({t:"picked",id:id,name:file.name,buf:buf},[buf]);})
 .catch(function(){WORKER.postMessage({t:"picked",id:id,cancel:1});});}
-if(PKI)PKI.addEventListener("change",function(){if(PKI.files&&PKI.files[0])pkSend(PKI.files[0]);
-PKI.value="";});
-if(PKX)PKX.addEventListener("click",function(){if(!WORKER||pkId===null)return;var id=pkId;
-pkDone(id);WORKER.postMessage({t:"picked",id:id,cancel:1});});
+function pkCancel(){if(!WORKER||pkId===null)return;var id=pkId;
+pkDone(id);WORKER.postMessage({t:"picked",id:id,cancel:1});}
 // The loader module hands the worker over once constructed.
 window.__moyAttach=function(w){WORKER=w;w.onmessage=function(e){onWorker(e.data);};audioSink(w);
 w.postMessage({t:"vis",hidden:document.hidden?1:0});};
@@ -355,40 +371,14 @@ if(WORKER&&schedNext>=0){SS.played=audioPlayed();WORKER.postMessage({t:"played",
 var f=pendingFrame,fb=pendingFB;pendingFrame=null;pendingFB=null;
 if(f){PERF.f++;if(fb)PERF.b+=fb.byteLength;HUD.kb=fb?fb.byteLength/1024:HUD.kb;
 df(JSON.parse(f),fb);
-podTick();
 // Hand the buffer back for reuse once it has been blitted.
 if(fb&&WORKER)WORKER.postMessage({t:"fbret",b:fb},[fb]);}}
 // ---- PLAY ON DEVICE (#197) ---------------------------------------------------
-// A page served BY a board can hand the open cart back to the board's own glass.
-// The whole protocol is a cart NAME: the board looks it up the same way its
-// serial `run` does, plays it, and its own exit returns to the connection screen
-// -- so this page never has to model device state.
-//
-// The link shows only when BOTH are true: the host answered GET /sync (a static
-// host -- moybyte.com, an export, a plain file server -- 404s it, and offering
-// the button there would be a button that always fails), and a cart is actually
-// open here. Probed ONCE at boot: the answer cannot change under a page, and a
-// per-frame probe would be a request per frame at a board that is single-threaded.
-var POD=document.getElementById("pod"),podHost=false,podLast=undefined;
-function podSync(){if(!POD)return;
-POD.style.display=(podHost&&assCart)?"":"none";
-POD.textContent="play on device";}
-function podProbe(){if(!POD)return;
-fetch("sync",{method:"GET"}).then(function(r){podHost=r.ok;podSync();})
-.catch(function(){});}
-// A cart change re-arms the link (and clears any "playing on device: X" the last
-// tap left on it). Checked off the frame loop rather than hooked into df(): the
-// cart title arrives on every frame payload, so a string compare is the whole
-// cost and it needs no second detection of a change page_core already tracks.
-function podTick(){if(podLast!==assCart){podLast=assCart;podSync();}}
-// The POST is the worker's (podRun), sealed like every signed-in call, so a
-// refusal is worded where theirs are.
-var podWas="";
-if(POD)POD.addEventListener("click",function(e){e.preventDefault();
-if(!assCart||!WORKER)return;
-podWas=POD.textContent;POD.textContent="starting...";
-WORKER.postMessage({t:"pod",cart:assCart});});
-function podSaid(s){if(POD)POD.textContent=s||podWas;}
+// A page served BY a board hands the open cart back to the board's own glass:
+// the open cart's Play on the console (page_link.py), a cart NAME the board
+// looks up the way its serial `run` does. The POST is the worker's (podRun),
+// sealed like every signed-in call, and what it said is the console's notice.
+function podSaid(s){if(s)pzSay(s,false);}
 // ---- the LINK surface: one panel, and the REASON is the point ---------------
 // A board stops answering for two very different reasons, and saying the same
 // thing about both is wrong in both directions:
@@ -423,13 +413,11 @@ function podSaid(s){if(POD)POD.textContent=s||podWas;}
 // is a fact rather than a hiccup -- belongs with the pump that sees them, next
 // to gpio_link's MAX_FAILS and the persist path's give-up, and it reaches this
 // through window.__moyLinkLost or the worker's {t:"lost"} above.
-var LNK=document.getElementById("lnk"),LNKH=document.getElementById("lnkh"),
-LNKB=document.getElementById("lnkb"),linkGone=false;
-function linkLost(kind,head,body,risk){
+var linkGone=false;
+function linkLost(kind,head,body,risk,go){
 if(linkGone)return;
 linkGone=true;
-LNKH.textContent=head;
-LNKB.textContent=(kind==="lost")
+var text=(kind==="lost")
 ?((body?body+" ":"")+((risk===false)
 ?"Nothing of yours is waiting to be saved. Reopen the console's WEB CONSOLE "
 +"screen to carry on."
@@ -437,18 +425,18 @@ LNKB.textContent=(kind==="lost")
 +"serving it, so anything you changed in the last few seconds is only in this "
 +"tab -- do not reload until the console is back."))
 :body;
-LNK.className=(kind==="lost")?"bad":"";
-LNK.style.display="block";
-// Readable by the browser harness without scraping, the way __moyReport is.
-window.__moyLink=kind;}
+// The console's card says it; the harness reads it here, the way __moyReport is.
+// `go`: where the console went (a Zero that moved to another network), which
+// the card's Open opens.
+window.__moyLink=kind;window.__moyLinkCard={head:head,body:text,bad:kind==="lost",go:go||""};
+send({type:"page",tell:[head,[text,kind==="lost"?"danger":"plain"]],go:go||""});}
 window.__moyLinkLost=linkLost;
 // A sign-in wait on the sync push: the board is answering and holding this
-// page off, so the same panel says why and comes down when a push lands ("").
+// page off, so the console says why, and again when a push lands ("").
 function linkWait(s){if(linkGone)return;
-if(s){LNKH.textContent=s;
-LNKB.textContent="Your changes wait in this tab until then -- do not reload.";
-LNK.className="";LNK.style.display="block";window.__moyLink="wait";}
-else if(window.__moyLink==="wait"){LNK.style.display="none";window.__moyLink="";}}
+if(s){window.__moyLink="wait";window.__moyLinkCard={head:s,bad:false};
+send({type:"page",say:[s,"Your changes wait in this tab until then -- do not reload.","ok"]});}
+else if(window.__moyLink==="wait"){window.__moyLink="";window.__moyLinkCard=null;}}
 
 // The loader module calls this on the play-button gesture (which also unlocks
 // WebAudio), once the worker has booted and shipped its assets. It is the whole
@@ -459,7 +447,6 @@ else if(window.__moyLink==="wait"){LNK.style.display="none";window.__moyLink="";
 window.__moyStart=function(){
 getA().then(function(){sEl.textContent="live";sEl.style.color="#00e436";
 if(WORKER)WORKER.postMessage({t:"run"});
-podProbe();
 requestAnimationFrame(tick);setInterval(plog,PERF_MS);cv.focus();})
 .catch(function(e){console.error(e);sEl.textContent="no assets";sEl.style.color="#ff004d";});};
 window.__moyRefetchAssets=function(){getA().catch(function(){});};
@@ -514,7 +501,7 @@ try {
                        { type: "module" });
   window.__moyAttach(w);
   // A coarse pointer is a finger: the console's hints start on touch.
-  w.postMessage({ t: "init", search: location.search, channel: MOY_CHANNEL, auth: auth,
+  w.postMessage({ t: "init", search: glassSearch(), channel: MOY_CHANNEL, auth: auth,
                   assets: assets, base: location.href,
                   rate: actx ? actx.sampleRate : 0,
                   coarse: !!(window.matchMedia && matchMedia("(pointer: coarse)").matches),
@@ -549,25 +536,19 @@ try {
       { once: true });
     document.body.appendChild(ov);
   }
-  // The tier link is a TOGGLE, not a one-way door: from the desk it offers the
-  // small screen, from the small screen it offers the desk back. "?" alone is
-  // the desktop, because an empty query is the default now.
-  try {
-    const a = document.getElementById("tier");
-    if (a && new URLSearchParams(location.search).get("handheld")) {
-      a.href = "?";
-      a.textContent = "full desktop";
-    }
-  } catch (e) { /* the link is decoration; never break boot over it */ }
   // ---- dev hot-reload (?dev=1, the moy CLI's watch loop) ---------------------
   // Poll the CLI server's /stamp (latest cart-file mtime); on change the WORKER
   // refetches carts.json, restarts the cart and pushes fresh assets. Static
-  // production hosting never has ?dev=1, so this costs nothing there.
+  // production hosting never has ?dev=1, so this costs nothing there; a host
+  // with no /stamp (a board, which says what changed on its live socket)
+  // answers the first ask with no stamp, and nothing asks again.
   if (new URLSearchParams(location.search).get("dev")) {
     let stamp = null;
-    setInterval(async () => {
+    const poll = setInterval(async () => {
       try {
-        const s = await (await fetch("stamp")).text();
+        const r = await fetch("stamp");
+        if (!r.ok) { clearInterval(poll); return; }
+        const s = await r.text();
         if (stamp === null) { stamp = s; return; }
         if (s === stamp) return;
         stamp = s;

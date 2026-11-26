@@ -140,7 +140,8 @@ int moy_sh_face_draw(moy_sh_face_t *f, moy_ui_ctx_t *c, const moy_ui_sink_t *s,
 // The line and its caret (a column in bytes), and setting them.
 const char *moy_sh_face_line(const moy_sh_face_t *f, int32_t *col);
 void moy_sh_face_set_line(moy_sh_face_t *f, const char *text, int32_t col);
-// Enter and Tab on the line as it stands.
+// Enter and Tab on the line as it stands. Before the face's first frame has
+// sized its grid the line waits, and that frame runs it.
 void moy_sh_face_submit(moy_sh_face_t *f);
 // Whether a run of the session is parked (one that ended is settled first).
 int moy_sh_face_busy(moy_sh_face_t *f);
@@ -177,6 +178,16 @@ void moy_sh_face_size(const moy_sh_face_t *f, int32_t *cols, int32_t *rows);
 // SGR text into `out` (its length).
 int32_t moy_sh_face_lines(const moy_sh_face_t *f);
 size_t moy_sh_face_log_line(moy_sh_face_t *f, int32_t i, char *out, size_t cap);
+
+// THE SELECTION: the log's cells from (r0, c0) to (r1, c1), the end's
+// column not in it, in the log's lines and columns as moy_ui_api_text_at
+// answers them for the view "log"; the ends in either order, and a line
+// past the log clears it. The log draws it, and it is cleared where the
+// grid's lines move under it (its oldest line scrolled away, or another
+// grid shown). moy_sh_face_selection: its ends in order into `out`, 1;
+// 0 where there is none.
+void moy_sh_face_select(moy_sh_face_t *f, int32_t r0, int32_t c0, int32_t r1, int32_t c1);
+int moy_sh_face_selection(const moy_sh_face_t *f, int32_t out[4]);
 
 // The T-Deck's row after Tab: the shell's symbols its keyboard cannot type,
 // in MOY_SH_FACE_SYMBOLS' order, into `out` (NUL-terminated); their count.

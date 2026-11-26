@@ -533,6 +533,7 @@ def build_desktop(name, link_id, comp, sys_canvas, set_backlight, inp, inputs,
         log("boot", "return start")
     else:
         report_update(ws, lambda m: log("OTA", m))
+        ws.notices.card_trouble(boot.card_trouble)
     print("%s desktop running (Ctrl-C for REPL)" % name)
     _census("ota check")
     boot.start_frames(ws)

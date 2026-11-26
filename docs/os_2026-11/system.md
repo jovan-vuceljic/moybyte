@@ -136,7 +136,9 @@ face) and the serial face. The command asks its face to put the app in
 front, and the app takes the face when the line's run ends. A full-screen
 app (`edit`, `top`) has a screen of its own of the face's size (the
 alternate screen: the shell's grid is untouched and back as it was when the
-app ends), which it writes as VT100, and reads keys as a terminal sends
+app ends), which it writes as VT100 (a stream face where there is no PSRAM
+takes the writes straight to its client's terminal, and the app keeps no
+screen: `native/moy_sh/moy_sh_app.h`), and reads keys as a terminal sends
 them; the face turns its input into those (a typed key its byte, the
 arrows, the trackball's and a d-pad's steps xterm's escapes, a key row's
 button its bytes), and a resize is the app's screen resized and drawn again.
@@ -170,7 +172,15 @@ frame's keys; the recovery console (§2) opens the same face from the kernel.
 There is no new drawing path, and the shell holds no pixels. A typed line is
 echoed into the grid and run; Tab completes a command's name
 (`moy_sh_complete`) or a path (`moy_sh_list`, the shell's own view of the
-files), left and right move the caret and up and down walk the history. A
+files), left and right move the caret and up and down walk the history.
+Esc is a key of the shell's and its apps' (vi leaves INSERT on it), never
+the console's back (`ESC_LEAVES` False): the Terminal is left by its
+window's X, the bar's back or the system key. A mouse's drag over the log
+selects its cells (`moy_sh_face_select`); Ctrl+Shift+C, or Ctrl+C over a
+selection, copies them to the console's clipboard, and Ctrl+C with none is
+the interrupt. A paste from outside the console (a browser page's,
+`InputPolicy.paste`) types its text whole, a line break as Enter, and a
+line whose run waits holds the rest until it ends. A
 desk has a keyboard and draws no key row. On a handheld a key row under the
 prompt holds what the input cannot type, and a completion with several
 candidates offers them there to pick: the T-Deck's holds Tab and the shell's
@@ -195,7 +205,7 @@ computes it holds the console's task, so **Ctrl-C reaches it in C**: the
 face's poll kicks the input drivers and reads the kernel input table's
 latches between merges for a key that types 0x03, the T-Deck's Mic
 (`start`) or a gamepad's B; a parked run takes the Terminal's Ctrl-C and
-the board's cancel key from the face, the console's back (B, Esc, the bar's
+the board's cancel key from the face, the console's back (B and the bar's
 chevron) from the Terminal's `back()`, which keeps the Terminal open while a
 run is parked, and the serial face's from the channel's 0x03. A role command asks the same poll between its polls through
 `moy_sh.interrupted()`, or is stopped by its session, gives back what it
@@ -208,12 +218,16 @@ serial face's output.
 **The terminal emulation**, a full-screen text app's surface: the app
 writes an ANSI/VT100 subset to its stdout and reads keys from stdin, as on
 any Unix; the C shell's emulator keeps the cell grid (`moy_term.h` lists the
-subset it reads: cursor motion, erase, SGR inks and grounds, scrolling and
-wrap), and the screen face draws that grid through `ui.text_view`, whose
-ANSI inks are the theme's tones and whose RGB inks and grounds are the
-nearest of the sixteen base colours, exactly; the half and whole blocks
+subset it reads: cursor motion, erase, SGR inks, grounds and reverse video,
+scrolling and wrap), and the screen face draws that grid through
+`ui.text_view`, whose ANSI inks are the theme's tones and whose RGB inks and
+grounds are the nearest of the sixteen base colours, exactly, a reversed
+cell filled with its ink (vi's visual selection); the half and whole blocks
 (▀ ▄ █) are fills, so a program draws pixel art two pixels a cell, as
-`neofetch` draws Moy. The keys below are what the text apps read (`moy_sh_app.h`); a
+`neofetch` draws Moy. The shell's own colours are base colours as RGB, on
+every face and board (`moy_term_base_sgr`; the typed line, a text app's
+title and `top`'s selected row in `MOY_TERM_ACCENT`), never an ANSI ink, so an SSH
+client shows the console's colours too. The keys below are what the text apps read (`moy_sh_app.h`); a
 line program's stdin from the terminal and the resize event are still a
 sketch, and the size call is built for a compiled command alone
 (`term_size(cols*, rows*)` from `moybyte.term`, 0 rows where the face has
@@ -323,7 +337,9 @@ spike the owner approved on 2026-11-06):
   that finds an SSH session's is told so. The transport is a WebSocket the
   webhost upgrades, `GET /term?cols=&rows=` (subprotocol `moy.sh`), sealed
   like every route below, handed off the console's task at once, so the
-  frame never carries it.
+  frame never carries it. A Zero's page has it on its live socket instead
+  (the `t` channel, `native/moy_tty/README.md`), and the Zero serves no
+  `/term`.
 - **Its sign-in is the page's**, the browser sign-in below: on a console a
   paired browser can already write and run any cart, so a shell adds no
   exposure. The page says in the Terminal when the board does not answer, no
@@ -373,7 +389,8 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   THE CLAIM the rules). The cable can ask for a fresh claim at any time
   (My consoles' "Manage by cable"), which replaces a password set before
   and signs every browser out, as `passwd` does: physical access is the
-  owner's proof. The record crosses the network, guessable only at
+  owner's proof. A claim that sets the password starts the SSH server at
+  once, as `passwd` does (the webhost's `on_password`). The record crosses the network, guessable only at
   its PBKDF2 cost; the password does not. A pairing
   mints a random 128-bit device key with an id and the browser's name, kept in
   `system/webkeys` (`/etc/webkeys`); the page keeps it per board id in its
@@ -419,6 +436,11 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   use) or taken by newer sign-ins. Both show
   the SSH host key's fingerprint (`SHA256:`, OpenSSH's form) to check a first
   `ssh` against.
+- **One page's at a time**: the web terminal and a Zero's live socket are the
+  newest signed-in page's (owner, 2026-11-25). The page that held one closes
+  4001 "taken" and offers it back at its user's word, never by itself; a
+  request with no session takes nothing. Sessions themselves are several at
+  once on every board.
 - **What it does not stop**: the page itself is served over plain HTTP, so an
   attacker ACTIVE on the LAN can swap the page for one that captures a
   password typed into it or a key it reads; only HTTPS with a certificate

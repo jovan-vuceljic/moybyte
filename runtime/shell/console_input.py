@@ -17,7 +17,7 @@ mode, cancel, back, the trackball's steps -- is the input policy's
 `ws.router`; the state it reads is created in console.py's `_init_state`.
 """
 
-from moy_input import SHIFT as _SHIFT, CTRL as _CTRL, ALT as _ALT
+from moy_input import SHIFT as _SHIFT, CTRL as _CTRL, ALT as _ALT, MODS_AT as _MODS_AT
 from editor_app import COMMIT_TABS, THEME_TABS
 from chrome import _ticks_ms, _ticks_us, _ticks_diff
 import ui_draw as _ui_draw
@@ -33,6 +33,7 @@ class InputRouter:
         self.ws = ws
 
     _start_down = 0               # when the console's key went down; 0: not armed
+    _ev = 0                       # the last frame's key event (`_alt_tab`'s press)
 
     def handle_input(self):
         """The frame's keys, routed (`_route_keys`), between two looks at the
@@ -108,6 +109,8 @@ class InputRouter:
                 if not (_ui_draw.input_kind() == "tdeck" and ws.input_policy.cancel()):
                     ws.system_key()
                 return
+        if self._alt_tab(i):
+            return
         policy = ws.input_policy
         # Redraw-on-change (#44): a button PRESS edge or a typed key this frame may
         # change visible state (nav, select, screen/menu switch, an edit), so request a
@@ -708,6 +711,27 @@ class InputRouter:
         if box is None or got is None:
             return None
         return box[0] - got[0][1][0] + box[2] // 2
+
+    def _alt_tab(self, i):
+        """Alt+Tab and Alt+Shift+Tab walk the desk's windows (`cycle`),
+        before any layer, on every keyboard with an Alt (a board's, the
+        browser page's in a fullscreen whose keyboard lock gives it the
+        chord); Alt's release ends the walk. A press is the key event
+        turning into the chord, as THE PRESS is a byte's. True where it
+        took the frame's keys."""
+        wm = self.ws.wm
+        ev = getattr(i, "key_event", 0) or 0
+        was, self._ev = self._ev, ev
+        if not getattr(i, "mods", 0) & _ALT:
+            if getattr(wm, "walk", None) is not None:
+                wm.cycle_end()
+        if ev == was or (ev & 0xFFFF) != 9 or (ev >> _MODS_AT) & ~_SHIFT & 0xFF != _ALT:
+            return False
+        cycle = getattr(wm, "cycle", None)
+        if cycle is None or not cycle(-1 if (ev >> _MODS_AT) & _SHIFT else 1):
+            return False
+        i.spend_edges()
+        return True
 
     def _caret_step(self, i):
         """A direction pressed while a caret has the keys: `nav` it, and

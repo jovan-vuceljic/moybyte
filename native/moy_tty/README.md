@@ -15,6 +15,7 @@ server could still serve the web terminal. How a face is reached is
 | `moy_tty_sys.c` | the face task, the hop to the console's task and its tail (`moy_tty_tail`, a weak hook in `native/moy_kernel/moy_loop_board.c`), the socket pair, PSRAM |
 | `moy_tty_sftp.c` | the SFTP server a face runs in place of a command (`MOY_TTY_SFTP`, SSH's `sftp` subsystem): SFTP version 3 over the stream, on the session's files tree through the shell's paths, each request one hop to the console's task, the shelf told of changed cart folders through the door's `rescan` (its header; `docs/os_2026-11/system.md` §4) |
 | `moy_tty_ws.c` | the web terminal's bridge: the socket the webhost upgraded (`GET /term`), its WebSocket messages to and from a face |
+| `moy_tty_live.c` | the web terminal on a Zero's live socket, its `t` channel (`native/moy_net/moy_live.c`): a face opened, fed and read on the socket's own task, where the board serves no `GET /term` |
 | `modmoy_tty.c` | the module `moy_tty`: `stats()` |
 | `host/tty_main.c` | the host harness `tests/test_moy_tty.py` builds: the kernel's webhost with its sign-in (a system folder, or `-` for an open host; `token` and `drop` on stdin mint a QR token and forget every browser) and the bridge in front of the face and shell SSH's harness runs (`native/moy_ssh/host/ssh_main.c`) |
 
@@ -49,7 +50,11 @@ server could still serve the web terminal. How a face is reached is
 
 **One face at a time** across the transports (owner choice open: two faces
 would take two arenas): a page that finds an SSH session's face is closed
-1013 `busy`, and an SSH client that finds the page's is refused its channel.
+1013 `busy`, and an SSH client that finds the page's reads why on its stderr
+and ends with status 1 (`native/moy_ssh/moy_ssh.c`, `moy_ssh_command`).
+Between two pages the newest signed-in one has the terminal (owner,
+2026-11-25): the page that held it closes 4001 `taken` and offers it back at
+its user's Enter (`native/moy_net/moy_webauth.c`, `moy_wa_take`).
 An SFTP server is a face too, a session of the shell's for its paths: while a
 shell runs (on the page, or a channel of the same SSH connection) SFTP's
 channel is refused, and while SFTP runs a shell is.
@@ -79,6 +84,15 @@ sign-ins. The subprotocol is `moy.sh`; the board
 link (`docs/os_2026-11/web_terminal_spike.md` §7) is a route of its own whose
 shell channel carries this stream.
 
+A board that builds the live socket (the Zeros, `native/moy_net/moy_live.h`)
+carries its page's terminal on it instead (`moy_tty_live.c`): the socket's
+probe says `"term":1`, `GET /term` is 404 there, and the Terminal's face is
+the socket's `t` channel, one socket, one session and one set of buffers for
+the page. The page opens a face with its size when its Terminal asks and the
+socket's end ends the face, so a takeover and a restart behave as the
+socket's: the taken page is told 4001, and after a restart the Terminal says
+the connection was lost and Enter opens a face on the reopened socket.
+
 The page's sign-in is the terminal's (owner, 2026-11-06, the spike's §4): on a
 console a paired browser can already run any code (`POST /sync` writes a cart,
 `POST /run` plays it), so a shell behind the same sign-in adds no exposure.
@@ -91,7 +105,9 @@ session's 32 KB arena (`moy_tty_sh.c`, the most one used is `stats()`'s
 `arena_peak`, measured in #246) and the face task's stack are PSRAM; the
 bridge's two 2 KB buffers live while a page is connected. A board without
 PSRAM pays all of it in its one internal heap, so it takes a 12 KB arena and
-the smaller stack, and its SSH server refuses SFTP
+the smaller stack, shows a full-screen app straight (its writes to the
+client as they come, no grid kept: `moy_tty_sh.c`), and its SSH server
+refuses SFTP
 (`native/moy_ssh/README.md`, Memory).
 
 ## Boards

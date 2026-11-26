@@ -99,6 +99,7 @@ ALLOWED = {
     ("moy_net/moy_seal.c", "mutex"): "made in PSRAM: its control block spends no internal SRAM",
     ("moy_sh/moy_sh_board.c", "mutex"): "a runner's hand-off: binary semaphores and a condition",
     ("moy_usbdisk/moy_usbdisk.c", "mutex"): "a binary semaphore: the task's done signal",
+    ("moy_sd/moy_sd.c", "mutex"): "a binary semaphore: the SPI card's hop's done signal",
     ("moy_wasm/modmoy_wasm.c", "mutex"): "binary semaphores: a session's hand-offs",
     ("moy_kernel/moy_kernel.c", "task"):
         "mp_task: the esp32 port's own task, pinned as the port starts it",

@@ -47,6 +47,18 @@ refuse for ES modules) and .wasm as application/wasm (streaming compile).
                                             # and the keys it is signed with),
                                             # stepped in the background as a
                                             # board's poll steps it.
+    python serve.py ... --carts D --wifi W  # ...and a Zero's /wifi on top: the
+                                            # board's own backend
+                                            # (zero_wifi.ZeroWifi) over a fake
+                                            # radio whose networks W names
+                                            # ({"on": SSID, "nets": [{"ssid",
+                                            # "password", "rssi"}], "join_ms",
+                                            # "back_ms"}), its saved networks
+                                            # D/../wifi.json. While the radio
+                                            # is off the network it started
+                                            # on, every request is dropped
+                                            # unanswered: the page reached it
+                                            # over that one.
     python serve.py ... --carts D --one-link  # ...over a board's LINK: one
                                             # connection at a time, each send
                                             # held to the board's budget
@@ -153,6 +165,13 @@ if "--official" in args:
     del args[i:i + 2]
     if "--carts" not in sys.argv:
         raise SystemExit("--official needs --carts (it is part of the board twin)")
+wifi_file = None
+if "--wifi" in args:
+    i = args.index("--wifi")
+    wifi_file = os.path.abspath(args[i + 1])
+    del args[i:i + 2]
+    if "--carts" not in sys.argv:
+        raise SystemExit("--wifi needs --carts (it is part of the board twin)")
 no_system = "--no-system" in args
 if no_system:
     args.remove("--no-system")
@@ -256,9 +275,38 @@ def serve_loader(h, path):
 
 
 class Static(http.server.SimpleHTTPRequestHandler):
+    """A static host, as the site's (GitHub Pages) serves: a file whose
+    build left its gzip beside it (build.sh) goes as that gzip, labelled,
+    to a browser that takes gzip -- the wasm crosses a LAN at half its size,
+    as it does from the site."""
+
     def do_GET(self):
         if not serve_pack(self, self.path.split("?", 1)[0]):
             super().do_GET()
+
+    def end_headers(self):
+        # A rebuilt dist is served at the same names: a browser that kept a
+        # file by its own heuristic would pair an old wasm with a new worker.
+        if not self._headers_buffer or b"Cache-Control" not in b"".join(
+                self._headers_buffer):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
+    def send_head(self):
+        path = self.translate_path(self.path)
+        gz = path + ".gz"
+        if ("gzip" not in (self.headers.get("Accept-Encoding") or "")
+                or not os.path.isfile(path) or not os.path.isfile(gz)):
+            return super().send_head()
+        f = open(gz, "rb")
+        st = os.fstat(f.fileno())
+        self.send_response(200)
+        self.send_header("Content-Type", self.guess_type(path))
+        self.send_header("Content-Encoding", "gzip")
+        self.send_header("Content-Length", str(st.st_size))
+        self.send_header("Last-Modified", self.date_time_string(st.st_mtime))
+        self.end_headers()
+        return f
 
 
 if carts_dir is None:
@@ -277,31 +325,24 @@ else:
     _LINK_CHUNK = 65536
     from runtime import moy_sync                        # noqa: E402
 
-    class TwinConsole:
+    class TwinConsole(moy_webhost.StoreSystem):
         """The board's Settings, the badges among them, as a board keeps them
-        beside its carts (D/../system/settings), merged through the same
-        bodies a board's VM runs (moy_webhost.ConsoleSystem's): what a page
-        served by this twin may change is moy_sync.SYSTEM_KEYS'."""
+        beside its carts (D/../system/settings), merged through the Zero's
+        own body (moy_webhost.StoreSystem): what a page served by this twin
+        may change is moy_sync.SYSTEM_KEYS'. One request at a time."""
 
         def __init__(self, carts):
             import threading
-            from runtime import moy_carts
-            from runtime.moy_spine import Settings
-            self.carts = carts
+            super().__init__(carts)
             self.lock = threading.Lock()
-            self.rows = Settings(
-                lambda text: moy_carts.save_system(text, carts) or True)
-            self.rows.adopt(moy_carts.load_system(carts))
-            self.rx = moy_sync.SystemReceiver()
 
         def pull(self):
             with self.lock:
-                return moy_sync.system_pull(self.rows)
+                return super().pull()
 
         def apply(self, ops):
             with self.lock:
-                applied, errors, _changed = self.rx.apply(ops, self.rows, self.carts)
-            return applied, errors
+                return super().apply(ops)
 
     console = None if no_system else TwinConsole(carts_dir)
 
@@ -485,6 +526,94 @@ else:
 
     official = twin_official(official_dir, carts_dir) if official_dir else None
 
+    class TwinRadio:
+        """moy_net's wifi functions over the networks `--wifi` names: a
+        join takes `delay` seconds and comes up where the network is named
+        and its password matches; a wrong password is refused (reason 15),
+        a network not named never answers (201), as a station's would."""
+
+        def __init__(self, doc):
+            self.nets = {n["ssid"]: n for n in doc.get("nets") or ()}
+            self.delay = float(doc.get("delay", 0.8))
+            self.ssid = doc.get("on")
+            self.up = self.ssid in self.nets
+            self.want = None
+            self.at = 0.0
+            self.reason = 0
+            self.scan_at = None
+
+        def _tick(self):
+            if self.want is None or time.time() < self.at:
+                return
+            ssid, pw = self.want
+            n = self.nets.get(ssid)
+            if n is not None and (n.get("password") or "") == pw:
+                self.ssid, self.up, self.want = ssid, True, None
+            else:
+                self.reason = 15 if n is not None else 201
+
+        def wifi_status(self):
+            self._tick()
+            return (True, True, self.up, self.ssid if self.up else None,
+                    "10.0.%d.2" % (sorted(self.nets).index(self.ssid) + 1)
+                    if self.up else None, self.reason, True)
+
+        def wifi_scan(self, wait=True):
+            if self.scan_at is None:
+                self.scan_at = time.time()
+            if not wait and time.time() - self.scan_at < 0.5:
+                return None
+            self.scan_at = None
+            return [(n["ssid"].encode(), int(n.get("rssi", -60)),
+                     3 if n.get("password") else 0) for n in self.nets.values()]
+
+        def wifi_connect(self, ssid, password):
+            self.up = False
+            self.want = (ssid, password or "")
+            self.at = time.time() + self.delay
+            self.reason = 0
+
+        def wifi_disconnect(self):
+            self.up = False
+            self.want = None
+
+        def wifi_mdns(self, name):
+            return True
+
+    def twin_wifi(path, carts):
+        """`--wifi`: the board's own /wifi backend over a TwinRadio,
+        stepped in the background as a board's poll steps it; and the
+        network the page reached the twin over."""
+        import zero_wifi
+        with open(path) as f:
+            doc = json.load(f)
+        radio = TwinRadio(doc)
+        backend = zero_wifi.ZeroWifi(
+            os.path.join(os.path.dirname(carts), "wifi.json"), "moybyte-twin",
+            radio=radio, join_ms=int(doc.get("join_ms", 3000)),
+            back_ms=int(doc.get("back_ms", 3000)))
+        lock = threading.Lock()
+
+        def pump():
+            while True:
+                with lock:
+                    if backend.busy():
+                        backend.step()
+                time.sleep(0.05)
+        threading.Thread(target=pump, daemon=True).start()
+        return backend, lock, radio, doc.get("on")
+
+    wifi = twin_wifi(wifi_file, carts_dir) if wifi_file else None
+
+    def wifi_away():
+        """True while the twin's radio is off the network the page reached
+        it over: a request then reaches nothing."""
+        if wifi is None:
+            return False
+        with wifi[1]:
+            st = wifi[2].wifi_status()
+        return not (st[2] and st[3] == wifi[3])
+
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **kw):
             super().__init__(*a, directory=root, **kw)
@@ -520,8 +649,15 @@ else:
             self._send(503, b'{"error":"closing","why":"off"}')
             return True
 
+        def _away(self):
+            """Dropped unanswered while the radio is elsewhere (`--wifi`)."""
+            if not wifi_away():
+                return False
+            self.close_connection = True
+            return True
+
         def do_GET(self):
-            if self._closing():
+            if self._closing() or self._away():
                 return
             path = self.path.split("?", 1)[0]
             if serve_pack(self, path):
@@ -575,10 +711,14 @@ else:
                 with official[1]:
                     self._send(200, official[0].answer().encode())
                 return
+            if path == "/wifi" and wifi is not None:
+                with wifi[1]:
+                    self._send(200, wifi[0].answer().encode())
+                return
             super().do_GET()          # the boot assets: never gated
 
         def do_POST(self):
-            if self._closing():
+            if self._closing() or self._away():
                 return
             path = self.path.split("?", 1)[0]
             if path == "/update":
@@ -611,6 +751,19 @@ else:
                     ok, msg = official[0].request(doc.get("action") or "",
                                                   doc.get("folder"), doc)
                     body = official[0].answer(ok, msg).encode()
+                self._send(200 if ok else 409, body)
+                return
+            if path == "/wifi" and wifi is not None:
+                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    doc = json.loads(self.rfile.read(n) or b"{}")
+                    doc.get("action")
+                except (ValueError, AttributeError):
+                    self._send(400, b'{"error":"bad json"}')
+                    return
+                with wifi[1]:
+                    ok, msg = wifi[0].request(doc)
+                    body = wifi[0].answer(ok, msg).encode()
                 self._send(200 if ok else 409, body)
                 return
             if path == "/auth":
@@ -737,6 +890,8 @@ with server_class(("0.0.0.0", port), handler) as srv:
         note += " + a faked /update (%s)" % update_mode
     if official_dir:
         note += " + /official from %s" % official_dir
+    if wifi_file:
+        note += " + /wifi over %s" % wifi_file
     if one_link:
         note += " over one link at a time"
     if loader_twin:

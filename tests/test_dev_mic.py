@@ -142,7 +142,7 @@ def test_the_recording_indicator_stands_while_a_process_holds_the_microphone():
     th = theme_colors("moy", "dark")
     chrome_ops.chrome_inks(th, NAMES)
     now = 5000000
-    moy_play.chrome_notice("", "", True, now)
+    moy_play.chrome_notice("", "", "check", now)
     moy_play.chrome_note("", "", "", 0)
     moy_play.chrome_toast_arm("", "", "", False, 0)   # an earlier test's, on the real clock
     raw = (ctypes.c_uint16 * (w * h))()
@@ -177,6 +177,7 @@ def _shell(tmp_path):
     ws = build_workstation(str(tmp_path / "carts"))
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid, as a desk's does
     return app, lambda line: (run(app, line), plain(app))[1]
 
 

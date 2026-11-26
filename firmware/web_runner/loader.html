@@ -70,8 +70,23 @@ const tx = (mode, f) => db ? new Promise((ok, no) => {
 const t = db.transaction("packs", mode), q = f(t.objectStore("packs"));
 t.oncomplete = () => ok(q && q.result); t.onerror = t.onabort = () => no(t.error);
 }).catch(() => null) : Promise.resolve(null);
+// A source's bytes, said as they arrive (of the total where the length is
+// theirs: a host that compressed them sends another).
+const mb = (b) => (b / 1048576).toFixed(1);
 const get = async (url) => {
-try { const q = await fetch(url); if (q.ok) return q.arrayBuffer(); why.push(url + " " + q.status); }
+try {
+const q = await fetch(url);
+if (q.ok) {
+const n = q.headers.get("content-encoding") ? 0 : +q.headers.get("content-length") || 0, rd = q.body.getReader(), parts = [];
+let got = 0;
+for (let c = await rd.read(); !c.done; c = await rd.read()) {
+parts.push(c.value); got += c.value.length;
+say("Loading the console, " + mb(got) + (n >= got ? " of " + mb(n) : "") + " MB");
+}
+return await new Blob(parts).arrayBuffer();
+}
+why.push(url + " " + q.status);
+}
 catch (e) { why.push(url + " unreachable"); }
 return null;
 };
@@ -109,6 +124,8 @@ for (const m of MIRRORS) sources.push([m, () => get(m + page + ".pack")]);
 for (const [from, fetchIt] of sources) {
 const t = performance.now(), buf = await fetchIt();
 if (!buf) continue;
+say("Checking the console");
+await new Promise((ok) => setTimeout(ok, 30));   // its words paint before the hash holds the page
 const t1 = performance.now(), ok = sha256(new Uint8Array(buf)) == want, t2 = performance.now();
 const items = ok && parse(buf, page);
 if (from == "link") handed.back({ kind: "pack", ok: !!items });
@@ -133,6 +150,7 @@ if (bare != name) body = await new Response(body.stream().pipeThrough(new Decomp
 A[bare] = URL.createObjectURL(new Blob([body], { type }));
 }
 self.moyAssets = A;
+say("Starting the console");
 self.moyBoot = { from, fetch: t1 - t, hash: t2 - t1, total: performance.now() - T0 };
 const html = await (await fetch(A["index.html"])).text();
 document.open(); document.write(html); document.close();

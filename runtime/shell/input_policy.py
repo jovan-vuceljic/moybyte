@@ -20,6 +20,9 @@ what its page has focused (the toolkit's `api_typing`, `api_cancel` and
   cascade: a menu, a fullscreen game's pause, the toolkit's step, the
   surface's own page step, then leaving the surface.
 - THE TRACKBALL: whether it steps the holder as W A S D do (`ball_steps`).
+- PASTE from outside the console (`paste`: a browser page's clipboard):
+  the console's clipboard holds its text, and the holder types it whole
+  where it can (the Terminal), else the host presses the console's Paste.
 
 THE SWITCH SWALLOWS THE BYTE THAT CAUSED IT. Every surface reads one
 typed-key press, the table's `typed` (THE PRESS, native/moy_input/moy_input.h).
@@ -30,7 +33,22 @@ pressing it again still types. It runs on a change only: a per-frame spend
 would swallow the keystroke of the frame it ran in.
 """
 
+import moy_app as _moy_app
 import ui_draw as _ui_draw
+
+
+def _clip_cut(text):
+    """`text` cut to what the clipboard holds (MOY_APP_CLIP_MAX bytes), at a
+    character's boundary."""
+    cap = _moy_app.CLIP_MAX
+    if len(text) * 4 <= cap:
+        return text
+    n = len(text[:cap].encode("utf-8"))
+    out = text[:cap]
+    while n > cap:
+        n -= len(out[-1].encode("utf-8"))
+        out = out[:-1]
+    return out
 
 
 class InputPolicy:
@@ -214,6 +232,27 @@ class InputPolicy:
             if app is not None and app.BACK_MINIMISES and ws.wm.minimise_kind(kind):
                 return
             ws.spine.exit_to_caller()
+
+    # -- paste -------------------------------------------------------------------
+
+    def paste(self, text):
+        """A paste from outside the console: its text on the console's
+        clipboard (as much as it holds, MOY_APP_CLIP_MAX bytes), then the
+        holder's to type whole (`Layer.paste`). True where the holder took
+        it; False where the host presses the console's Paste (Ctrl+V) for
+        a field, an editor or a popover's field to take from the
+        clipboard."""
+        ws = self.ws
+        clip = getattr(ws, "clipboard", None)
+        if clip is not None:
+            clip.put_text(_clip_cut(text))
+        if self._typing_popover() is not None or self._modal():
+            return False
+        s = self.holder()
+        if s is None or not s.paste(text):
+            return False
+        ws.mark_dirty()
+        return True
 
     # -- the trackball ---------------------------------------------------------
 

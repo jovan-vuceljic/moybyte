@@ -82,8 +82,10 @@ nor those docs will warn you about:
 - **The browser draws what its boards draw: each arrangement on its board's
   metric class, in the theme's fonts and icon set** (owner, 2026-10-20: the
   browser and the boards never diverge). The handheld 320x240 declares no
-  glass, as the T-Deck declares none; the desk declares the P4's at the P4's
-  pixel density at any page size (`layout_base.desk_diagonal_in`), so it lays
+  glass, as the T-Deck declares none, and so does any page glass below the
+  desk's room (a phone, a small window: `web_boot.glass_in`); the desk declares
+  the P4's at the P4's pixel density at any page size
+  (`layout_base.desk_diagonal_in`), so it lays
   out on the desk's metrics and tap floor as that board does. `build.sh` generates `fonts_data` (`tools/make_font.py module`)
   for board.toml's `font_tier` -- both tiers -- and freezes it into the wasm,
   faces and icon masks together, so they ride the compressed
@@ -108,6 +110,40 @@ nor those docs will warn you about:
   to a secure context**: Firefox's `getGamepads()` answers none over plain
   HTTP, so a board-served page may see no pad where the site (https) and
   localhost do.
+- **The page keeps no bar of its own** (owner, 2026-11-25): what its top
+  bar and the cards under the canvas did is the console's
+  (`firmware/web_runner/page_link.py`, `Workstation.page`). The system menu
+  holds Full screen (where the browser has it) and Add a file, a cart's menu
+  Download and, on a page a console serves, Play on the console; Settings'
+  Carts row says where the page keeps them; an import's report, a lost link
+  and a sign-in wait are the console's cards and notices. A row ASKS and the
+  frame carries the ask to the page (`ask`, the worker's `{t:"ask"}`); a
+  browser grants full screen and its file chooser only inside a user's
+  gesture, so the page does those while the tap that chose the row is
+  still active, else arms them for the next pointerup or keydown and the
+  console says to tap. What stays HTML is the loader's progress, the
+  pairing card before the console boots and a crash's text.
+- **An iPhone's full screen is the page saved to its Home Screen** (owner,
+  2026-11-25/26): its Safari has no element full screen, and where an
+  iPhone's or an iPad's browser has one it keeps its domain strip and Close
+  over the page's top, so there, and wherever the browser has none, the
+  system menu offers Add to Home Screen, whose card has the steps, beside
+  any Full screen, until the page runs as the app (`navigator.standalone`,
+  `display-mode`), which shows neither. That strip is why the page's own
+  controls keep out of the top corners (the burger and the keyboard summon
+  sit at the bottom of a landscape phone's margins) and why an iPhone's
+  element full screen takes a 50-pixel top inset (`html.iosfs`). The manifest and Moy's icons are `tools/web_app.py`'s,
+  written beside the page by both builds and named in the webhost's ASSETS
+  table, so a board serves them too; the page's head carries iOS's tags and
+  `viewport-fit=cover`, and its layout keeps out of the safe-area insets
+  (`room()` reads them back from the body's padding). No service worker:
+  iOS makes a standalone app of a plain-http page on the LAN without one.
+  What bites: the app's storage is not Safari's, so it pairs with a board
+  once more, by the password, because a code scanned with the camera
+  opens Safari, not the app; and a board's page saved at a number breaks
+  when its lease moves, so the card says to save it from the board's
+  .local name. The page never zooms: no pinch, no double tap, and the play
+  surfaces take every touch (no selection or callout).
 - **The emscripten is PINNED: `EMSDK_VERSION` in build.sh, held by
   `tools/emsdk_tree.sh` on every full build** (a tree at the pin is a silent
   no-op, another version is moved to it, one that cannot be had fails the
@@ -154,9 +190,12 @@ nor those docs will warn you about:
   exports to a list that only shrinks, every string it holds to a filed word
   (no file, folder or suffix) and its patterns to the channel's one (the
   audit: `docs/moycore_direction.md` §3).
-- **The substrate is OPFS, not IndexedDB**: the ops ARE file writes at paths, so a
-  cart folder stays a cart folder. No OPFS (private window, blocked site data,
-  `file://`) runs in memory and **the page says so**; a quota failure requeues, and
+- **The substrate is OPFS's shape**: the ops ARE file writes at paths, so a
+  cart folder stays a cart folder. OPFS is a secure context's, so a page on
+  plain http (a dev server on the LAN) keeps the same folders in IndexedDB
+  through OPFS's calls (`moy_store.idbNav`, `pageNav`); a page with neither
+  (blocked site data, `file://`) runs in memory and **the page says so**,
+  once, as a notice that times out; a quota failure requeues, and
   after three gives up ONCE and says that too. A returning browser's shelf is
   OPFS's, never the bundle's -- except the bundle's SYSTEM carts, which reach
   it as a board's built-ins reach its SD (#47), decided in the VM
@@ -180,7 +219,7 @@ nor those docs will warn you about:
   `navigator` (`tests/test_site_channel.py` holds the call sites), and a player
   the build cannot stamp is not published at all.
 - **What an embedding page can ask of the console, all read at boot and absent
-  from a plain visit** (the project site's hero passes the first three):
+  from a plain visit** (the project site's hero passes them):
   `?scheme=dark|light` (else the browser's `prefers-color-scheme`) is the
   theme VARIANT of a first run, handed to `console.wire_workstation_core(
   first_variant=)` -- the absent-row default of `load_system`, so a saved
@@ -189,8 +228,11 @@ nor those docs will warn you about:
   (`web_boot.start_edit`, without the First Steps badge) from whatever the
   browser's store holds, so a visitor's edits are kept, and on the desk as a
   window unless this browser left it full screen; `&play=1` presses its Play,
-  which on the desk runs the cart in the Editor's Game pane (the site's
-  Desktop tab passes it, its Handheld tab does not). The framed player posts
+  which on the desk runs the cart in the Editor's Game pane; `&only=desk`
+  applies them only where the console lands on the desk, so in console mode
+  (a phone) the visit lands on the home (the site's one embedded console
+  passes all four and lays itself out from its frame, the desk's aspect on
+  a wide page and the handheld's 4:3 on a phone, with no tiers to pick). The framed player posts
   `{moyChrome}` and, at its first painted frame, `{moyLive}`.
   `tests/test_web_first_run_e2e.py` drives them. The hero's two stills (Night,
   Day) are CAPTURED by `site/build.py` from the player it ships, through
@@ -232,7 +274,8 @@ nor those docs will warn you about:
   because a torn `system/settings` boots the console on its defaults. **On a
   board the root is the VM's, never the C's**: the page seeds from `GET
   /console.json` and pushes `{"v": 2, "root": "system"}` batches, which the C
-  parks (its seal checked) for `moy_webhost.ConsoleSystem`; the board is of record
+  parks (its seal checked) for `moy_webhost.ConsoleSystem` (a Zero's
+  `StoreSystem` keeps them and applies nothing); the board is of record
   and takes a page's change KEY BY KEY (`moy_sync.SYSTEM_KEYS`: an unknown key
   is LOCAL, so the consent records are never taken; the update channel is
   never sent and never taken, and the badges row crosses whole, the later
@@ -294,9 +337,10 @@ nor those docs will warn you about:
     from the mirror, only when its signature verifies under the release keys
     the bundle bakes in (`release_keys`, `tools/ota_sign.py keys-module`,
     the keys every board trusts) -- never for the address it was read from. An external file it can read from neither is the player's
-    own copy, chosen through a REAL page control (the card under the canvas):
-    a browser opens its file dialog only from a click on one, never from a tap
-    the console relays a frame later.
+    own copy, chosen in the browser's file chooser, which a browser opens
+    only inside a user's gesture: the page opens it at once while the tap
+    that asked is still active (`navigator.userActivation`), else at the
+    player's next tap or key (page_core.html, THE ASKS).
   - **The sweep cannot persist an install**: the wire carries text and covers,
     never a module or a WAD. The keeper writes the folder and the record into
     OPFS behind one marker file (`moy_store.commitInstall`), boot rolls an
@@ -411,6 +455,18 @@ nor those docs will warn you about:
   the unsynced-work warning, because board mode keeps no local store. First
   reason wins, so an update nobody needs warning about cannot later be
   re-reported as a loss.
+- **A page a Zero serves manages that board's Wi-Fi** (2026-11-25): its
+  `ws.wifi` is the board's (`wifi_link.BoardWifi` over the sealed `/wifi`,
+  `device/zero_wifi.py`), probed before boot, so the bar, the Settings row and
+  the one Wi-Fi panel are the board's; anywhere else the page has none (#324).
+  What bites: a join MOVES the board off the network the page reaches it
+  over, so Settings asks first (`switch_says`), and from the board's answer
+  the worker holds the sync's give-up through the board's two windows
+  (worker.js, `wifiMove`); the board found again settles it, and silence to
+  the end is a move that worked, said as EXPECTED with an Open to
+  `<name>.local`, never as a loss. A cart is never handed this station
+  (`CARTS`). `serve.py --wifi` is the twin, and
+  `tests/test_web_zero_wifi_e2e.py` drives it.
 - **The console's HTTP server is the kernel's** (`native/moy_net/moy_webhost.c`
   over `moy_http.c` and `moy_net_port.c`): a non-blocking listener polled at the
   frame tail with no Python, one-shot serving, the bundle, the pulls and the
@@ -434,8 +490,14 @@ nor those docs will warn you about:
   deleted on 2026-10-27 (`docs/surface_model_v1.md` §16).
 - **The live socket is a Zero's page's, and the worker's to move** (#256,
   `native/moy_net/moy_live.h`): one sealed WebSocket to `GET /live` (seal
-  slot 1; the Terminal's is 0), multiplexed by its frames' first byte, served
-  on the board's own task. Its first channel relays the board's ESP-NOW, so
+  slot 1), multiplexed by its frames' first byte, served
+  on the board's own task. Its terminal channel ('t') is the page's
+  Terminal (`native/moy_tty/moy_tty_live.c`): a Zero serves no `GET /term`,
+  which the consoles' pages keep (seal slot 0). Its control channel's hints
+  (`moy_live.c`, THE HINTS) say when what the page reads over HTTP changed
+  (the store, `/wifi`, `/update`, `/official`), and while the socket is open
+  the worker asks those routes on a hint, never on its clocks; the bulk
+  (cart downloads, sync batches, the pack, sign-in) stays HTTP. Its first channel relays the board's ESP-NOW, so
   the page's link (`moy_link_web.c`, the kernel's Match over it) plays a
   console's match, a Python cart's as a Lua one's: the wasm computes floats
   as the boards' do (REPR_C over 32-bit words, single precision,
@@ -443,9 +505,15 @@ nor those docs will warn you about:
   (`docs/netplay_v1.md` §5). So a count, an address or a time the page and
   the VM exchange rides an integer, never a float, which keeps 22 bits:
   `web_boot._PCM` is 64-bit integers, and `time.time()` is whole seconds
-  as on a board. The worker moves its bytes between frames
-  (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a dropped
-  socket itself; a console board builds no bridge and 404s the probe.
+  as on a board. Its device channel ('d') relays the board's device APIs
+  that have a relay list (`native/moy_kernel/moy_dev_kinds.h`, THE RELAY;
+  lora): the probe names them, and the page's handles of them are remote
+  rows of its handle table (`moy_dev_web.c`) that never wait on the socket,
+  served on the board under the page session's own process, which its end
+  sweeps. A Python program holds faces, not handles, so a relayed device is
+  absent to it (`app_perms._why_absent`). The worker moves its bytes between
+  frames (`liveStep`, `web_boot.live_*`), never inside a step, and reopens a
+  dropped socket itself; a console board builds no bridge and 404s the probe.
 - **WASM MODE IS A SWITCH, NOT A SESSION** (owner call): no heartbeat, no presence
   detection, no timeout. While WEB CONSOLE is ON the glass PARKS on a connection
   screen — which is how the two-writer collision is **designed out rather than
@@ -490,8 +558,12 @@ nor those docs will warn you about:
   forgotten here. `ports/celeste.moy` is gitignored on BOTH repos (CC BY-NC-SA)
   — never commit or ship it.
 - **The BROWSER imports p8 carts too (#194), by running those same files, and
-  the imported cart RUNS.** A dropped `.p8`/`.p8.png` is converted in the wasm
-  VM: `build.sh` stages `tools/p8_import.py`, `tools/p8_lua_port.py` (both
+  the imported cart RUNS.** A dropped or chosen `.p8`/`.p8.png` is converted
+  in a wasm VM of its own, a second worker that ends with the cart
+  (`worker.js`, THE CONVERTER: a conversion takes an iPhone minutes), while the
+  console goes on drawing and its notice says the stage; then the console's
+  card shows the compatibility report, its Open playing the cart
+  (`page_link.py`'s `offer`): `build.sh` stages `tools/p8_import.py`, `tools/p8_lua_port.py` (both
   hash-pinned) and `tools/p8_writer.py` into the frozen set, plus `shims/zlib.py`,
   four lines over MicroPython's `deflate`. **The browser could skip the inflate
   entirely** (`createImageBitmap` + `getImageData`, then read the low bits in JS)
@@ -515,7 +587,7 @@ nor those docs will warn you about:
   injected from out here**. `tests/test_p8_micropython.py` is the lane that found
   them and `tests/test_p8_import_vendor.py` scans a re-vendored file for the six
   statically. **Memory is the other tier fact**: a real BBS cart needs several
-  times the fixture's MicroPython heap to import; the browser gives the VM 16MB,
+  times the fixture's MicroPython heap to import; the browser gives the converter's VM 16MB to start,
   and that import is the bar a device leg has to clear.
 - **Trust zepto8 for p8 semantics, not the wiki**: the pattern-length rule is the
   first non-looping channel, and all-looping means the SLOWEST channel — the
@@ -546,5 +618,9 @@ nor those docs will warn you about:
   plays a live station a minute on both sinks. The loop's own collect waits
   for a stream to end (`worker.js`, IDLE_QUIET_FRAMES): what a playing frame
   allocates the VM's threshold collects, and a pause the worker added would
-  come out of the sink's lead.
+  come out of the sink's lead. Two URL flags take it apart on a phone, where
+  there is no console to read: `?audio=0` makes no context (no sink, no
+  samples sent), and `?hud=1` shows the HUD from the load (the page's rate,
+  the worker's step report, the sink, http or https, and the page sink's
+  calls a second and cost).
 

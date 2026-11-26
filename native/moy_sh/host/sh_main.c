@@ -8,8 +8,9 @@
 // With SH_MAIN_MEASURE set it says last, on stderr, the deepest C stack under
 // main any poll ran on ("c stack N"; a walk polls at every path, so a tree's
 // depth that moves it is a walk recursing), the largest block the session
-// took after its arena ("largest block N") and the calls it made on the
-// store, each one hop ("store calls N").
+// took after its arena ("largest block N"), the calls it made on the
+// store, each one hop ("store calls N"), and the blocks it held after its last
+// line, before it was freed ("live blocks N").
 // SH_MAIN_ARENA sets the session's arena in KB (256 without it).
 //
 // The OS around the session is a stand-in, enough to exercise every path:
@@ -44,7 +45,7 @@ static int bg_signal = 0;
 static char interrupt_path[1024];
 static const char *stack_base;
 static size_t stack_deepest;
-static size_t largest = 0, *largest_at = NULL;
+static size_t largest = 0, *largest_at = NULL, live = 0;
 static size_t hops = 0;
 
 static void h_hop(void *ctx, void (*fn)(void *arg), void *arg) {
@@ -86,11 +87,14 @@ static void *h_alloc(void *ctx, size_t n) {
     if (largest_at != NULL && n > *largest_at) {
         *largest_at = n;
     }
-    return malloc(n);
+    void *p = malloc(n);
+    live += p != NULL;
+    return p;
 }
 
 static void h_free(void *ctx, void *p) {
     (void)ctx;
+    live -= p != NULL;
     free(p);
 }
 
@@ -392,10 +396,11 @@ int main(int argc, char **argv) {
         fprintf(stderr, "sh_main: the script ended inside a command\n");
         status = 2;
     }
+    size_t held = live;
     moy_sh_free(s);
     if (getenv("SH_MAIN_MEASURE") != NULL) {
-        fprintf(stderr, "c stack %zu\nlargest block %zu\nstore calls %zu\n", stack_deepest,
-                largest, hops);
+        fprintf(stderr, "c stack %zu\nlargest block %zu\nstore calls %zu\nlive blocks %zu\n",
+                stack_deepest, largest, hops, held);
     }
     return status;
 }

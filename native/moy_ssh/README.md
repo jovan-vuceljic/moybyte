@@ -40,9 +40,12 @@ it (the mbedTLS Curve25519 a console image carries is the apps'
 
 - **the server** (`moy_ssh`, priority 1, core 0, a 16 KB PSRAM stack, or
   10 KB of internal SRAM on a board without PSRAM) owns
-  the network and the crypto, one connection at a time (one that has not
+  the network and the crypto, one session at a time (one that has not
   signed in is closed 30 s after it connects, `AUTH_TIMEOUT` in
-  `port/localoptions.h`); it reads a
+  `port/localoptions.h`). A second connection signs in beside the session
+  served, in turns of that session's loop, and once signed in it ends that
+  session, whose client reads "another session signed in; this one is
+  closing" (owner, 2026-11-25; `moy_ssh.c`, THE TAKEOVER); it reads a
   connection's sign-in files through the hop to the console's task;
 - **the face** is `native/moy_tty`'s task, which the server holds while it
   serves: the session's shell, the hops and the gathered output are that
@@ -72,7 +75,9 @@ its arena are the face's (`native/moy_tty/README.md`, Memory); `stats()`'s
 On a board without PSRAM (`MOY_HAS_PSRAM` unset,
 `native/moy_kernel/moy_platform.h`) every one of these is internal SRAM, so
 the server's stack and the face's are sized to what a session was measured to
-use there, and the `sftp` subsystem is refused (`moy_ssh_command`): an SFTP
+use there, the packets it sends are at most 2 KB (`port/localoptions.h`: the
+payload buffer a session holds, and the queue to the client), and the `sftp`
+subsystem is refused (`moy_ssh_command`): an SFTP
 face's buffers do not fit beside a session, and a refusal is what the client
 reports. `firmware/esp32c3_zero/README.md` says how that board fits the rest.
 

@@ -764,6 +764,28 @@ class DeviceCanvas:
         self._install_draw_gates()
         _room(self)
 
+    def resize(self, w, h):
+        """This canvas over `w` x `h` pixels from now on: its compositor's
+        buffer made again at that size (`resize`, which a compositor whose
+        glass can change size has: the browser page's), the row pointed at
+        it, the draw state from the top (`reset_state`) and the scratches
+        the old size shaped dropped. The pixels start black; the caller
+        redraws."""
+        self._comp.resize(int(w), int(h))
+        self.w, self.h = self._comp.size()
+        self._stride = self.w
+        self._bh = self.h
+        self._ox = 0
+        self._oy = 0
+        self._buf = self._comp.framebuffer()
+        self._crow.point(self._buf, getattr(self._comp, "buf_h", 0))
+        st = self._gate_state
+        st[_ST_W] = self.w
+        st[_ST_H] = self.h
+        self._view_scratch = None
+        self._snap_scratch = None
+        self.reset_state()
+
     def sync_back(self):
         """Re-point the draw target at the compositor's current BACK buffer (#40
         double-buffer). Called once per frame BEFORE drawing: the prior flush() swapped
@@ -1381,10 +1403,10 @@ class DeviceCanvas:
     #
     # ONE verb, two meanings, and the tier decides which. On the HANDHELD tier
     # (the T-Deck's, and the wasm head's 320x240 arrangement) this canvas IS the
-    # glass: everything outside the game rect is letterbox, so the four black
-    # bands belong here -- and `FullscreenStackWM.composite_game` DEPENDS on
-    # them, because it probes for this verb and RETURNS, so its own
-    # `sc.cls(_VIEWPORT_BEZEL)` never runs on a canvas that has one. Hence the
+    # glass: everything outside the game rect is letterbox, so the four
+    # bands (in `bezel`) belong here -- and `FullscreenStackWM.composite_game`
+    # DEPENDS on them, because it probes for this verb and RETURNS, so its own
+    # `sc.cls(bezel(ws))` never runs on a canvas that has one. Hence the
     # default is True: a canvas nobody told otherwise letterboxes.
     #
     # The WINDOWED tier means the opposite by the same call.
@@ -1404,6 +1426,8 @@ class DeviceCanvas:
     # outright for its PPA path and paints no bands, so the flag is moot
     # there.)
     letterbox_composite = True
+    # The letterbox's colour, a palette index (the WM sets it: wm.bezel).
+    bezel = 0
 
     def front_scratch(self, gw, gh):
         """The fold's snapshot scratch for a run in the kernel's front on this
@@ -1531,19 +1555,21 @@ class DeviceCanvas:
             g.blit565(scr.framebuffer(), vw, vh, -sx, -sy,
                       src_buf, gw, gh, -1)
             src_buf = scr.framebuffer()
-        # Bezel: only the four strips outside the viewport (raw 565 black).
+        # Bezel: only the four strips outside the viewport, in `bezel` (the
+        # colour the WM names: the theme's desktop, wm.bezel).
         # Skipped on a WINDOWED tier -- see letterbox_composite above; the
         # composite below writes exactly the game rect either way, so this is
         # the ONLY difference between the two meanings of the verb.
         if self.letterbox_composite:
+            b = self._col(self.bezel)
             if oy > 0:
-                self._fill(0, 0, self.w, oy, 0)
+                self._fill(0, 0, self.w, oy, b)
             if oy + rh < self.h:
-                self._fill(0, oy + rh, self.w, self.h - (oy + rh), 0)
+                self._fill(0, oy + rh, self.w, self.h - (oy + rh), b)
             if ox > 0:
-                self._fill(0, oy, ox, rh, 0)
+                self._fill(0, oy, ox, rh, b)
             if ox + rw < self.w:
-                self._fill(ox + rw, oy, self.w - (ox + rw), rh, 0)
+                self._fill(ox + rw, oy, self.w - (ox + rw), rh, b)
         g.blit565_scale(self._buf, self.w, self.h, ox, oy,
                         src_buf, vw, vh, scale)
 

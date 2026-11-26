@@ -158,9 +158,15 @@ Everything time-dependent is pinned rather than tolerated (the repo rule:
 dt is INJECTED, never read from a clock -- `ScrollRegion` is the precedent):
 
   * dt is the fixed `_DT`; no surface reads a clock for its own animation.
-  * `bar_layer.clock_text` is bound to a constant. The OS bar prints a live
-    HH:MM, and a minute boundary between two renders is a real flake that has
-    taken CI down before (see `test_responsive_editors._quiesce`).
+  * the wall clock is a constant: `capture` pins `wallclock`'s instant
+    (`_NOW`) for the whole config, from its console's boot on, and every
+    workstation `_build` makes has `bar_layer.clock_text` and `today` bound
+    to constants from its first frame (`_pin_clock`). The OS bar prints a
+    live HH:MM, and a minute boundary between two renders is a real flake
+    that has taken CI down before (see `test_responsive_editors._quiesce`).
+  * what a config's plan leaves in a process-wide app (Music's `STREAM`,
+    the status items) is put back as `_build` starts, so a surface hashes
+    the same whatever ran on the worker before it.
   * every transient overlay is cleared each frame (`_quiesce`): the toast, the
     confetti/egg timers, the achievements list, the system menu, About, the
     notice banner, the FPS/perf HUDs, the cursor.
@@ -253,6 +259,7 @@ REBASELINE_CMD = (
 _DT = 1.0 / 30.0          # the injected frame delta; never a clock
 _MAX_FRAMES = 6           # settle cap -- every surface settles at 2 today
 _CLOCK = "00:00"          # the pinned OS-bar clock text
+_NOW = 1791936000         # the pinned wall clock: _DATE's midnight, UTC
 _COVER_SLICE_UNBOUNDED = 10 ** 9   # ms: build every cover in its own frame
 
 # The cart whose Editor tabs are rendered: a seeded GAME with a sprite sheet
@@ -371,7 +378,7 @@ TDECK_INPUTS = (("local", "tdeck"),)
 CONFIGS = {
     "tdeck_320x240_fs1_dark": dict(
         sys_size=None, font_scale=1, windowed=False, variant="dark",
-        diagonal_in=None, appearance=True),
+        diagonal_in=None, appearance=True, card=True),
     "tdeck_320x240_fs1_light": dict(
         sys_size=None, font_scale=1, windowed=False, variant="light",
         diagonal_in=None, appearance=True),
@@ -389,7 +396,7 @@ CONFIGS = {
         diagonal_in=7.0),
     "p4_1024x600_cs2_fs1_windowed": dict(
         sys_size=(1024, 600), font_scale=1, windowed=True, variant="dark",
-        diagonal_in=7.0, appearance=True),
+        diagonal_in=7.0, appearance=True, card=True),
     "p4_1024x600_fs2_light": dict(
         sys_size=(1024, 600), font_scale=2, windowed=False, variant="light",
         diagonal_in=7.0),
@@ -563,9 +570,13 @@ def _quiesce(ws):
         ws.about = False
     ws.notice_up = None
     ws._notice_until = 0
-    # The bar prints a live HH:MM. Bind the accessor -- pinning the clock's
-    # cache does NOT work (bar_layer reads the clock again once its hold runs
-    # out, so a sentinel only forces a recompute).
+    _pin_clock(ws)
+
+
+def _pin_clock(ws):
+    """The bar's HH:MM and day as constants. Bind the accessors -- pinning
+    the clock's cache does NOT work (bar_layer reads the clock again once its
+    hold runs out, so a sentinel only forces a recompute)."""
     ws.bar_layer.clock_text = lambda: _CLOCK
     ws.bar_layer.today = lambda: _DATE
 
@@ -625,6 +636,7 @@ def _build(cfg, carts_dir):
     music_app.STREAM.stations = music_app.STATIONS
     music_app.STREAM.section = None     # nor the last console's section and app
     music_app.STREAM.on_change = None
+    music_app.STREAM.tick = 0           # nor how far a connecting pulse had run
     for it in ITEMS.slots:              # no app's status item outlives its config
         if it.pid:
             ITEMS._free(it)
@@ -632,6 +644,7 @@ def _build(cfg, carts_dir):
         str(carts_dir), sys_size=cfg["sys_size"],
         font_scale=cfg["font_scale"], windowed=cfg["windowed"],
         panel_diagonal_in=cfg["diagonal_in"])
+    _pin_clock(ws)
     if cfg["sys_size"] is None:
         ws.use_inputs(TDECK_INPUTS)     # the T-Deck's canvas, its keyboard's keys
     pick_layout(ws, cfg)
@@ -851,7 +864,27 @@ def _surface_plan(ws, cfg):
     if desktop:
         plan.append(("desk_two_windows", _two_windows(ws)))
     plan.append(("launcher_make_broken", _broken_cart(ws, cfg)))
+    if cfg.get("card"):
+        plan += [("card_" + kind, _card_trouble(ws, kind, desktop)) for kind in CARD_TROUBLE]
     return plan
+
+
+# The card's two verdicts the desk is told at boot (`Notices.card_trouble`),
+# rendered last on the rows marked `card`: the T-Deck's and the P4's as shipped.
+CARD_TROUBLE = ("errors", "format")
+
+
+def _card_trouble(ws, kind, desktop):
+    """Over the floor a boot lands on: the desk on the desktop tier, else the
+    home."""
+    def enter():
+        ws.confirm.cancel()
+        if desktop:
+            ws.home.open_desk()
+        else:
+            ws.home.go_home()
+        assert ws.notices.card_trouble(kind) and ws.confirm.open
+    return enter
 
 
 BROKEN_APP = {"title": "Boomy", "canvas": "320x240", "moybyte": {"type": "app"}}
@@ -1085,6 +1118,17 @@ def _terminal_plan(ws, cfg):
         f.submit()
         app._damage.all()
 
+    def ansi():
+        # a program's ANSI inks, 30-37 then 90-97, which the view draws in
+        # the theme's tones, never a terminal's own colours
+        f = app.face
+        f.clear_cands()
+        f.set_in_row(False)
+        f.set_line("clear; for b in 3 9; do for i in 0 1 2 3 4 5 6 7; do "
+                   "printf '\\033[%d%dmink%d ' $b $i $i; done; printf '\\033[0m\\n'; done")
+        f.submit()
+        app._damage.all()
+
     plan = [("app_terminal", open_it)]
     if cfg.get("appearance"):
         plan.append(("app_terminal_listing", typed("help")))
@@ -1097,6 +1141,7 @@ def _terminal_plan(ws, cfg):
         plan.append(("app_terminal_top", text_app("top", still=True)))
         plan.append(("app_terminal_neofetch", neofetch))
         plan.append(("app_terminal_colours", colours))
+        plan.append(("app_terminal_ansi", ansi))
     return plan
 
 
@@ -1894,15 +1939,17 @@ def _open_get_carts(ws):
     through an in-memory transport, so its golden is the LIST a kid sees on a
     fresh console rather than the no-network notice. The store's free space is
     the one machine-dependent number on that screen, so it is pinned. The
-    check runs to its end first: its busy page settles in pixels while the
-    covers are still on their way, and the golden is the shelf."""
+    check runs to its end first, and the covers' fetches after it (the
+    snapshot serves none, so each card keeps its icon): its busy page and a
+    shelf whose covers are on their way both settle in pixels, and the
+    golden is the shelf as it stays."""
     def enter():
         ws.cart_net = MemNet({INDEX_URL: snapshot("index.json")})
         app = ws.app("getcarts")
         app._inst.free = lambda: (64 * 1048576, 4096)
         ws.spine.open_app(app)
         for _ in range(20):
-            if app.phase != "checking":
+            if app.phase != "checking" and not app._covers and not app._jobs:
                 break
             _quiesce(ws)
             ws.mark_dirty()
@@ -1972,12 +2019,14 @@ def surface_names(config_name):
         if not cfg["windowed"]:
             names.append("app_terminal_touch")
         names += ["app_terminal_edit", "app_terminal_top", "app_terminal_neofetch",
-                  "app_terminal_colours"]
+                  "app_terminal_colours", "app_terminal_ansi"]
     names += ["open_with", "pick", "app_files_document", "app_moymesh"]
     names += [name for name, _lua in MESH_PAGES]
     if cfg["windowed"] and not cfg.get("console"):
         names.append("desk_two_windows")
     names.append("launcher_make_broken")
+    if cfg.get("card"):
+        names += ["card_" + kind for kind in CARD_TROUBLE]
     return names
 
 
@@ -1991,6 +2040,16 @@ def capture(config_name, carts_dir, golden=None, moved=None):
     moved from it is written as a PNG (`pixel_goldens`) and its path added to
     `moved`."""
     cfg = CONFIGS[config_name]
+    import wallclock
+    now = wallclock._now
+    wallclock._now = lambda: _NOW
+    try:
+        return _capture(cfg, config_name, carts_dir, golden, moved)
+    finally:
+        wallclock._now = now
+
+
+def _capture(cfg, config_name, carts_dir, golden, moved):
     ws = _build(cfg, carts_dir)
     expect_bytes = ws.glass_canvas.w * ws.glass_canvas.h * 2  # RGB565
     out = {}

@@ -220,13 +220,14 @@ IMAGE = ImageT("image")
 class Pic:
     """An image value: where the engine finds the picture. `store` is a path
     in the console's store (KIND/NAME, a .moyimg drawing); `own` a key into
-    the app's own pictures (`pictures.put`)."""
+    the app's own pictures (`pictures.put`); `cart` a cart's store path,
+    its cover as the shell's cover cache holds it (runtime/shell/cover_cache.py)."""
     __slots__ = ("kind", "key")
 
     def __init__(self, kind, key):
-        if kind not in ("store", "own") or not isinstance(key, str) or not key:
-            raise UIError("S02", "an image is image.store(\"KIND/NAME\") or image.own(\"KEY\")",
-                          found="%r %r" % (kind, key), fix='image.store("drawings/NAME") for a file in the store, image.own("KEY") for one the app puts')
+        if kind not in ("store", "own", "cart") or not isinstance(key, str) or not key:
+            raise UIError("S02", "an image is image.store(\"KIND/NAME\"), image.own(\"KEY\") or image.cart(PATH)",
+                          found="%r %r" % (kind, key), fix='image.store("drawings/NAME") for a file in the store, image.own("KEY") for one the app puts, image.cart(cart["path"]) for a cart\'s cover')
         object.__setattr__(self, "kind", kind)
         object.__setattr__(self, "key", key)
 
@@ -255,6 +256,10 @@ class image:
     @staticmethod
     def own(key):
         return Pic("own", key)
+
+    @staticmethod
+    def cart(path):
+        return Pic("cart", path)
 
 
 class Enum(T):

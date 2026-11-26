@@ -166,57 +166,126 @@ void common_session_init(int sock_in, int sock_out) {
 	TRACE(("leave session_init"))
 }
 
+/* The loop's two halves, on the session the globals name: the sockets it
+waits on (its readfd and writefd added to the sets) and its ses.maxfd; then,
+after the select(), what it heard handled and what it queued written out.
+The Moybyte server (moy_ssh.c) runs a second session's halves inside this
+loop while that one signs in. */
+int session_loop_fds(fd_set *readfd, fd_set *writefd) {
+	const int writequeue_has_space = (ses.writequeue_len <= 2*TRANS_MAX_PAYLOAD_LEN);
+
+	dropbear_assert(ses.payload == NULL);
+
+	/* We get woken up when signal handlers write to this pipe.
+	   SIGCHLD in svr-chansession is the only one currently. */
+#if DROPBEAR_FUZZ
+	if (!fuzz.fuzzing) 
+#endif
+	if (ses.signal_pipe[0] >= 0) {
+	dropbear_fd_set(ses.signal_pipe[0], readfd);
+	}
+
+	/* set up for channels which can be read/written */
+	setchannelfds(readfd, writefd, writequeue_has_space);
+
+	/* Pending connections to test */
+	set_connect_fds(writefd);
+
+	/* We delay reading from the input socket during initial setup until
+	after we have written out our initial KEXINIT packet (empty writequeue). 
+	This means our initial packet can be in-flight while we're doing a blocking
+	read for the remote ident.
+	We also avoid reading from the socket if the writequeue is full, that avoids
+	replies backing up */
+	if (ses.sock_in != -1 
+		&& (ses.remoteident || isempty(&ses.writequeue)) 
+		&& writequeue_has_space) {
+		dropbear_fd_set(ses.sock_in, readfd);
+	}
+
+	/* Ordering is important, this test must occur after any other function
+	might have queued packets (such as connection handlers) */
+	if (ses.sock_out != -1 && !isempty(&ses.writequeue)) {
+		dropbear_fd_set(ses.sock_out, writefd);
+	}
+	return ses.maxfd;
+}
+
+void session_loop_step(fd_set *readfd, fd_set *writefd, void(*loophandler)(void)) {
+	/* We'll just empty out the pipe if required. We don't do
+	any thing with the data, since the pipe's purpose is purely to
+	wake up the select() above. */
+	ses.channel_signal_pending = DROPBEAR_MOY;
+	if (ses.signal_pipe[0] >= 0 && FD_ISSET(ses.signal_pipe[0], readfd)) {
+		char x;
+		TRACE(("signal pipe set"))
+		while (read(ses.signal_pipe[0], &x, 1) > 0) {}
+		ses.channel_signal_pending = 1;
+	}
+
+	/* check for auth timeout, rekeying required etc */
+	checktimeouts();
+
+	/* process session socket's incoming data */
+	if (ses.sock_in != -1) {
+		if (FD_ISSET(ses.sock_in, readfd)) {
+			if (!ses.remoteident) {
+				/* blocking read of the version string */
+				read_session_identification();
+			} else {
+				read_packet();
+			}
+		}
+		
+		/* Process the decrypted packet. After this, the read buffer
+		 * will be ready for a new packet */
+		if (ses.payload != NULL) {
+			process_packet();
+		}
+	}
+
+	/* if required, flush out any queued reply packets that
+	were being held up during a KEX */
+	maybe_flush_reply_queue();
+
+	handle_connect_fds(writefd);
+
+	/* loop handler prior to channelio, in case the server loophandler closes
+	channels on process exit */
+	loophandler();
+
+	/* process pipes etc for the channels, ses.dataallowed == 0
+	 * during rekeying ) */
+	channelio(readfd, writefd);
+
+	/* process session socket's outgoing data */
+	if (ses.sock_out != -1) {
+		if (!isempty(&ses.writequeue)) {
+			write_packet();
+		}
+	}
+}
+
 void session_loop(void(*loophandler)(void)) {
 
 	fd_set readfd, writefd;
 	struct timeval timeout;
-	int val;
+	int val, maxfd;
 
 	/* main loop, select()s for all sockets in use */
 	for(;;) {
-		const int writequeue_has_space = (ses.writequeue_len <= 2*TRANS_MAX_PAYLOAD_LEN);
-
 		timeout.tv_sec = select_timeout();
 		timeout.tv_usec = 0;
 		DROPBEAR_FD_ZERO(&writefd);
 		DROPBEAR_FD_ZERO(&readfd);
 
-		dropbear_assert(ses.payload == NULL);
-
-		/* We get woken up when signal handlers write to this pipe.
-		   SIGCHLD in svr-chansession is the only one currently. */
-#if DROPBEAR_FUZZ
-		if (!fuzz.fuzzing) 
+		maxfd = session_loop_fds(&readfd, &writefd);
+#if DROPBEAR_MOY
+		/* the listening socket, and a second session signing in */
+		maxfd = moy_ssh_loop_fds(&readfd, &writefd, &timeout, maxfd);
 #endif
-		if (ses.signal_pipe[0] >= 0) {
-		dropbear_fd_set(ses.signal_pipe[0], &readfd);
-		}
 
-		/* set up for channels which can be read/written */
-		setchannelfds(&readfd, &writefd, writequeue_has_space);
-
-		/* Pending connections to test */
-		set_connect_fds(&writefd);
-
-		/* We delay reading from the input socket during initial setup until
-		after we have written out our initial KEXINIT packet (empty writequeue). 
-		This means our initial packet can be in-flight while we're doing a blocking
-		read for the remote ident.
-		We also avoid reading from the socket if the writequeue is full, that avoids
-		replies backing up */
-		if (ses.sock_in != -1 
-			&& (ses.remoteident || isempty(&ses.writequeue)) 
-			&& writequeue_has_space) {
-			dropbear_fd_set(ses.sock_in, &readfd);
-		}
-
-		/* Ordering is important, this test must occur after any other function
-		might have queued packets (such as connection handlers) */
-		if (ses.sock_out != -1 && !isempty(&ses.writequeue)) {
-			dropbear_fd_set(ses.sock_out, &writefd);
-		}
-
-		val = select(ses.maxfd+1, &readfd, &writefd, NULL, &timeout);
+		val = select(maxfd+1, &readfd, &writefd, NULL, &timeout);
 
 		if (ses.exitflag) {
 			dropbear_exit("Terminated by signal");
@@ -234,60 +303,14 @@ void session_loop(void(*loophandler)(void)) {
 			DROPBEAR_FD_ZERO(&writefd);
 			DROPBEAR_FD_ZERO(&readfd);
 		}
-		
-		/* We'll just empty out the pipe if required. We don't do
-		any thing with the data, since the pipe's purpose is purely to
-		wake up the select() above. */
-		ses.channel_signal_pending = DROPBEAR_MOY;
-		if (ses.signal_pipe[0] >= 0 && FD_ISSET(ses.signal_pipe[0], &readfd)) {
-			char x;
-			TRACE(("signal pipe set"))
-			while (read(ses.signal_pipe[0], &x, 1) > 0) {}
-			ses.channel_signal_pending = 1;
-		}
 
-		/* check for auth timeout, rekeying required etc */
-		checktimeouts();
+#if DROPBEAR_MOY
+		/* a connection accepted, or the second session's turn; a sign-in
+		 * there ends this session (moy_ssh.c, THE TAKEOVER) */
+		moy_ssh_loop_heard(&readfd, &writefd);
+#endif
 
-		/* process session socket's incoming data */
-		if (ses.sock_in != -1) {
-			if (FD_ISSET(ses.sock_in, &readfd)) {
-				if (!ses.remoteident) {
-					/* blocking read of the version string */
-					read_session_identification();
-				} else {
-					read_packet();
-				}
-			}
-			
-			/* Process the decrypted packet. After this, the read buffer
-			 * will be ready for a new packet */
-			if (ses.payload != NULL) {
-				process_packet();
-			}
-		}
-
-		/* if required, flush out any queued reply packets that
-		were being held up during a KEX */
-		maybe_flush_reply_queue();
-
-		handle_connect_fds(&writefd);
-
-		/* loop handler prior to channelio, in case the server loophandler closes
-		channels on process exit */
-		loophandler();
-
-		/* process pipes etc for the channels, ses.dataallowed == 0
-		 * during rekeying ) */
-		channelio(&readfd, &writefd);
-
-		/* process session socket's outgoing data */
-		if (ses.sock_out != -1) {
-			if (!isempty(&ses.writequeue)) {
-				write_packet();
-			}
-		}
-
+		session_loop_step(&readfd, &writefd, loophandler);
 	} /* for(;;) */
 	
 	/* Not reached */

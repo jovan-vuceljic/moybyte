@@ -267,7 +267,9 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   the panel's and dies with `ESP_ERR_INVALID_STATE`). The store
   is `/sd/moybyte/carts` and its sibling documents `/sd/moybyte/*`; no card, a
   dead one or a filesystem the build cannot read all boot on the internal store
-  (`/moy/carts`) with one line, and `card_store.STATUS` is the verdict. FAT12/16/32
+  (`/moy/carts`) with one line, and `card_store.STATUS` is the verdict; an
+  unreadable filesystem, or a mounted card whose store then fails, also opens
+  a desk dialog that says so (`card_store.WHY`). FAT12/16/32
   and exFAT both mount (`MICROPY_FATFS_EXFAT` in `mpconfigboard.h`, the T-Deck's
   too). The OTA directory and the BLE bond store stay internal. Never format or
   erase a card from the console.
@@ -370,7 +372,8 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   `mpconfigboard.h`). The store is
   `/sd/moybyte/carts` and its sibling documents `/sd/moybyte/*`; no card, a dead
   one or a filesystem the build cannot read all boot on the internal store with
-  one line, and `card_store.STATUS` is the verdict. An EMPTY slot surfaces as
+  one line, and `card_store.STATUS` is the verdict (the desk dialog for the last
+  two is the Guition S3's paragraph's). An EMPTY slot surfaces as
   `moy_sd.up()`'s `card_init` error, named the way a failed mount is. The
   bring-up is native/moy_sd's C from each board's board.toml card row
   (`moy_sd.h`), which the kernel's recovery floor calls with no VM.
@@ -474,9 +477,13 @@ stages 1–6 all absent. Its README is the authority; what bites:
   hides costs this one internal SRAM, and a new resident task or buffer on a
   Zero is measured there before it ships: SSH fits only with its stacks,
   arena and receive window sized for it, SFTP refused, the webhost's upload buffer made per
-  request and the Python heap's ceiling kept clear of both (the README's SSH
-  paragraph). A block that lives for good is made at start, beside the
-  others: one made mid-session splits the free heap for good. One factory
+  request and the Python heap one block of 64 KB that never grows (the
+  README's SSH and No PSRAM paragraphs). A block that lives for good is made
+  at start, beside the others: one made mid-session splits the free heap for
+  good, in the C side's heap and in Python's alike. A module a running host
+  imports goes in `zero_host.LASTING`, and `tests/test_zero_heap.py` fails a
+  staged module that is in neither it nor the test's reasoned list, and
+  plays a page's session at the host's twin in the heap this board has. One factory
   slot and no OTA (owner, 2026-11-17): a new image goes on by cable, and the
   website's card offers the install and the app image as its update. Its
   browser console is ONLINE (owner, 2026-11-23, board.toml's `[web]

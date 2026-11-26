@@ -1290,6 +1290,10 @@ class LauncherHomeLayer(HomeHints, HomeDetails, HomeZone, HomeSearch, Layer):
             self.toggle_favourite()
         elif verb == "send":
             ws.link.beam_send(ws, self.grid.selected())
+        elif verb == "save":
+            ws.page.save_cart(self.grid.selected())
+        elif verb == "pod":
+            ws.page.play_on_console(self.grid.selected())
         elif verb == "options":
             self.open_card_menu()
         elif verb == "window":

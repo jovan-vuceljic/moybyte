@@ -82,7 +82,8 @@ def frame_cut(events):
 def apply_events(events, input, pointer, on_press=None, on_pan=None,
                  on_key=None, on_esc=None, on_hold=None, on_key_hold=None,
                  on_super=None, on_full=None, on_key_down=None, on_key_up=None,
-                 on_mods=None, on_wheel=None, on_middle=None, on_gamepad=None):
+                 on_mods=None, on_wheel=None, on_middle=None, on_gamepad=None,
+                 on_paste=None, on_glass=None, on_page=None):
     """Inject a batch of browser events into an InputState + Pointer. Each event is fully
     guarded (a malformed one is skipped, never raised) so a buggy client can't crash the loop.
 
@@ -98,8 +99,12 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                                         the browser, to that source
       {"type":"kd","code":..,"mods":..} -> a desk keyboard's key down: its
                                         code and modifiers (on_key_down)
+      {"type":"kd",...,"rep":1}      -> the browser's repeat of a key held
+                                        (on_key_down's `repeat`)
       {"type":"ku","code":..,"mods":..} -> ...and up (on_key_up)
       {"type":"mods","mods":..}      -> the modifiers it holds now (on_mods)
+      {"type":"mods",...,"lost":1}   -> ...let go as the page lost the
+                                        keyboard (on_mods' `tap` False)
       {"type":"wheel","dx":..,"dy":..,"mods":..} -> wheel notches (on_wheel)
       {"type":"mdown"|"mup","x":..,"y":..} -> the middle button (on_middle)
       a "down" with "mods" says the modifiers held as it went down
@@ -116,6 +121,15 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                                         screen, and back
       {"type":"super"}               -> the system key (on_super): the system
                                         menu, or the pause menu in play
+      {"type":"glass","w","h","zoom","zooms"} -> the page's viewport moved
+                                        (on_glass): the glass resized, the
+                                        UI scale and the ones it offers
+      {"type":"page",..}             -> the page's word (on_page): full
+                                        screen, where it keeps the carts,
+                                        what it has to say (page_link.py)
+      {"type":"paste","text":..}     -> the browser's clipboard pasted
+                                        (on_paste): the text whole; with no
+                                        text, the console's own Paste
     """
     for ev in events:
         try:
@@ -187,7 +201,10 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
                 fn = on_key_down if t == "kd" else on_key_up
                 if (isinstance(code, int) and 0 < code <= 0xFFFF and isinstance(mods, int)
                         and fn is not None):
-                    fn(code, mods & 0xFF)
+                    if t == "kd" and ev.get("rep"):
+                        fn(code, mods & 0xFF, True)
+                    else:
+                        fn(code, mods & 0xFF)
             elif t == "wheel":
                 if on_wheel is not None:
                     on_wheel(int(ev.get("dx", 0)), int(ev.get("dy", 0)),
@@ -198,7 +215,10 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
             elif t == "mods":
                 mods = ev.get("mods", 0)
                 if isinstance(mods, int) and on_mods is not None:
-                    on_mods(mods & 0xFF)
+                    if ev.get("lost"):
+                        on_mods(mods & 0xFF, False)
+                    else:
+                        on_mods(mods & 0xFF)
             elif t == "khold":
                 # A physically HELD printable key (browser keydown/keyup edges):
                 # outside text mode the driver latches it so key() streams every
@@ -220,6 +240,17 @@ def apply_events(events, input, pointer, on_press=None, on_pan=None,
             elif t == "full":
                 if on_full is not None:
                     on_full()
+            elif t == "glass":
+                if on_glass is not None:
+                    on_glass(int(ev["w"]), int(ev["h"]), int(ev.get("zoom", 1)),
+                             ev.get("zooms") or (1,))
+            elif t == "page":
+                if on_page is not None:
+                    on_page(ev)
+            elif t == "paste":
+                text = ev.get("text", "")
+                if isinstance(text, str) and on_paste is not None:
+                    on_paste(text)
         except Exception:  # noqa: BLE001 -- one bad event must not drop the batch
             pass
 

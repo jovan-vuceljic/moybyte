@@ -45,7 +45,7 @@
 //                     close_session open key press input elsewhere draw line
 //                     col set_line submit complete recall pick more prompt
 //                     take in_row set_in_row cands clear_cands history size
-//                     lines status interrupt
+//                     lines select selection status interrupt
 //   face_row(desk) tdeck_row()
 //                     the key row the input in use gets; the T-Deck's symbols
 //
@@ -664,6 +664,24 @@ static mp_obj_t face_lines(mp_obj_t self) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(face_lines_obj, face_lines);
 
+static mp_obj_t face_select(size_t n_args, const mp_obj_t *args) {
+    moy_sh_face_select(tface(args[0]), mp_obj_get_int(args[1]), mp_obj_get_int(args[2]),
+                       mp_obj_get_int(args[3]), mp_obj_get_int(args[4]));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(face_select_obj, 5, 5, face_select);
+
+static mp_obj_t face_selection(mp_obj_t self) {
+    int32_t v[4];
+    if (!moy_sh_face_selection(tface(self), v)) {
+        return mp_const_none;
+    }
+    mp_obj_t t[4] = {MP_OBJ_NEW_SMALL_INT(v[0]), MP_OBJ_NEW_SMALL_INT(v[1]),
+                     MP_OBJ_NEW_SMALL_INT(v[2]), MP_OBJ_NEW_SMALL_INT(v[3])};
+    return mp_obj_new_tuple(4, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(face_selection_obj, face_selection);
+
 static mp_obj_t face_status(mp_obj_t self) {
     moy_sh_screen_t *scr = moy_sh_face_screen(tface(self));
     return MP_OBJ_NEW_SMALL_INT(scr ? moy_sh_screen_status(scr) : 0);
@@ -709,6 +727,8 @@ static const mp_rom_map_elem_t face_locals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_history), MP_ROM_PTR(&face_history_obj) },
     { MP_ROM_QSTR(MP_QSTR_size), MP_ROM_PTR(&face_size_obj) },
     { MP_ROM_QSTR(MP_QSTR_lines), MP_ROM_PTR(&face_lines_obj) },
+    { MP_ROM_QSTR(MP_QSTR_select), MP_ROM_PTR(&face_select_obj) },
+    { MP_ROM_QSTR(MP_QSTR_selection), MP_ROM_PTR(&face_selection_obj) },
     { MP_ROM_QSTR(MP_QSTR_status), MP_ROM_PTR(&face_status_obj) },
     { MP_ROM_QSTR(MP_QSTR_interrupt), MP_ROM_PTR(&face_interrupt_obj) },
     { MP_ROM_QSTR(MP_QSTR_close), MP_ROM_PTR(&face_close_obj) },

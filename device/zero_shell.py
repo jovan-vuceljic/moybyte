@@ -10,11 +10,14 @@ console's Python gives them:
     board has no frame: its poll loop calls `tail()` each turn
     (zero_host.serve), and between turns a hop waits.
   * THE DOOR (native/moy_sh/moy_sh_board.h, the ROLE door's row
-    MOY_SH_DOOR): `passwd`, `df`, `mem` and `ps` answered here; everything
-    else is the console's (its processes, /proc's and /dev's rows, the
-    installed and the other role commands), which this board has not got, so
-    it answers as a console with its VM stopped does (NEEDS_VM), and the
-    store's C commands (`settings`, `pkg list`) still serve.
+    MOY_SH_DOOR): `passwd`, `df`, `mem` and `ps` answered here, and
+    /proc/console's name, board and firmware (neofetch's rows). The other
+    role commands and the installed ones are not served on this board
+    (ABSENT: "not served here", "not found"), the store's C commands
+    (`settings`, `pkg list`) serving in their place; everything else is the
+    console's (its processes, /proc's and /dev's rows), which this board has
+    not got, so it answers as a console with its VM stopped does
+    (NEEDS_VM).
   * THE CONSOLE ssh_service reads: the store's carts root, the board's name,
     its webhost (the browsers `passwd -l` lists) and no WiFi lease
     (`wifi_hold` None): the station and the mDNS name are the board's, up
@@ -91,13 +94,29 @@ class Door:
 
     def v_role(self, job, *argv):
         if not argv or argv[0] != "passwd":
-            return NEEDS_VM
+            return ABSENT
         import ssh_service
         try:
             return ssh_service.passwd(self, list(argv[1:]))
         except OSError as e:
             self.err("passwd", str(e))
             return 1
+
+    def v_spawn(self, *argv):
+        return ABSENT               # no installed commands
+
+    def v_read(self, path):
+        # /proc/console: what neofetch shows beside the shell's own rows,
+        # where this board can answer it (runtime/shell/sh_door.py's
+        # console_text on a console)
+        if path != "/proc/console":
+            return NEEDS_VM
+        import moy_ota
+        import ssh_service
+        rows = (("name", ssh_service.hostname(self.ws)),
+                ("board", moy_ota.BOARD_NAMES.get(moy_ota.BOARD, moy_ota.BOARD)),
+                ("firmware", moy_ota.FIRMWARE_LABEL or moy_ota.FIRMWARE_NAME))
+        return "".join("%s: %s\n" % (k, v) for k, v in rows if v).encode()
 
     def v_ps(self):
         used = gc.mem_alloc() if hasattr(gc, "mem_alloc") else 0
@@ -139,12 +158,22 @@ def start(carts_root, name, webhost=None):
         print("ZERO ssh: no door:", exc)
         return None
     ssh_service.boot(ws)
+    if webhost is not None:
+        webhost.on_password = lambda: _claimed(ws)
     tail()      # the face's hops are this task's from the server's first connection
     st = ssh_service.status()
     print("ZERO ssh: %s" % ("off (no SSH server in this image)" if st is None
                              else "serving as %s.local" % ssh_service.hostname(ws)
                              if st[0] else "off (no password: passwd)"))
     return ws
+
+
+def _claimed(ws):
+    """A browser's claim set the password (moy_webauth.c, THE CLAIM): the
+    server serves from now, as at a boot that finds one."""
+    import ssh_service
+    if ssh_service.start(ws):
+        print("ZERO ssh: serving as %s.local" % ssh_service.hostname(ws))
 
 
 def tail():

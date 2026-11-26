@@ -996,7 +996,7 @@ def _copy_cart_files(src, dst, main):
     """Copy a cart folder's asset files (one level of subfolders -- images/,
     scenes/, docs/) into a fresh copy, leaving out what the copy writes itself
     or must not inherit: its manifest, config and `main`, the original's saves
-    and undo journal, thumbs/, and the crash-safety leftovers (a copied .bak
+    and undo journal, thumbs/, and the crash-safety leftovers (a copied backup
     would "recover" the source's bytes over the copy's own file, #154). An
     unreadable entry is skipped; a store that is full raises: a copy that ran
     out of room is not a copy. native/moy_store/moy_cat.c's moy_cat_copy."""

@@ -7,8 +7,11 @@
 // KEY CREATED SEEN NAME" (hex, hex, Unix seconds, moy_net_time; the browser's
 // own name for itself). Read at config, written whole (through a .tmp and a
 // replace) when a browser pairs, is dropped, or was last seen an hour or more
-// before a sign-in. Its keys are secrets: the file is the owner's, as
-// system/password is, and no route serves it.
+// before a sign-in. MOY_WA_KEYS are kept: a new browser's takes a free
+// place, else that of the least recently seen browser not signed in now, so
+// one in use is never signed out by another's pairing. Its keys are
+// secrets: the file is the owner's, as system/password is, and no route
+// serves it.
 //
 // THE CHALLENGES: a hello's nonce is its source's (the peer's address), good
 // for MOY_WA_NONCE_MS and one credential from that source, right or wrong. A
@@ -24,7 +27,10 @@
 // recently used goes), by its browser's key being dropped, or, every one, by
 // the password changing. An upgraded stream (the web terminal, the live
 // socket: MOY_WA_TERM, MOY_WA_LIVE) ends with its session; its frames from
-// the page count as the session's use. A request's
+// the page count as the session's use. Each is one page's at a time, and the
+// newest signed-in page to ask for it has it (owner, 2026-11-25): another
+// session's request takes it (moy_wa_take), and the page that held it is
+// told so and asks for it again only at its user's word. A request's
 // sequence number is taken once: above the highest seen, or within
 // MOY_WA_WINDOW below it and not yet taken (a page's parallel requests can
 // arrive out of order; none arrives twice).
@@ -76,13 +82,13 @@ bool moy_flush_drain(void);
 #if __has_include("moy_tty.h")
 #include "moy_tty.h"
 #else
-void moy_web_term_cut(void);
+void moy_web_term_cut(int taken);
 uint32_t moy_web_term_idle_ms(void);
 #endif
 #pragma weak moy_web_term_cut
 #pragma weak moy_web_term_idle_ms
 // The live socket's (moy_live.c), the same two.
-void moy_web_live_cut(void);
+void moy_web_live_cut(int taken);
 uint32_t moy_web_live_idle_ms(void);
 #pragma weak moy_web_live_cut
 #pragma weak moy_web_live_idle_ms
@@ -148,7 +154,7 @@ typedef struct {
     uint8_t token[MOY_SEAL_RAND];
     uint64_t token_at;
     uint8_t claim[MOY_SEAL_RAND];
-    uint8_t token_on, claim_on, paired;
+    uint8_t token_on, claim_on, paired, claimed;
     struct {
         uint8_t on;
         uint8_t kid[MOY_SEAL_KID], sid[MOY_SEAL_SID];
@@ -603,6 +609,14 @@ int moy_wa_paired(void) {
     return 1;
 }
 
+int moy_wa_claimed(void) {
+    if (A == NULL || !A->claimed) {
+        return 0;
+    }
+    A->claimed = 0;
+    return 1;
+}
+
 size_t moy_wa_keys(char *out, size_t cap) {
     size_t n = 0;
     if (cap) {
@@ -626,11 +640,11 @@ size_t moy_wa_keys(char *out, size_t cap) {
     return n;
 }
 
-// An upgraded stream's end and its page's idle time (UINT32_MAX with none),
-// where the image has the stream.
-static void stream_cut_fn(int w) {
+// An upgraded stream's end (`taken`: another session took it) and its
+// page's idle time (UINT32_MAX with none), where the image has the stream.
+static void stream_cut_fn(int w, int taken) {
     if (w == MOY_WA_TERM ? moy_web_term_cut != NULL : moy_web_live_cut != NULL) {
-        (w == MOY_WA_TERM ? moy_web_term_cut : moy_web_live_cut)();
+        (w == MOY_WA_TERM ? moy_web_term_cut : moy_web_live_cut)(taken);
     }
 }
 
@@ -641,10 +655,10 @@ static uint32_t stream_idle(int w) {
     return (w == MOY_WA_TERM ? moy_web_term_idle_ms : moy_web_live_idle_ms)();
 }
 
-static void stream_cut(int w) {
+static void stream_cut(int w, int taken) {
     A->st[w].on = 0;
     moy_seal_wipe(A->st[w].sid, sizeof A->st[w].sid);
-    stream_cut_fn(w);
+    stream_cut_fn(w, taken);
 }
 
 // An upgraded stream's session, when it is still one: its frames from the
@@ -679,7 +693,7 @@ static void sweep_sessions(void) {
     }
     for (int w = 0; w < MOY_WA_STREAMS; w++) {
         if (A->st[w].on && stream_session(w) == NULL) {
-            stream_cut(w);
+            stream_cut(w, 0);
         }
     }
 }
@@ -694,7 +708,7 @@ static int end_sessions(const uint8_t *kid) {
     }
     for (int w = 0; w < MOY_WA_STREAMS; w++) {
         if (A->st[w].on && (kid == NULL || memcmp(A->st[w].kid, kid, MOY_SEAL_KID) == 0)) {
-            stream_cut(w);
+            stream_cut(w, 0);
         }
     }
     return n;
@@ -737,6 +751,21 @@ int moy_wa_drop(const char *kid) {
         save();
     }
     return gone;
+}
+
+int moy_wa_take(int w, const moy_wa_seal_t *s) {
+    if (A == NULL || !A->on || w < 0 || w >= MOY_WA_STREAMS || s == NULL || !s->on
+        || !A->st[w].on) {
+        return 0;
+    }
+    int taken = memcmp(A->st[w].sid, s->sid, MOY_SEAL_SID) != 0;
+    stream_cut(w, taken);
+    return taken;
+}
+
+int moy_wa_holds(int w, const moy_wa_seal_t *s) {
+    return A != NULL && w >= 0 && w < MOY_WA_STREAMS && s != NULL && s->on && A->st[w].on
+           && memcmp(A->st[w].sid, s->sid, MOY_SEAL_SID) == 0;
 }
 
 void moy_wa_stream(int w, const moy_wa_seal_t *s) {
@@ -808,13 +837,29 @@ static wkey_t *key_of(const uint8_t kid[MOY_SEAL_KID]) {
     return NULL;
 }
 
-// A new browser's key, in a free place or the least recently seen one's.
+// Whether a session of `k`'s is live: a browser signed in now.
+static int key_in(const wkey_t *k) {
+    for (int i = 0; i < MOY_WA_SESSIONS; i++) {
+        if (A->ss[i].used && fresh(A->ss[i].at, MOY_WA_SESSION_MS)
+            && memcmp(A->ss[i].kid, k->kid, MOY_SEAL_KID) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// A new browser's key, in a free place, else the least recently seen one's
+// of a browser not signed in now, else the least recently seen one's.
 static wkey_t *key_new(const char *name) {
     wkey_t *best = NULL;
+    int best_in = 0;
     for (int i = 0; i < MOY_WA_KEYS; i++) {
         wkey_t *k = &A->keys[i];
-        if (best == NULL || !k->used || (best->used && k->seen < best->seen)) {
+        int in = k->used && key_in(k);
+        if (best == NULL || !k->used
+            || (best->used && (in < best_in || (in == best_in && k->seen < best->seen)))) {
             best = k;
+            best_in = in;
         }
     }
     if (best->used) {
@@ -850,7 +895,7 @@ static sess_t *session_new(void) {
     moy_seal_wipe(best, sizeof *best);
     for (int w = 0; w < MOY_WA_STREAMS; w++) {
         if (cut[w]) {
-            stream_cut(w);
+            stream_cut(w, 0);
         }
     }
     return best;
@@ -1139,6 +1184,7 @@ static int claim(uint32_t peer, const char *o, const char *oe, char *doc, size_t
     }
     claim_drop();
     end_sessions(NULL);
+    A->claimed = 1;
     snprintf(doc, cap, "{\"ok\":true}");
     return 200;
 }

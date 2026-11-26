@@ -174,6 +174,11 @@
 // A device a handle holds stays through the VM's end (moy_lease.h's THE
 // VM'S END, moy_dev_holds) and goes with its process.
 //
+// In the browser console a Zero serves, a device API the image lacks and
+// the board relays (moy_dev_kinds.h's THE RELAY) opens as a REMOTE row: its
+// verbs cross the live socket to the board's own table
+// (native/moy_net/moy_dev_web.c has what each answers).
+//
 // Every other name, and a handle without MOY_DEV_BASE, is MOY_DEV_PASS.
 //
 // THE GRAMMAR. `cfg` is words `key=value` split by spaces, a value a number

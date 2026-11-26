@@ -40,7 +40,18 @@ _LOOK_ICON = {"menu.delete_cart": "trash", "menu.home": "home",
 # The selected card's verbs (LauncherHomeLayer.card_verbs) as menu rows:
 # (the chrome's label, icon, the look's text); the star's are the string ids'.
 _CARD_ROW = {"change": ("CHANGE", "pencil", "Change"), "copy": ("DUPLICATE", "dup", "Duplicate"),
-             "send": ("SEND", "export", "Send"), "delete": ("DELETE", "trash", "Delete")}
+             "send": ("SEND", "export", "Send"),
+             "save": ("DOWNLOAD", "save", "Download"),
+             "pod": ("PLAY ON THE CONSOLE", "play", "Play on the console"),
+             "delete": ("DELETE", "trash", "Delete")}
+# The browser page's rows (`Workstation.page`): the open cart's, then the
+# system group's, as (the chrome's label, icon, the look's text).
+_PAGE_ROW = {"save": _CARD_ROW["save"],
+             "pod": _CARD_ROW["pod"],
+             "full": ("FULL SCREEN", "maximize", "Full screen"),
+             "unfull": ("LEAVE FULL SCREEN", "minimize", "Leave full screen"),
+             "add": ("ADD A FILE", "getcarts", "Add a file"),
+             "home": ("ADD TO HOME SCREEN", "maximize", "Add to Home Screen")}
 # The system group's beam row (runtime/run/link_beam.py), by the beam under
 # way: none, a send, a receive.
 _BEAM_ROW = {None: ("RECEIVE NEARBY", "wifi", "Receive nearby"),
@@ -51,6 +62,12 @@ _BEAM_ROW = {None: ("RECEIVE NEARBY", "wifi", "Receive nearby"),
 def _row(kind, sid, action=None):
     """A Popup row: (kind, the chrome's label, action, icon, the look's text)."""
     return (kind, _ui_draw.s(sid), action, _LOOK_ICON.get(sid, ""), _LOOK_TEXT[sid])
+
+
+def _page_row(key, action):
+    """A browser page's row (`_PAGE_ROW`) doing `action`."""
+    label, icon, text = _PAGE_ROW[key]
+    return ("item", label, action, icon, text)
 
 
 def _in_box(px, py, b):
@@ -600,7 +617,11 @@ class DeleteConfirm:
     And the intents' "open with" menu (`choose`, runtime/system/intents.py):
     "Open with", the item's name over a menu of the apps that open it, each
     row its app's icon and title, the one chosen last first and focused, and
-    Cancel."""
+    Cancel.
+
+    And what the console tells once and waits to be read (`tell`,
+    `Notices.card_trouble`): a title over its lines, and OK; every way the
+    dialog closes dismisses it."""
 
     UNDONE = "This can't be undone."
 
@@ -621,6 +642,8 @@ class DeleteConfirm:
         self._choice = None          # fn(i) told the row picked, None on a cancel
         self.lines = ()              # a first-run prompt's lines (`ask_lines`), else ()
         self._no = None              # what a cancel answers (`ask_close`'s `no`)
+        self._told = False           # the lines are (line, tone) rows already (`offer`)
+        self._save = None            # a move's Save (`ask_switch`)
 
     def _arm(self, verb):
         ws = self.ws
@@ -638,8 +661,9 @@ class DeleteConfirm:
         ws.mark_dirty()
 
     def line_rows(self):
-        """The first-run prompt's lines as (line, tone) rows."""
-        return _perms.rows(self.lines)
+        """The first-run prompt's lines as (line, tone) rows; a `tell`'s and
+        an `offer`'s are their own."""
+        return self.lines if self.verb == "tell" or self._told else _perms.rows(self.lines)
 
     def all(self):
         """The page's damage: the frame draws again."""
@@ -668,13 +692,16 @@ class DeleteConfirm:
         if fn is not None:
             fn(None)
 
-    def ask_close(self, title, line, then, verb="close", no=None, lines=()):
+    def ask_close(self, title, line, then, verb="close", no=None, lines=(), told=False):
         """Ask to close what `title` names so that what `line` says can
         open; `then()` closes it and opens that. `verb` names the answer
         where Close does not (confirm_ui.VERBS), and `no()` runs at the
-        tail on every other answer."""
+        tail on every other answer. `told`: `lines` are (line, tone) rows
+        already, not a first-run prompt's."""
         self._drop_choice()
         self._no = no
+        self._save = None
+        self._told = told
         self.cart = None
         self.title = title
         self.line = line
@@ -688,6 +715,33 @@ class DeleteConfirm:
         """Ask the install prompt's question: `title` over the prompt's
         `lines` (`app_perms.rows`), No and Open; `then()` on Open."""
         return self.ask_close(title, "", then, "open", lines=list(lines))
+
+    def tell(self, title, rows):
+        """Say `title` over `rows` ((line, tone) rows, tone plain, dim or
+        danger), and OK."""
+        return self.ask_close(title, "", None, "tell", lines=tuple(rows))
+
+    def offer(self, title, rows, then):
+        """Say `title` over `rows` (as `tell`'s), with No and Open;
+        `then()` on Open."""
+        return self.ask_close(title, "", then, "open", lines=tuple(rows), told=True)
+
+    def ask_switch(self, title, rows, then, save=None):
+        """Ask before the console moves to another Wi-Fi network: `title`
+        over `rows` (as `tell`'s), Cancel and Move, `then()` on Move; with
+        `save`, a Save between them, `save()` on it."""
+        self.ask_close(title, "", then, "switch_save" if save is not None else "switch",
+                       lines=tuple(rows), told=True)
+        self._save = save
+        return True
+
+    def saved(self):
+        """A move's Save: `save()` at the tail."""
+        fn, self._save = self._save, None
+        self._act = self._no = None
+        self._done()
+        if fn is not None:
+            self.ws.defer(fn, toast=False)
 
     def ask(self, cart, then=None):
         """Ask before `cart` (a cart dict, or None for the open cart) is
@@ -819,7 +873,7 @@ class SystemMenuUI:
 
     def __init__(self, ws):
         self.ws = ws
-        self._host = _ui_draw.AppHost()
+        self._host = _ui_draw.AppHost(None, self)   # a finger held on it drags its rows
         self._page = None           # sysmenu_ui's page, made at the first draw
         self._items = None          # the Popup's rows the page holds ...
         self._took = None           # ... at (its row, its anchor)
@@ -845,18 +899,28 @@ class SystemMenuUI:
         The cart group is OMITTED entirely (not greyed) when it has no row."""
         rows = []
         cart = self.ws.cart
+        page = self.ws.page
         if cart is not None:
-            # headed by the cart's own title over Delete (which asks first:
-            # `DeleteConfirm`), offered only for a cart the store can delete: a
-            # built-in is the console's, so it has no group. A run restarts
-            # from the pause menu.
+            # headed by the cart's own title over its verbs: in the browser
+            # Download, and Play on the console where a console
+            # serves the page, then Delete (which asks first:
+            # `DeleteConfirm`), offered only for a cart the store can delete.
+            # A built-in with none has no group. A run restarts from the
+            # pause menu.
+            verbs = []
+            if page is not None and cart.get("path"):
+                verbs.append(_page_row("save", lambda: page.save_cart(cart)))
+                if page.served:
+                    verbs.append(_page_row("pod", lambda: page.play_on_console(cart)))
             if self._deletable(cart):
+                verbs.append(_row("item", "menu.delete_cart", self._menu_delete_cart))
+            if verbs:
                 title = cart.get("title") or ""
                 head = _row("header", "menu.cart")
                 if title:
                     head = ("header", title.upper(), None, "", title)
                 rows.append(head)
-                rows.append(_row("item", "menu.delete_cart", self._menu_delete_cart))
+                rows.extend(verbs)
                 rows.append(("sep",))
         elif self.ws.screen == "launcher" or self._projects_focused():
             # over the home, or the desk's PROJECTS window holding the focus,
@@ -891,6 +955,19 @@ class SystemMenuUI:
             label, icon, text = _BEAM_ROW.get(role, _BEAM_ROW[None])
             rows.append(("item", label, self._menu_beam, icon, text))
         rows.append(_row("item", "menu.settings", self.ws.open_settings))
+        # The browser page's: full screen where the browser has it (not in an
+        # iPhone's home-screen app, which is full screen); the page saved to
+        # the Home Screen, the true full screen, where the browser has none
+        # or is an iPhone's or an iPad's, until it runs so; and the file
+        # chooser for carts, PICO-8 carts and songs where the store writes.
+        if page is not None:
+            if page.can_fullscreen and not (page.ios and page.app):
+                rows.append(_page_row("unfull" if page.fullscreen else "full",
+                                      page.toggle_fullscreen))
+            if not page.app and (page.ios or not page.can_fullscreen):
+                rows.append(_page_row("home", lambda: page.home_screen(ws)))
+            if getattr(ws, "can_manage", True):
+                rows.append(_page_row("add", page.add_files))
         rows.append(_row("item", "menu.about", self._menu_about))
         # Sleep where the board's idle ladder can blank its light (absent on
         # a tier with none); restarting the console is last.
@@ -1408,10 +1485,24 @@ class SystemMenuUI:
         else:
             self.ws.popover_touch()
 
+    def pointer(self):
+        """The console's pointer, where the page's host reads whether it is
+        held."""
+        return self.ws.pointer
+
+    @property
+    def host(self):
+        """The page's host: where the last frame placed each row (`box`)."""
+        return self._host
+
     def point(self, px, py, click):
-        """A tap on the open menu: outside the card it closes, on it the
-        page's (a row's runs at the frame's tail)."""
-        if _in_box(px, py, self.look_card()):
+        """The pointer on the open menu: a press outside the card closes it;
+        any other sample is the page's, whose rows a drag scrolls and a tap
+        chooses (a row's runs at the frame's tail)."""
+        if not click:
+            if self._page is not None:
+                self._page.point(px, py, False)
+        elif _in_box(px, py, self.look_card()):
             self._page.point(px, py, click)
         else:
             self.ws.sysmenu.close()
@@ -1456,13 +1547,13 @@ class AboutCard:
         ws = self.ws
         u = ws.updater
         v = _about_ui.version_words(u, ws.toggles.ota_channel() if u is not None else None)
-        b = _about_ui.board_of()
-        from settings_layer import BOARDS
+        from settings_layer import board_name
+        b = board_name()
         upd = ""
         if u is not None:
             ready = getattr(ws.update_ui, "offered", None)
             upd = ("%s is ready" % ready) if ready else "Up to date"
-        return ("Version " + v if v else "", _about_ui.board_words(BOARDS.get(b, b)) if b else "", upd)
+        return ("Version " + v if v else "", b or "", upd)
 
     def updates(self):
         self.close()

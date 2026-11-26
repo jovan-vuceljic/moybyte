@@ -665,13 +665,190 @@ int moy_ota_judge_c6(const char *text, size_t n, int require_sig,
 typedef struct {
     uint16_t gen;
     uint8_t open;
+    uint8_t keep;                   // THE POOL: the connection outlives this response
+    uint8_t mode;                   // MOY_CONN_*: with host and port, the pool's key
+    uint16_t port;
+    uint32_t left;                  // a kept response's body bytes still on the connection
     void *conn;
-    char *head;                     // MOY_HTTPC_HEAD_MAX: the head, then the body's first bytes
+    char *head;                     // the head, then the body's first bytes
+    size_t cap;                     // head's bytes: MOY_HTTPC_HEAD_FIRST, doubled while one needs it
     size_t head_n;                  // the final response's head
     size_t rest, rest_n;            // the body bytes still in `head`
+    char host[MOY_URL_HOST_MAX];
 } client_t;
 
 static client_t *s_cl;                  // MOY_HTTPC_SLOTS of them, kernel memory
+
+// -- THE POOL (moy_ota.h) --
+
+typedef struct {
+    void *conn;                     // NULL: a free row
+    uint32_t at;                    // moy_net_ms when it was kept
+    uint32_t seq;                   // the order rows were kept in: the oldest goes first
+    uint16_t port;
+    uint8_t mode;
+    char host[MOY_URL_HOST_MAX];
+} kept_t;
+
+static kept_t *s_kept;                  // MOY_HTTPC_POOL of them, after s_cl
+static uint32_t s_kept_seq;
+
+// The pool's lock, the lease table's (moy_lease.h, weak: an image without the
+// table has one client task). The VM's task, the fetch worker, the media
+// service and the reaper's timer take and give under it; a connection is
+// closed outside it.
+void moy_lease_lock(void);
+void moy_lease_unlock(void);
+#pragma weak moy_lease_lock
+#pragma weak moy_lease_unlock
+
+static void pool_lock(void) {
+    if (moy_lease_lock != NULL) {
+        moy_lease_lock();
+    }
+}
+
+static void pool_unlock(void) {
+    if (moy_lease_unlock != NULL) {
+        moy_lease_unlock();
+    }
+}
+
+// Under the lock: the rows idle MOY_HTTPC_IDLE_MS (every row with `all`)
+// taken out into `out`, their count; the reaper armed for the next to expire.
+static int pool_expire(int all, void **out) {
+    int n = 0;
+    uint32_t now = moy_net_ms(), next = 0;
+    for (int i = 0; s_kept != NULL && i < MOY_HTTPC_POOL; i++) {
+        kept_t *k = &s_kept[i];
+        if (k->conn == NULL) {
+            continue;
+        }
+        uint32_t idle = now - k->at;
+        if (all || idle >= MOY_HTTPC_IDLE_MS) {
+            out[n++] = k->conn;
+            k->conn = NULL;
+        } else if (next == 0 || MOY_HTTPC_IDLE_MS - idle < next) {
+            next = MOY_HTTPC_IDLE_MS - idle;
+        }
+    }
+    if (next != 0) {
+        moy_net_reap_after(next);
+    }
+    return n;
+}
+
+static void pool_close(void **conns, int n) {
+    for (int i = 0; i < n; i++) {
+        moy_conn_close(conns[i]);
+    }
+}
+
+static void pool_drop(int all) {
+    void *gone[MOY_HTTPC_POOL + 1];
+    pool_lock();
+    int n = pool_expire(all, gone);
+    pool_unlock();
+    pool_close(gone, n);
+}
+
+void moy_httpc_pool_reap(void) {
+    pool_drop(0);
+}
+
+void moy_httpc_pool_flush(void) {
+    pool_drop(1);
+}
+
+uint32_t moy_httpc_pool_count(void) {
+    uint32_t n = 0;
+    pool_lock();
+    for (int i = 0; s_kept != NULL && i < MOY_HTTPC_POOL; i++) {
+        n += s_kept[i].conn != NULL;
+    }
+    pool_unlock();
+    return n;
+}
+
+// A kept connection to (mode, host, port) taken out of the pool, the newest
+// such, or NULL. The expired ones, and a taken one no longer alive, are closed.
+static void *pool_take(int mode, const char *host, uint16_t port) {
+    for (;;) {
+        void *gone[MOY_HTTPC_POOL + 1], *conn = NULL;
+        pool_lock();
+        int n = pool_expire(0, gone);
+        int at = -1;
+        for (int i = 0; s_kept != NULL && i < MOY_HTTPC_POOL; i++) {
+            kept_t *k = &s_kept[i];
+            if (k->conn != NULL && k->mode == mode && k->port == port
+                && strcmp(k->host, host) == 0
+                && (at < 0 || k->seq - s_kept[at].seq < 0x80000000u)) {
+                at = i;
+            }
+        }
+        if (at >= 0) {
+            conn = s_kept[at].conn;
+            s_kept[at].conn = NULL;
+        }
+        pool_unlock();
+        pool_close(gone, n);
+        if (conn == NULL || moy_conn_alive(conn)) {
+            return conn;
+        }
+        moy_conn_close(conn);
+    }
+}
+
+// `c`'s connection kept for the next request, the oldest row closed for it
+// when the pool is full; closed instead where the pool keeps none.
+static void pool_give(client_t *c) {
+    void *gone[MOY_HTTPC_POOL + 2];
+    pool_lock();
+    int n = pool_expire(0, gone);
+    int at = -1;
+    for (int i = 0; s_kept != NULL && i < MOY_HTTPC_POOL; i++) {
+        if (s_kept[i].conn == NULL) {
+            at = i;
+            break;
+        }
+        if (at < 0 || s_kept[i].seq - s_kept[at].seq >= 0x80000000u) {
+            at = i;                     // the oldest so far
+        }
+    }
+    if (at < 0) {
+        gone[n++] = c->conn;
+    } else {
+        kept_t *k = &s_kept[at];
+        if (k->conn != NULL) {
+            gone[n++] = k->conn;
+        }
+        k->conn = c->conn;
+        k->at = moy_net_ms();
+        k->seq = ++s_kept_seq;
+        k->mode = c->mode;
+        k->port = c->port;
+        memcpy(k->host, c->host, sizeof(k->host));
+        void *none[MOY_HTTPC_POOL + 1];
+        pool_expire(0, none);           // arms the reaper for the row just kept
+    }
+    pool_unlock();
+    pool_close(gone, n);
+    c->conn = NULL;
+}
+
+// The connection `c` is done with: kept when its response's body was read to
+// its end, closed otherwise.
+static void conn_end(client_t *c) {
+    if (c->conn != NULL) {
+        if (c->keep && c->left == 0 && c->rest_n == 0) {
+            pool_give(c);
+        } else {
+            moy_conn_close(c->conn);
+        }
+        c->conn = NULL;
+    }
+    c->keep = 0;
+}
 
 static int handle_of(int i) {
     return (int)s_cl[i].gen << 8 | (i + 1);
@@ -687,10 +864,7 @@ static client_t *client_at(int h) {
 }
 
 static void client_drop(client_t *c) {
-    if (c->conn != NULL) {
-        moy_conn_close(c->conn);
-        c->conn = NULL;
-    }
+    conn_end(c);
     if (c->head != NULL) {
         moy_net_free(c->head);
         c->head = NULL;
@@ -699,7 +873,99 @@ static void client_drop(client_t *c) {
     c->gen = (uint16_t)((c->gen + 1u) & 0x7fffu);
 }
 
-// One GET: the connection open with its head read into c->head. 0, or -errno.
+// c->head made at least `need` bytes, doubling, its bytes kept: 0, -EIO past
+// MOY_HTTPC_HEAD_MAX, or -ENOMEM.
+static int head_room(client_t *c, size_t need) {
+    if (need <= c->cap) {
+        return 0;
+    }
+    if (need > MOY_HTTPC_HEAD_MAX) {
+        return -EIO_;
+    }
+    size_t cap = c->cap;
+    while (cap < need) {
+        cap *= 2;
+    }
+    if (cap > MOY_HTTPC_HEAD_MAX) {
+        cap = MOY_HTTPC_HEAD_MAX;
+    }
+    char *b = moy_net_alloc(cap);
+    if (b == NULL) {
+        return -ENOMEM_;
+    }
+    memcpy(b, c->head, c->cap);
+    moy_net_free(c->head);
+    c->head = b;
+    c->cap = cap;
+    return 0;
+}
+
+// c->head back to MOY_HTTPC_HEAD_FIRST once nothing in it is needed: 0, or
+// -ENOMEM.
+static int head_shrink(client_t *c) {
+    if (c->cap <= MOY_HTTPC_HEAD_FIRST) {
+        return 0;
+    }
+    moy_net_free(c->head);
+    c->head = moy_net_alloc(MOY_HTTPC_HEAD_FIRST);
+    c->cap = c->head != NULL ? MOY_HTTPC_HEAD_FIRST : 0;
+    return c->head != NULL ? 0 : -ENOMEM_;
+}
+
+size_t moy_httpc_head_room(int h) {
+    client_t *c = client_at(h);
+    return c != NULL ? c->cap : 0;
+}
+
+// The request sent on c->conn and its response's head read into c->head: 0,
+// or -errno; `*n` the bytes that came either way.
+static int ask(client_t *c, const char *path, const char *agent, uint32_t flags,
+               const char *range, moy_http_resp_t *r, size_t *n) {
+    *n = 0;
+    int k;
+    for (;;) {
+        k = snprintf(c->head, c->cap,
+                     "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n%s%sConnection: %s\r\n\r\n",
+                     path, c->host, agent, (flags & MOY_HTTPC_ICY) ? "Icy-MetaData: 1\r\n" : "",
+                     range, MOY_HTTPC_POOL > 0 ? "keep-alive" : "close");
+        if (k <= 0 || k >= MOY_HTTPC_HEAD_MAX) {
+            return -EINVAL_;
+        }
+        if ((size_t)k < c->cap) {
+            break;
+        }
+        int rc = head_room(c, (size_t)k + 1u);
+        if (rc != 0) {
+            return rc;
+        }
+    }
+    int rc = moy_conn_write(c->conn, c->head, (size_t)k);
+    if (rc != 0) {
+        return rc;
+    }
+    for (;;) {
+        if (*n >= c->cap) {
+            rc = head_room(c, *n + 1u);
+            if (rc != 0) {
+                return rc;
+            }
+        }
+        int got = moy_conn_read(c->conn, c->head + *n, c->cap - *n);
+        if (got < 0) {
+            return got;
+        }
+        if (got == 0) {
+            return -EIO_;
+        }
+        *n += (size_t)got;
+        if (moy_http_resp_parse(c->head, *n, r) == MOY_HTTP_OK) {
+            return 0;
+        }
+    }
+}
+
+// One GET: a connection, a kept one where the pool has it, with its head read
+// into c->head. 0, or -errno.
 static int get_once(client_t *c, const char *url, const char *agent, uint32_t flags,
                     const char *range, moy_http_resp_t *r) {
     char host[MOY_URL_HOST_MAX];
@@ -714,52 +980,49 @@ static int get_once(client_t *c, const char *url, const char *agent, uint32_t fl
     if (mode == MOY_CONN_TLS && !moy_conn_verifies()) {
         return -MOY_HTTPC_ETLS;
     }
-    int rc = moy_conn_open(host, port, mode, &c->conn);
-    if (rc != 0) {
-        c->conn = NULL;
-        return rc;
-    }
-    int k = snprintf(c->head, MOY_HTTPC_HEAD_MAX,
-                     "GET %s HTTP/1.0\r\nHost: %s\r\nUser-Agent: %s\r\n%s%sConnection: close\r\n\r\n",
-                     path, host, agent, (flags & MOY_HTTPC_ICY) ? "Icy-MetaData: 1\r\n" : "",
-                     range);
-    if (k <= 0 || k >= MOY_HTTPC_HEAD_MAX) {
-        return -EINVAL_;
-    }
-    rc = moy_conn_write(c->conn, c->head, (size_t)k);
-    if (rc != 0) {
-        return rc;
-    }
-    size_t n = 0;
-    for (;;) {
-        if (n >= MOY_HTTPC_HEAD_MAX) {
-            return -EIO_;
+    c->keep = 0;
+    c->mode = (uint8_t)mode;
+    c->port = port;
+    memcpy(c->host, host, sizeof(c->host));
+    size_t n;
+    for (int fresh = 0;; fresh = 1) {
+        c->conn = fresh ? NULL : pool_take(mode, host, port);
+        int kept = c->conn != NULL;
+        if (!kept) {
+            int rc = moy_conn_open(host, port, mode, &c->conn);
+            if (rc != 0) {
+                c->conn = NULL;
+                return rc;
+            }
         }
-        int got = moy_conn_read(c->conn, c->head + n, MOY_HTTPC_HEAD_MAX - n);
-        if (got < 0) {
-            return got;
-        }
-        if (got == 0) {
-            return -EIO_;
-        }
-        n += (size_t)got;
-        if (moy_http_resp_parse(c->head, n, r) == MOY_HTTP_OK) {
+        int rc = ask(c, path, agent, flags, range, r, &n);
+        if (rc == 0) {
             break;
         }
+        if (!kept || n != 0) {
+            return rc;
+        }
+        moy_conn_close(c->conn);        // the server closed it meanwhile: once more, fresh
+        c->conn = NULL;
     }
     c->head_n = r->head_end;
     c->rest = r->head_end;
     c->rest_n = n - r->head_end;
+    c->keep = r->keep && c->rest_n <= r->clen;
+    c->left = c->keep ? r->clen - (uint32_t)c->rest_n : 0u;
     return 0;
 }
 
 int moy_httpc_init(void) {
     if (s_cl == NULL) {
-        s_cl = moy_net_alloc(sizeof(client_t) * MOY_HTTPC_SLOTS);
-        if (s_cl == NULL) {
+        size_t n = sizeof(client_t) * MOY_HTTPC_SLOTS + sizeof(kept_t) * MOY_HTTPC_POOL;
+        client_t *cl = moy_net_alloc(n);
+        if (cl == NULL) {
             return -ENOMEM_;
         }
-        memset(s_cl, 0, sizeof(client_t) * MOY_HTTPC_SLOTS);
+        memset(cl, 0, n);
+        s_kept = MOY_HTTPC_POOL > 0 ? (kept_t *)(void *)(cl + MOY_HTTPC_SLOTS) : NULL;
+        s_cl = cl;
     }
     return 0;
 }
@@ -788,6 +1051,25 @@ int moy_httpc_open_range(const char *url, const char *agent, uint32_t start, uin
     return open_with(url, agent, 0, range, status, clen);
 }
 
+// A redirect's connection done with, the Location copied out of its head:
+// its body read and dropped when the connection is kept and the body short,
+// so the next hop can take it.
+static void hop_end(client_t *c) {
+    c->rest_n = 0;
+    if (c->left > MOY_HTTPC_HOP_BODY) {
+        c->keep = 0;
+    }
+    while (c->keep && c->left > 0) {
+        int k = moy_conn_read(c->conn, c->head, c->left < c->cap ? c->left : c->cap);
+        if (k <= 0 || (uint32_t)k > c->left) {
+            c->keep = 0;
+            break;
+        }
+        c->left -= (uint32_t)k;
+    }
+    conn_end(c);
+}
+
 static int open_with(const char *url, const char *agent, uint32_t flags, const char *range,
                      int *status, uint32_t *clen) {
     if (moy_httpc_init() != 0) {
@@ -803,8 +1085,13 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
         return -EBADF_;
     }
     client_t *c = &s_cl[i];
-    char *cur = moy_net_alloc(URL_MAX);
-    c->head = moy_net_alloc(MOY_HTTPC_HEAD_MAX);
+    size_t ul = strlen(url);
+    if (ul >= URL_MAX) {
+        return -EINVAL_;
+    }
+    char *cur = moy_net_alloc(ul + 1u);
+    c->head = moy_net_alloc(MOY_HTTPC_HEAD_FIRST);
+    c->cap = MOY_HTTPC_HEAD_FIRST;
     if (cur == NULL || c->head == NULL) {
         moy_net_free(cur);
         moy_net_free(c->head);
@@ -812,7 +1099,7 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
         return -ENOMEM_;
     }
     c->open = 1;
-    snprintf(cur, URL_MAX, "%s", url);
+    memcpy(cur, url, ul + 1u);
     int rc;
     for (int hop = 0;; hop++) {
         moy_http_resp_t r;
@@ -827,7 +1114,11 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
             *clen = r.clen;
             break;
         }
-        char *next = moy_net_alloc(URL_MAX);
+        size_t nn = r.loc_n + 1u + (r.loc[0] == '/' ? strlen(c->host) + 16u : 0u);
+        if (nn > URL_MAX) {
+            nn = URL_MAX;
+        }
+        char *next = moy_net_alloc(nn);
         if (next == NULL) {
             rc = -ENOMEM_;
             break;
@@ -843,15 +1134,18 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
             if (!dflt) {
                 snprintf(pp, sizeof(pp), ":%u", (unsigned)port);
             }
-            snprintf(next, URL_MAX, "%s://%s%s%.*s", tls ? "https" : "http", host, pp,
+            snprintf(next, nn, "%s://%s%s%.*s", tls ? "https" : "http", host, pp,
                      (int)r.loc_n, r.loc);
         } else {
-            snprintf(next, URL_MAX, "%.*s", (int)r.loc_n, r.loc);
+            snprintf(next, nn, "%.*s", (int)r.loc_n, r.loc);
         }
         moy_net_free(cur);
         cur = next;
-        moy_conn_close(c->conn);
-        c->conn = NULL;
+        hop_end(c);
+        rc = head_shrink(c);
+        if (rc != 0) {
+            break;
+        }
     }
     moy_net_free(cur);
     if (rc != 0) {
@@ -859,6 +1153,19 @@ static int open_with(const char *url, const char *agent, uint32_t flags, const c
         return rc;
     }
     return handle_of(i);
+}
+
+// A body read off the connection, counted against a kept response's length:
+// one that ends or fails short of it leaves the connection to be closed.
+static int body_read(client_t *c, int k) {
+    if (c->keep) {
+        if (k > 0 && (uint32_t)k <= c->left) {
+            c->left -= (uint32_t)k;
+        } else {
+            c->keep = 0;
+        }
+    }
+    return k;
 }
 
 int moy_httpc_read(int h, void *buf, size_t n) {
@@ -876,10 +1183,16 @@ int moy_httpc_read(int h, void *buf, size_t n) {
         c->rest_n -= k;
         return (int)k;
     }
+    if (c->keep && n > c->left) {
+        n = c->left;
+        if (n == 0) {
+            return 0;                   // the body's end; the connection stays for the pool
+        }
+    }
     if (n > 0x7fffffffu) {
         n = 0x7fffffffu;
     }
-    return moy_conn_read(c->conn, buf, n);
+    return body_read(c, moy_conn_read(c->conn, buf, n));
 }
 
 int moy_httpc_read_wait(int h, void *buf, size_t n, uint32_t ms) {
@@ -887,13 +1200,17 @@ int moy_httpc_read_wait(int h, void *buf, size_t n, uint32_t ms) {
     if (c == NULL) {
         return -EBADF_;
     }
-    if (c->rest_n > 0 || n == 0) {
+    if (c->rest_n > 0 || n == 0 || (c->keep && c->left == 0)) {
         return moy_httpc_read(h, buf, n);
+    }
+    if (c->keep && n > c->left) {
+        n = c->left;
     }
     if (n > 0x7fffffffu) {
         n = 0x7fffffffu;
     }
-    return moy_conn_read_wait(c->conn, buf, n, ms);
+    int k = moy_conn_read_wait(c->conn, buf, n, ms);
+    return k == -MOY_HTTPC_EAGAIN ? k : body_read(c, k);
 }
 
 int moy_httpc_header(int h, const char *name, char *out, size_t cap) {

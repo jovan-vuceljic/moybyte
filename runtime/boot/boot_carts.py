@@ -29,6 +29,11 @@ class BootCarts:
     """The cart load, seed and scan of a boot. Needs `say` and `note` from the
     class that takes it (`DeviceBoot`)."""
 
+    # What the desk tells the user about the card (`Notices.card_trouble`):
+    # None, "errors" (it mounted and its store failed: `load_carts`) or
+    # "format" (a filesystem this build cannot read: card_store.carts_loader).
+    card_trouble = None
+
     def seed_progress(self, done, total, title):
         """`seed_builtins`' progress callback: a repaint per cart at most every
         SEED_PAINT_MS, one serial line every eighth.
@@ -80,6 +85,10 @@ class BootCarts:
         the T-Deck's card shares the panel's SPI host and is mounted PER
         SESSION, so the only honest question is "did a real session work" --
         which is this call. The boards differ because the buses do.
+
+        A card store that fails once its scan has begun (a mount that failed
+        never reaches it) is the boot's `card_trouble` "errors": the console
+        on its internal store says so on the desk, where the card's carts went.
         """
         sram_census("rd-entry")
         try:
@@ -114,8 +123,10 @@ class BootCarts:
         left to try. `bring` is the internal store's carts folder where `root`
         is a card's: the browser console add-on the website's install left
         there moves to the card first (moy_seed.bring_addon)."""
+        scanned = []
         try:
             def _scan_and_seed():
+                scanned.append(root)
                 store.ensure_dirs(root)
                 if bring is not None and hasattr(store, "bring_addon"):
                     try:
@@ -138,4 +149,6 @@ class BootCarts:
                 return carts
         except Exception as exc:  # noqa: BLE001 -- any store failure degrades
             self.say("%s carts unavailable: %s" % (media, exc))
+            if bring is not None and scanned:
+                self.card_trouble = "errors"
         return []

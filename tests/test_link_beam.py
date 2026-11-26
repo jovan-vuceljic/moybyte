@@ -309,7 +309,7 @@ def test_a_cart_crosses_as_its_files_never_packed(tmp_path, monkeypatch):
     os.makedirs(cart["path"] + "/thumbs")
     with open(cart["path"] + "/thumbs/t.png", "wb") as f:
         f.write(b"thumb")
-    with open(cart["path"] + "/main.py.bak", "w") as f:
+    with open(cart["path"] + "/.main.py.moybak", "w") as f:
         f.write("old")
 
     def no(*k, **kw):
@@ -324,7 +324,7 @@ def test_a_cart_crosses_as_its_files_never_packed(tmp_path, monkeypatch):
     assert _run(a, b, wsa, wsb, clock, 30000, until=_both_done(a, b))
     got = _tree(wsb.carts_root + "/local.pong.moy")
     want = _tree(cart["path"])
-    for left_out in ("thumbs/t.png", "main.py.bak"):
+    for left_out in ("thumbs/t.png", ".main.py.moybak"):
         del want[left_out]
     assert got == want and got["levels/empty.txt"] == b""
     assert wsb.notices.said[-1][:2] == ("Got Pong", "From Ada, on your shelf")
@@ -358,7 +358,7 @@ def test_a_head_naming_a_path_outside_the_cart_lands_nothing(tmp_path, monkeypat
 
 def test_a_received_path_is_checked_as_the_packer_walks():
     ok = ["main.py", "levels/one.txt", "a/b/c/d/e/f/g.txt"]
-    bad = ["", "/x", "..", "a/../b", "./a", "a\\b", "a//b", "x.bak", "thumbs/a", "journal/x",
+    bad = ["", "/x", "..", "a/../b", "./a", "a\\b", "a//b", ".x.moybak", "thumbs/a", "journal/x",
            "a/b/c/d/e/f/g/h.txt", 3, None]
     assert all(link_beam.rel_ok(r) for r in ok)
     assert not any(link_beam.rel_ok(r) for r in bad)
@@ -913,7 +913,7 @@ def test_a_file_lands_in_downloads_under_a_safe_name_and_is_never_run(tmp_path):
     ("../../system/settings", "settings"), ("..", "file"), ("...", "file"),
     (".hidden", "hidden"), ("a\\b\\c.md", "c.md"), ("tab\there\x7f.txt", "tab_here_.txt"),
     ("", "file"), ("x" * 100 + ".png", "x" * 60 + ".png"),
-    ("notes.bak", "notes.bak_"), ("a.tmp", "a.tmp_"),
+    ("notes.bak", "notes.bak"), ("a.tmp", "a.tmp_"),
 ])
 def test_a_received_name_is_made_safe(name, safe):
     assert link_beam.safe_name(name) == safe

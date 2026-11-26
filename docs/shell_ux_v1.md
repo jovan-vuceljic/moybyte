@@ -164,6 +164,14 @@ home), and the Editor, from Make or CHANGE, is a desk window
 keyboard — is the way back to the desk, its windows where they were. The Player tier only ever gets the
 home; its desktop story is the web view.)*
 
+*(Status 2026-11-25 — ALT+TAB: on the desk, Alt+Tab brings the window behind
+the focused one forward and Alt+Shift+Tab walks back; while Alt stays down
+each Tab walks on through the order the walk began with, a minimised window
+shown on its way, and Alt's release ends the walk
+(`ConsoleInput._alt_tab`, `WindowedWM.cycle`). Any keyboard with an Alt has
+it; a browser page has it only in its own fullscreen, whose keyboard lock
+takes the chord from the OS (§9a).)*
+
 *(Status 2026-07-31 — PLAY INTENT, #178: `run(cart)` stays one verb, but the
 windowed tier reads WHY it was called to pick the playtest window's default
 size. A **PLAY from the Editor is a dev action** — the window opens at **2× of
@@ -455,7 +463,7 @@ cart ever reads it. It is the `start` button (`Workstation.system_key`,
 | a BLE or USB keyboard | its GUI key tapped (the simulator's Super, Cmd or Meta): it acts on its release, and only when no other key went down while it was held, so Super leads chords (`native/moy_input/moy_input.h`'s key events, 2026-10-21) |
 | the T-Deck's keyboard | **Mic**: d0 bit 6 of the raw matrix, and in the C3's ASCII mode (which sends no byte for a bare Mic) Shift+Mic (`firmware/lilygo_t_deck_plus_mainline/README.md`); inside a text field being typed into, Mic is the field's Cancel instead (owner call 2026-10-18: K types a letter there, and Mic never types), an app's `ui.field` while it has an edit in progress (`InputPolicy.cancel`, which asks the surface holding the keys: `AppFace.cancel` for a cart, a shell app's AppHost, Settings' Name and Wi-Fi password) |
 | a gamepad | Start |
-| the browser page | a Meta tap (on a Mac Cmd is Ctrl, so there it is the page's ☰ and Esc), the page's ☰, and Esc during play (a page rarely sees Super) |
+| the browser page | a lone Alt tap, which its hints name (2026-11-25: the OS takes Super before a page sees it, and no OS or cart takes a bare Alt; `firmware/web_runner/page_core.html`), a Meta tap where the page sees one (on a Mac Cmd is Ctrl), the page's ☰, and Esc during play. In a fullscreen the page asked for (the system menu's Full screen; F11 is the console's full key), it locks Super, Esc, Alt and Tab with the Keyboard Lock API where the browser has it (Chromium), so Super reaches the console, Esc the Terminal and Alt+Tab the desk's windows; a Mac's OS keeps Cmd+Tab and its Cmd is Ctrl here |
 | touch | the bar's Moy button, where a bar shows |
 
 A tap over a fullscreen game opens the **pause menu**; anywhere else it opens the

@@ -71,13 +71,37 @@ def _run(scenario, base, profile, outdir):
     return r.stdout, [j.strip().strip('"') for j in js]
 
 
-def test_a_cart_made_in_the_browser_survives_a_reload(tmp_path):
+def _lan_address():
+    """This machine's address on its network (not loopback), or None: a page
+    there is not a secure context, as a dev server on the LAN is not."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+    return None if ip.startswith("127.") else ip
+
+
+@pytest.mark.parametrize("host", ["loopback", "lan"])
+def test_a_cart_made_in_the_browser_survives_a_reload(tmp_path, host):
     """#193's done-when, in one run: make a cart on a STATIC host, close the
-    page, open it again in the same browser, and it is still on the shelf."""
+    page, open it again in the same browser, and it is still on the shelf.
+    At a LAN address over plain http the page is no secure context and has
+    no OPFS: it keeps the same folders in IndexedDB (moy_store.idbNav)."""
     web_e2e.require("store")
     port = web_e2e.free_port()             # fixed: OPFS is scoped to the ORIGIN
     profile = tmp_path / "chrome"          # fixed: OPFS lives in the profile
     server, base = _serve(port)
+    if host == "lan":
+        ip = _lan_address()
+        if ip is None:
+            server.terminate()
+            pytest.skip("this machine has no address but loopback")
+        base = base.replace("127.0.0.1", ip)
     try:
         out, js = _run("persist_create", base, profile, tmp_path / "s1")
         assert len(js) >= 5, "no js steps reported:\n%s" % out[-2000:]
@@ -408,9 +432,9 @@ def test_a_board_served_page_keeps_nothing_locally(tmp_path):
     try:
         out, js = _run("persist_board_mode", base, tmp_path / "chrome", tmp_path / "s1")
         assert len(js) >= 2, out[-2000:]
-        display, _, said = js[0].partition("|")
-        assert display.strip() == "flex", \
-            "the import/export row must be offered on a board too: %r" % display
+        listed, _, said = js[0].partition("|")
+        assert listed == "listed", \
+            "a board-served page must list its carts for Save too: %r" % listed
         assert "kept on the console" in said, said
         # No local store was opened, seeded or read: the detail is empty because
         # board mode never touches OPFS at all.

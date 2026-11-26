@@ -134,13 +134,12 @@ def test_the_fullscreen_tier_still_gets_its_letterbox(tmp_path):
     assert ws.cart_error is None, ws.cart_error
     ox, oy, _scale = ws.wm.viewport()
     assert ox > 0 and oy > 0                     # there IS a letterbox here
-    # STAIN the bezel first. `_VIEWPORT_BEZEL` is 0 and a fresh RGB565 buffer
-    # reads back as index 0 everywhere, so the bare assertion below also passes
-    # on a corner nothing ever drew -- i.e. it passed with the bands turned off.
-    # The sentinel is what makes this a measurement of the fill.
+    # STAIN the bezel first, so the assertion below measures the fill, never
+    # a corner nothing drew.
     ws.sys_canvas.cls(8)
     drv.frame(1 / 30)
-    assert ws.sys_canvas.pix(0, 0) == WM._VIEWPORT_BEZEL
+    sc = ws.sys_canvas
+    assert int.from_bytes(bytes(sc._buf[0:2]), "little") == sc._col(WM.bezel(ws)) != sc._col(8)
 
 
 def _web_canvas_module():
@@ -5024,3 +5023,130 @@ def test_a_desk_tile_the_keys_moved_to_opens(tmp_path):
     for _ in range(10):
         drv.frame(1 / 30)
     assert ws.wm.stack.kinds()[-1] == "projects", ws.wm.stack.kinds()
+
+
+def test_alt_tab_walks_the_windows_and_alt_s_release_ends_the_walk(tmp_path):
+    """Alt+Tab, before any surface (a Terminal's Tab included), brings the
+    window behind the front one forward; while Alt stays down each Tab walks
+    on through the order the walk began with, a minimised window shown on
+    its way; Alt+Shift+Tab walks back. Alt let go ends the walk, so the next
+    Alt+Tab goes back to the window before. Tab alone is the window's."""
+    from runtime.host_app import ConsoleDriver
+    from moy_input import ALT, SHIFT
+    ws = _moy_desk(tmp_path)
+    drv = ConsoleDriver(ws)
+    for app in ("files", "calc", "terminal"):
+        ws.spine.open_app(ws.app(app))
+        drv.frame(1 / 30)
+    wm = ws.wm
+    wm.minimize(wm.windows["files"], True)
+    assert wm.focus_key == "terminal"
+
+    def tab(mods):
+        drv.key_down(9, mods)
+        drv.frame(1 / 30)
+        drv.key_up(9, mods)
+        drv.frame(1 / 30)
+
+    try:
+        drv.set_mods(ALT)
+        tab(ALT)
+        assert wm.focus_key == "calc"
+        tab(ALT)
+        assert wm.focus_key == "files" and not wm.windows["files"].minimized
+        tab(ALT | SHIFT)
+        assert wm.focus_key == "calc"
+        drv.set_mods(0)
+        drv.frame(1 / 30)
+        drv.set_mods(ALT)
+        tab(ALT)
+        assert wm.focus_key == "files", "a new walk starts from the front"
+        drv.set_mods(0)
+        tab(0)
+        assert wm.focus_key == "files", "Tab alone switches nothing"
+    finally:
+        ws.app("terminal").close_session()
+
+
+def test_a_zoomed_glass_resizes_live_and_keeps_what_runs(tmp_path):
+    """The browser page's glass (`Appearance.zoom_glass`) resizes live
+    (`Workstation.resize_glass`): the windows stay, clamped into the new
+    desk; a glass with no desk room holds console mode with the windows
+    parked; room again gives the desk back with them; the Text size row
+    gives way to UI size there."""
+    from runtime.host_app import ConsoleDriver
+    from runtime import layout_base as lb
+    ws = _moy_desk(tmp_path)
+    ws.look.zoom_glass(0, (0, 100, 200))
+    drv = ConsoleDriver(ws)
+    for app in ("files", "calc"):
+        ws.spine.open_app(ws.app(app))
+        drv.frame(1 / 30)
+    wm = ws.wm
+    assert ws.look.font_scales() == (1,)
+    assert ws.resize_glass(1920, 1080, lb.desk_diagonal_in(1920, 1080))
+    drv.frame(1 / 30)
+    assert (ws.sys_canvas.w, ws.sys_canvas.h) == (1920, 1080)
+    assert wm.mode == "desktop" and set(wm.z_order) >= {"files", "calc"}
+    assert wm.focus_key == "calc"
+    win = wm.windows["calc"]
+    win.x = 1900                                   # hangs off the right edge
+    ws.resize_glass(1100, 640, lb.desk_diagonal_in(1100, 640))
+    drv.frame(1 / 30)
+    dx, dy, dw, dh = wm.desk_rect()
+    assert win.x + win.w <= dx + dw and win.buf is not None
+    ws.resize_glass(569, 240, lb.desk_diagonal_in(569, 240))
+    drv.frame(1 / 30)
+    assert ws.wm is wm and wm.mode == "console" and ws.metric_class == lb.HANDHELD
+    assert {"files", "calc"} <= set(wm.parked.wins)
+    wm.leave_console()
+    assert wm.mode == "console", "no desk without its room"
+    ws.resize_glass(1280, 720, lb.desk_diagonal_in(1280, 720))
+    drv.frame(1 / 30)
+    assert wm.mode == "desktop" and {"files", "calc"} <= set(wm.z_order)
+    assert ws.metric_class == lb.DESK
+
+
+def test_the_user_s_console_mode_stays_across_a_resize(tmp_path):
+    from runtime.host_app import ConsoleDriver
+    from runtime import layout_base as lb
+    ws = _moy_desk(tmp_path)
+    ws.look.zoom_glass(0, (0, 100))
+    drv = ConsoleDriver(ws)
+    ws.wm.enter_console()
+    drv.frame(1 / 30)
+    assert ws.bar_layer.draws_back("home"), "the user's console mode: the desk beneath"
+    ws.resize_glass(569, 240, None)
+    drv.frame(1 / 30)
+    assert ws.wm.mode == "console"
+    # Held there, the home is the floor, as on a handheld: no way back, and
+    # back on it (the chevron's, Esc's and B's) leaves it standing.
+    assert not ws.bar_layer.draws_back("home")
+    ws.home.open_desk()
+    drv.frame(1 / 30)
+    assert ws.wm.mode == "console" and ws.wm.stack.depth() == ws.wm.floor()
+    # ...and its pause card offers no window: there is no desk to put one on.
+    ws.open()
+    drv.frame(1 / 30)
+    assert ws.wm.stack.top() == "desktop" and not ws.wm.offers_window()
+    assert not ws.wm.play_in_window() and ws.wm.mode == "console"
+    ws.home.go_home()
+    drv.frame(1 / 30)
+    ws.resize_glass(1920, 1080, lb.desk_diagonal_in(1920, 1080))
+    drv.frame(1 / 30)
+    assert ws.wm.mode == "console"
+    assert ws.bar_layer.draws_back("home")
+
+
+def test_settings_ui_size_row_is_the_zoomed_glass_s(tmp_path):
+    """A zoomed glass shows UI size (Auto and the page's percents) and no
+    Text size; its pick is the console's for the page to apply."""
+    import settings_rows
+    ws = _moy_desk(tmp_path)
+    ws.look.zoom_glass(0, (0, 100, 200))
+    assert ws.look.font_scales() == (1,) and ws.look.zoom == 0
+    ws.look.set_zoom(200)
+    assert ws.look.zoom == 200
+    ws.look.set_zoom(300)
+    assert ws.look.zoom == 200, "only what the page offers"
+    assert hasattr(settings_rows, "zoom_set")

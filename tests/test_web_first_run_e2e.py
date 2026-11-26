@@ -87,16 +87,27 @@ def test_the_url_scheme_is_what_the_site_passes(tmp_path, base):
     assert got["variant"] == "light", out[-2000:]
 
 
+def _until(cond):
+    """A step that waits for the console to show `cond` (over `s`, its
+    state) and to have drawn no frame for 300 ms."""
+    return {"waitFor": "(async () => { const a = await window.__moyState(); "
+                       "await new Promise(r => setTimeout(r, 300)); "
+                       "const s = await window.__moyState(); "
+                       "return a.frames === s.frames && (%s); })()" % cond,
+            "timeout": 15000}
+
+
 def test_a_saved_choice_wins_over_the_scheme(tmp_path, base):
     """Day picked in Settings -> Appearance on a dark browser's first run: the
     next visit, still dark, is Day -- and an unpicked first run is not saved,
     so before the pick the scheme still decided."""
     profile = tmp_path / "chrome"
     got, _ = _load(tmp_path, base, profile, "", "dark", "pick", steps=[
-        {"note": "Settings from the system menu, Appearance, Mode: Day"},
+        {"note": "Settings from the system menu, Appearance (General's first "
+                 "row: the browser has no Wi-Fi), Mode: Day"},
         {"click": [16, 14]}, {"wait": 600},
-        {"click": [77, 134]}, {"wait": 1200},
-        {"click": [443, 233]}, {"wait": 1500},
+        {"click": [77, 134]}, _until("s.stack.includes('settings')"),
+        {"click": [443, 193]}, _until("s.stack.includes('appearance')"),
         {"click": [923, 330]}, {"wait": 6000}])
     assert got["variant"] == "light", "the Day pick did not take"
     again, out = _load(tmp_path, base, profile, "", "dark", "after_pick")

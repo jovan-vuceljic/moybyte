@@ -202,11 +202,11 @@ def test_a_hosted_console_installs_carts_into_its_own_store(tmp_path):
             {"note": "the archive's host cannot be read: the page asks", "wait": 4000},
             {"shot": "your_copy"},
             {"js": "JSON.stringify(window.__moyPick || null)"},
-            {"js": "getComputedStyle(document.getElementById('pk')).display"},
+            {"js": "window.__moyPick ? 'block' : 'none'"},
             {"file": "$MOY_WAD", "as": "__wad"},
             {"js": "pkSend(new File([window.__wad], 'doom1.wad')), 'sent'"},
             {"wait": 6000}, {"shot": "dm_ready"},
-            {"js": "getComputedStyle(document.getElementById('pk')).display"},
+            {"js": "window.__moyPick ? 'block' : 'none'"},
             {"js": _OPFS % _FOLDERS},
             {"note": "Zap: its mirror's bytes are wrong", "key": "Escape"},
             {"wait": 800}, {"click": at["cards"][2]},
@@ -250,8 +250,7 @@ def test_a_hosted_console_installs_carts_into_its_own_store(tmp_path):
         out2, js2 = web_e2e.run(tmp_path, "reload", "?handheld=1&dev=1", [
             {"wait": 2500},
             {"js": "pzAsk(), 'asked'"}, {"wait": 600},
-            {"js": "Array.from(document.getElementById('pzc').options)"
-                   ".map(o=>o.value).join(',')"},
+            {"js": "(window.__moyCarts || []).join(',')"},
             {"js": "window.__moyPersist ? window.__moyPersist.d : 'none'"},
         ], base, profile)
         shelf = js2[1]
@@ -320,7 +319,7 @@ def test_a_hosted_console_takes_an_external_file_from_its_mirror(tmp_path):
             {"click": at["agree"]},
             {"note": "from the mirror, asking nothing", "wait": 6000}, {"shot": "wm_ready"},
             {"js": "JSON.stringify(window.__moyPick || null)"},
-            {"js": "getComputedStyle(document.getElementById('pk')).display"},
+            {"js": "window.__moyPick ? 'block' : 'none'"},
             {"js": _OPFS % '["wm.moy"]'},
         ], base, tmp_path / "chrome")
         assert len(js) == 3, "the scenario did not run to its end:\n%s" % out[-4000:]

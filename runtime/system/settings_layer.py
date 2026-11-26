@@ -196,11 +196,6 @@ _STABLE_BETA = ("Stable", "Beta")
 # home's arrangements (appearance HOME_STYLES).
 _HOME_WORDS = ("Theme", "Carousel", "Grid", "Icons")
 
-# A board's name in About, by its OTA id (each board.toml's [board] ota):
-# the name a reader knows it by.
-BOARDS = {"tdeck": "T-Deck Plus", "p4": "Waveshare P4 7″", "guition_s3": "Guition 3.5″",
-          "guition_p4": "Guition P4 10″", "elecrow_p4": "Elecrow P4 10″",
-          "xiao_zero": "XIAO ESP32-S3", "cores3": "M5Stack CoreS3 SE"}
 _PAGE_TITLES = {"achievements": "Achievements", "licences": "Licences", "log": "System log",
                 "permissions": "App permissions"}
 
@@ -335,6 +330,8 @@ class SettingsLayer(Layer):
         self._rows_web = False
         self._rows_c6 = False
         self._rows_usb = False
+        self._rows_wifi = True
+        self._rows_light = True
         self._rows_idle = None
         self._rows_lgen = -1
         self._rows_sizes = None
@@ -768,9 +765,37 @@ class SettingsLayer(Layer):
 
     def _wifi_connect(self, ssid, pw, locked=False):
         """Ask the service to join `ssid` and return at once: the verdict is
-        the join's to give (`_wifi_settle`), now or when the poll sees it."""
+        the join's to give (`_wifi_settle`), now or when the poll sees it.
+        A station whose join moves what this page reaches the console over
+        (a Zero's, `switch_says`) asks first, and offers to save a network
+        it has not saved instead."""
         ws = self.ws
         self.wifi_pick = None
+        w = self._wifi.station()
+        says = getattr(w, "switch_says", None) if w is not None else None
+        card = says(ssid) if says is not None else None
+        if card is not None:
+            save = None
+            if pw and ssid not in self.wifi_known:
+                save = lambda: self._wifi_save(ssid, pw)       # noqa: E731
+            ws.confirm.ask_switch(card[0], card[1], lambda: self._wifi_join(ssid, pw, locked),
+                                  save)
+            return None
+        return self._wifi_join(ssid, pw, locked)
+
+    def _wifi_save(self, ssid, pw):
+        """Save `ssid` with the station, joining nothing."""
+        w = self._wifi.station()
+        try:
+            w.save(ssid, pw)
+            self.wifi_known = list(w.known())
+            self.wifi_msg = ("Saved " + str(ssid))[:34]
+        except Exception as exc:  # noqa: BLE001
+            self.wifi_msg = ("Save failed: " + str(exc))[:34]
+        self.ws.mark_dirty()
+
+    def _wifi_join(self, ssid, pw, locked):
+        ws = self.ws
         w = self._wifi.station()
         try:
             join = getattr(w, "join", None) if w is not None else None
@@ -799,12 +824,18 @@ class SettingsLayer(Layer):
             else ("That password didn't work." if pw
                   else "Couldn't connect.")
         w = self._wifi.station()
+        card = None
         if w is not None:
             try:
                 self.wifi_known = list(w.known())
             except Exception:  # noqa: BLE001
                 pass
-        if not ok and locked and not pw:
+            says = getattr(w, "join_says", None)
+            card = says() if says is not None else None
+        if card is not None:
+            self.wifi_msg = card[0][:34]
+            ws.confirm.tell(card[0], card[1])
+        elif not ok and locked and not pw:
             self._wifi_ask(ssid)
         addon = getattr(ws, "addon", None)
         if ok and addon is not None:
@@ -974,6 +1005,8 @@ class SettingsLayer(Layer):
         usb = self._usb.drive() is not None
         idle = getattr(ws, "idle_ladder", None)
         tog = self._toggle_rows()
+        radio = self._wifi.station() is not None
+        light = bool(ws.panel_light)
         lgen = ws.look.layout_gen
         sizes = ws.look.font_scales()
         if (self._rows_cache is not None and lgen == self._rows_lgen
@@ -981,12 +1014,18 @@ class SettingsLayer(Layer):
                 and bt == self._rows_bt
                 and upd == self._rows_upd and onl == self._rows_onl
                 and web == self._rows_web and c6u == self._rows_c6
-                and usb == self._rows_usb
+                and usb == self._rows_usb 
+                and radio == self._rows_wifi and light == self._rows_light
                 and tog is self._rows_tog and idle is self._rows_idle):
             return self._rows_cache
         # The registry block sits directly after NAME, which is where the
         # hand-spliced FRAMESKIP/PERF DIAG rows were.
         rows = self._SETTINGS_ROWS + tog
+        if not radio or not light:
+            # WIFI where there is a radio, BRIGHTNESS where there is a panel
+            # light (`ws.panel_light`): the browser page has neither.
+            rows = tuple(r for r in rows if (radio or r[0] != "wifi")
+                         and (light or r[0] != "brightness"))
         if ws.look.layout_choices() or ws.look.layout_theme() is not None:
             # LAYOUT (docs/theme_and_shell_2026-11.md §8.9): after FONT SIZE, and
             # only where a package's layout differs from the theme's.
@@ -1040,6 +1079,8 @@ class SettingsLayer(Layer):
         self._rows_web = web
         self._rows_c6 = c6u
         self._rows_usb = usb
+        self._rows_wifi = radio
+        self._rows_light = light
         self._rows_idle = idle
         self._rows_lgen = lgen
         self._rows_sizes = sizes
@@ -1216,11 +1257,17 @@ class SettingsLayer(Layer):
         return tuple(out)
 
     def _free(self):
-        """The store's free space as About shows it, or None."""
+        """The store's free space as About shows it, or None: the store of
+        record's, so a page a board serves shows the board's as its last
+        check said (`cart_board`) and never its own memory's."""
         ws = self.ws
         try:
             keep = getattr(ws, "cart_keep", None)
-            if keep is not None:
+            if getattr(ws, "cart_home", None) == "board":
+                board = getattr(ws, "cart_board", None)
+                got = board.free() if board is not None else None
+                b = got[0] if got else None
+            elif keep is not None:
                 got = keep.free()
                 b = got[0] if got else None
             else:
@@ -1468,7 +1515,8 @@ def board_name():
     except ImportError:
         return None
     board = getattr(moy_ota, "BOARD", None)
-    return board_words(BOARDS.get(board, str(board))) if board else None
+    names = getattr(moy_ota, "BOARD_NAMES", None) or {}
+    return board_words(names.get(board, str(board))) if board else None
 
 
 def _idle_word(secs):

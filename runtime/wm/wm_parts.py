@@ -95,6 +95,7 @@ class _Win:
         self.minimized = False        # hidden; lives on as a taskbar chip
         self.proc = None              # the running set's Proc it shows, if any
         self.held = False             # a docked playtest's run held while hidden
+        self.scales = None            # (font, chrome) scale it was built at (`_scales`)
         self.saved = None             # full screen: the rect a restore puts
                                       # back (x, y, w, h); None while restored
         self._content = None          # content_rect's last answer

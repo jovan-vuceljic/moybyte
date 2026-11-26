@@ -21,6 +21,7 @@ def term(tmp_path):
     ws = build_workstation(str(tmp_path / "carts"))
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     yield ws, app
     app.close_session()
 
@@ -58,7 +59,8 @@ def test_a_line_is_echoed_and_run_in_the_session(term):
     _ws, app = term
     run(app, "echo hello; mkdir /made; cd /made; pwd")
     assert plain(app) == ["$ echo hello; mkdir /made; cd /made; pwd", "hello", "/made"]
-    assert app.face.lines()[0] == "\x1b[2m$ \x1b[36mecho hello; mkdir /made; cd /made; pwd\x1b[0m"
+    assert app.face.lines()[0] == ("\x1b[2m$ \x1b[38;2;41;173;255m"
+                                   "echo hello; mkdir /made; cd /made; pwd\x1b[0m")
 
 
 def test_a_command_that_goes_on_takes_the_continuation_prompt(term):
@@ -97,6 +99,7 @@ def test_a_first_run_asks_at_the_prompt_and_the_next_line_answers(tmp_path):
     ws = build_workstation(str(root))
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     try:
         run(app, "echo before; greet one; echo after")
         got = plain(app)
@@ -114,7 +117,7 @@ def test_a_first_run_asks_at_the_prompt_and_the_next_line_answers(tmp_path):
         run(app, "other")
         run(app, "")                    # Enter alone is a no
         got = plain(app)
-        assert "".join(got[-2:]) == "other: needs your OK - open it to say yes", got
+        assert got[-1] == "other: needs your OK - open it to say yes", got
         assert ws.consent.get("local.other") is None and app.face.prompt() == "$ "
         run(app, "other")
         app.face.key(3)                 # Ctrl-C drops the question
@@ -200,6 +203,7 @@ def test_pkg_asks_the_console_s_password_unseen_and_its_install_question_at_the_
         f.write(ssh_service.hashed("hunter22", "ab" * 16) + "\n")
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     f = app.face
     try:
         run(app, "pkg install snake")
@@ -207,7 +211,8 @@ def test_pkg_asks_the_console_s_password_unseen_and_its_install_question_at_the_
         _type(app, "hunter22")
         f.key(0x08)
         _type(app, "2")
-        assert f.prompt_row() == "\x1b[2mThe console's password: \x1b[0;36m********\x1b[0m"
+        assert f.prompt_row() == ("\x1b[2mThe console's password: \x1b[0m\x1b[38;2;41;173;255m"
+                                  "********\x1b[0m")
         f.key(9)
         f.recall(-1)
         assert f.line() == "hunter22", "no completion, no history while it is asked"
@@ -250,6 +255,7 @@ def test_ctrl_c_at_pkg_s_question_drops_the_build_it_kept(tmp_path):
         f.write(ssh_service.hashed("hunter22", "ab" * 16) + "\n")
     app = ws.app("terminal")
     app.open()
+    app.draw(0)                         # the first frame sizes the grid
     try:
         run(app, "pkg install snake")
         assert app.face.prompt() == "The console's password: " and len(pkg._KEPT) == 1
@@ -717,6 +723,61 @@ def test_vi_s_key_row_leaves_insert_saves_and_quits_on_the_tdeck(term, tmp_path)
         ui_draw.hint_kind(kinds[1])
 
 
+def _reversed(row):
+    """A screen row's text, and under it `^` for each reversed cell."""
+    import re
+    text, mask, rev = [], [], False
+    for m in re.finditer("\x1b\\[([0-9;]*)m|([^\x1b])", row):
+        if m.group(2) is not None:
+            text.append(m.group(2))
+            mask.append("^" if rev else " ")
+            continue
+        for p in m.group(1).split(";"):
+            rev = True if p == "7" else False if p in ("", "0", "27") else rev
+    return "".join(text), "".join(mask).rstrip()
+
+
+def test_vi_s_visual_selection_is_drawn_in_reverse_video(term):
+    """vi's VISUAL draws its selection in reverse video, which the grid
+    keeps (SGR 7, then 27 or a reset): as far as each line shows, a long
+    line's sideways cut and its `$` marks included, a selected line break
+    as one cell; the status line names the mode, and Esc leaves it."""
+    ws, app = term
+    words = " ".join("w%02d" % i for i in range(1, 31))
+    run(app, "mkdir -p /sd/moybyte")
+    run(app, "printf 'one two\\n\\n%s\\nend\\n' > /sd/moybyte/v.txt" % words)
+    run(app, "vi /sd/moybyte/v.txt")
+    _frame(ws)
+    cols = app.face.size()[0]
+    assert len(words) > cols
+
+    def screen():
+        app.face.take()
+        return [_reversed(ln) for ln in app.face.lines()]
+    _keys(app, b"wv")
+    assert app.face.lines()[0] == "one \x1b[7mt\x1b[27mwo"
+    assert plain(app)[-1].startswith("-- VISUAL --")
+    _keys(app, b"jj")                       # down to the long line's fifth column
+    shown = screen()
+    assert shown[0] == ("one two ", "    ^^^^")
+    assert shown[1] == (" ", "^")
+    assert shown[2] == (words[:cols - 1] + "$", "^" * 5)
+    _keys(app, b"$")                        # its end: the view scrolls sideways
+    left = len(words) - cols // 2
+    assert screen()[2] == ("$" + words[left:] + " ", " " + "^" * (len(words) - left + 1))
+    _keys(app, b"o")                        # the other end: the line cut at the right
+    assert screen()[2] == (words[:cols - 1] + "$", "^" * (cols - 1))
+    _keys(app, b"V")
+    assert screen()[:4] == [("one two ", "^" * 8), (" ", "^"), (words[:cols - 1] + "$", "^" * (cols - 1)),
+                            ("end", "")]
+    assert plain(app)[-1].startswith("-- VISUAL LINE --")
+    _keys(app, b"\x1b")
+    assert all(mask == "" for _text, mask in screen())
+    assert not plain(app)[-1].startswith("--")
+    _keys(app, b":q\r")
+    assert app.face.app() is None
+
+
 def test_python_runs_a_file_by_the_sessions_path(term):
     """`python FILE [ARG...]`: the file named by the session's path, read
     from the store's, `sys.argv` its name as typed and its ARGs, its exit
@@ -814,8 +875,9 @@ def test_a_session_starts_in_the_user_files_folder_beside_the_carts(term, tmp_pa
 
 def test_neofetch_reads_the_console_s_own_rows_from_its_proc_file(term):
     """/proc/console is the door's: the rows only the console knows, which
-    neofetch (C) shows beside its own; on the screen face in colour, the
-    title kept on a screen too short for every row."""
+    neofetch (C) shows beside its own; on the screen face in colour, Moy
+    beside the rows on the T-Deck's 44 columns and the palette under them
+    on its 13 rows."""
     ws, app = term
     run(app, "cat /proc/console")
     rows = dict(ln.split(": ", 1) for ln in plain(app)[1:] if ": " in ln)
@@ -823,15 +885,42 @@ def test_neofetch_reads_the_console_s_own_rows_from_its_proc_file(term):
     assert rows["display"] == "%dx%d" % (ws.glass_canvas.w, ws.glass_canvas.h)
     run(app, "ls /proc")
     assert "console" in plain(app)[-1].split()
-    run(app, "neofetch")
+    assert app.face.size() == (44, 13)
+    run(app, "clear; neofetch")
     shown = plain(app)
-    assert any(rows["name"] in ln for ln in shown)
-    assert any(ln.strip().startswith("Shell: moy_sh") for ln in shown)
-    # the T-Deck's screen: the title first, the rows that fit, no palette
-    assert shown[shown.index("$ neofetch") + 1] == rows["name"] + "@moybyte"
+    assert any("Shell: moy_sh" in ln for ln in shown)
+    # the title first, Moy's top row beside it, his body beside the rows
+    title = shown.index(next(ln for ln in shown if ln.endswith(rows["name"] + "@moybyte")))
+    assert shown[title].startswith("   \u2584\u2584\u2584\u2584\u2584\u2584\u2584 ")
+    board = next(ln for ln in shown if "Board: " in ln)
+    assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
     lines = app.face.lines()
     assert any("\x1b[38;2;255;119;168mDisplay\x1b[0m" in ln for ln in lines)
-    assert not any("\x1b[48;2;" in ln for ln in lines)
+    # the palette's two rows of eight grounds under them
+    assert sum(ln.count("\x1b[48;2;") == 8 for ln in lines) == 2
+
+
+def test_a_line_run_before_the_first_frame_waits_for_the_grid_it_sizes(tmp_path):
+    """The face's grid starts at 40 x 12, a size no screen has: a line
+    submitted before the first frame lays the page out runs at that frame,
+    so neofetch as the first command has the T-Deck's 44 columns and
+    draws Moy beside its rows."""
+    from runtime.host_app import build_workstation
+    ws = build_workstation(str(tmp_path / "carts"))
+    app = ws.app("terminal")
+    app.open()
+    try:
+        run(app, "neofetch")
+        assert plain(app) == [""] and not app.face.busy()
+        app.draw(0)
+        settle(app)
+        assert app.face.size() == (44, 13)
+        shown = plain(app)
+        assert shown[0] == "$ neofetch", shown
+        board = next(ln for ln in shown if "Board: " in ln)
+        assert board.index("Board: ") == 18 and "\u2588" in board[:15], shown
+    finally:
+        app.close_session()
 
 
 def test_wait_reads_a_background_command_s_exit_code(term, tmp_path):
@@ -862,3 +951,190 @@ def test_a_console_with_no_shell_says_so(tmp_path, monkeypatch):
     ws.frame(1 / 30)
     assert app.face is None and app._none is not None
     assert app._none.root is not None
+
+
+# -- Esc and the clipboard ---------------------------------------------------------
+
+
+def _vi_open(ws, drv, app, tmp_path):
+    """vi on a new file in INSERT, "hi" typed through the driver."""
+    run(app, "mkdir -p /sd/moybyte")
+    run(app, "vi /sd/moybyte/v.txt")
+    for _ in range(2):
+        drv.frame(1 / 30)
+    for c in b"ihi":
+        drv.type_char(c)
+        drv.frame(1 / 30)
+    assert app.face.app() == "vi" and "-- INSERT --" in plain(app)[-1]
+    return tmp_path / "sd" / "moybyte" / "v.txt"
+
+
+def _desk_or_console(tmp_path, desk):
+    from ws_helpers import build_ws, build_desktop_ws
+    from runtime.host_app import ConsoleDriver
+    ws = build_desktop_ws(tmp_path) if desk else build_ws(tmp_path)
+    if desk:
+        ws.home.open_desk()
+    app = ws.app("terminal")
+    drv = ConsoleDriver(ws)
+    ws.spine.open_app(app)
+    for _ in range(3):
+        drv.frame(1 / 30)
+    assert ws.input.text_mode and ws.wm.input_kind() == "terminal"
+    return ws, app, drv
+
+
+@pytest.mark.parametrize("desk", [False, True], ids=["console", "desk"])
+def test_esc_is_vi_s_and_the_terminal_stays(tmp_path, desk):
+    """Esc is a key the Terminal's apps read: a page's Esc (ConsoleDriver.escape,
+    the typed 27 on a text surface) leaves vi's INSERT, and `:wq` saves; the
+    Terminal stays, at the prompt as in vi. A board keyboard's Esc presses
+    `stop` with the byte (moy_hid.c), which the Terminal does not take as the
+    console's back either (`takes_stop`). Its ways out are the window's X,
+    the bar's back and the system key."""
+    ws, app, drv = _desk_or_console(tmp_path / "ws", desk)
+    try:
+        assert not ws.input_policy.takes_stop(app)
+        path = _vi_open(ws, drv, app, tmp_path / "ws")
+
+        def esc():
+            drv.escape()
+            drv.frame(1 / 30)
+            drv.frame(1 / 30)
+        esc()
+        assert ws.wm.input_kind() == "terminal" and app.face.app() == "vi"
+        assert "-- INSERT --" not in plain(app)[-1]
+        for c in b":wq\r":
+            drv.type_char(c)
+            drv.frame(1 / 30)
+        assert app.face.app() is None and path.read_text() == "hi\n"
+        esc()
+        assert ws.wm.input_kind() == "terminal", "Esc at the prompt keeps the Terminal"
+    finally:
+        app.close_session()
+
+
+def test_a_paste_types_whole_into_the_prompt_and_into_vi(tmp_path):
+    """A paste (ConsoleDriver.paste, the page's clipboard) types its text at
+    once, a line break as Enter: two lines run in turn, and in vi's INSERT
+    the lines land as typed. The console's clipboard holds it too."""
+    ws, app, drv = _desk_or_console(tmp_path / "ws", True)
+    try:
+        drv.paste("echo one\r\necho two\n")
+        drv.frame(1 / 30)
+        shown = [ln for ln in plain(app) if ln.strip()]
+        assert shown[-4:] == ["$ echo one", "one", "$ echo two", "two"]
+        assert ws.clipboard.text() == "echo one\r\necho two\n"
+        path = _vi_open(ws, drv, app, tmp_path / "ws")
+        drv.paste(" there\nsecond line")
+        drv.frame(1 / 30)
+        drv.escape()
+        drv.frame(1 / 30)
+        for c in b":wq\r":
+            drv.type_char(c)
+            drv.frame(1 / 30)
+        assert path.read_text() == "hi there\nsecond line\n"
+    finally:
+        app.close_session()
+
+
+def _cells(app, ui_draw):
+    """Where each log cell lies in the app's coordinates, as the last frame drew it."""
+    at = {}
+    lay = app.layout
+    for y in range(0, lay.h, 2):
+        for x in range(0, lay.w, 2):
+            a = ui_draw.text_at(app._ui, "log", x, y)
+            if a is not None and a not in at:
+                at[a] = (x, y)
+    return at
+
+
+def test_a_reversed_cell_is_filled_with_its_ink(term):
+    """SGR 7 (vi's selection draws in it) reaches the Terminal's page: the
+    grid says the reversed cells back as `ESC [7m` and the text view fills
+    them with their ink, a reversed blank included, where a plain blank
+    shows the page."""
+    from runtime import ui_draw
+    ws, app = term
+    run(app, "printf 'ab\\033[7m  \\033[0m\\n'")
+    _frame(ws)
+    app.face.take()
+    rows = list(app.face.lines())
+    r = rows.index("ab\x1b[7m  \x1b[0m")
+    at = _cells(app, ui_draw)
+    cv = app._surf.canvas()
+    rgb = cv.to_rgb888()
+
+    def px(cell, dx=0, dy=0):
+        x, y = at[cell]
+        i = ((y + dy) * cv.w + x + dx) * 3
+        return rgb[i:i + 3]
+    rev, plain_ = px((r, 2)), px((r, 5))
+    assert rev != plain_
+    assert px((r, 3), 2, 2) == rev and px((r, 6), 2, 2) == plain_
+
+
+def test_a_mouse_drag_selects_and_ctrl_c_copies_it(tmp_path):
+    """A mouse's drag over the log selects its cells, drawn; Ctrl+C over a
+    selection copies its text to the console's clipboard (no interrupt),
+    Ctrl+Shift+C too, and Ctrl+C with none is the shell's again."""
+    from runtime import ui_draw
+    ws, app, drv = _desk_or_console(tmp_path / "ws", True)
+    try:
+        drv.paste("echo one\necho two\n")
+        drv.frame(1 / 30)
+        r = plain(app).index("one")
+        ws.pointer.hovers = True                       # a mouse
+        cx, cy, _w, _h = ws.wm.windows["terminal"].content_rect()
+        at = _cells(app, ui_draw)
+        x0, y0 = at[(r - 1, 2)]
+        x1, y1 = at[(r, 3)]
+        drv.touch(cx + x0, cy + y0)
+        drv.frame(1 / 30)
+        drv.touch_drag(cx + x1, cy + y1)
+        drv.frame(1 / 30)
+        drv.touch_up()
+        drv.frame(1 / 30)
+        assert app.face.selection() == (r - 1, 2, r, 3)
+        app.face.set_line("kept")
+        drv.key_down(ord("c"), 1)
+        drv.frame(1 / 30)
+        drv.frame(1 / 30)
+        drv.key_up(ord("c"), 0)
+        drv.frame(1 / 30)
+        assert ws.clipboard.text() == "echo one\none"
+        assert app.face.selection() is None and app.face.line() == "kept", "no interrupt"
+        app.face.select(r + 1, 0, r + 2, 3)
+        drv.key_down(ord("C"), 3)                     # Ctrl+Shift+C
+        drv.frame(1 / 30)
+        drv.key_up(ord("C"), 0)
+        drv.frame(1 / 30)
+        assert ws.clipboard.text() == "$ echo two\ntwo"
+        drv.key_down(ord("c"), 1)
+        drv.frame(1 / 30)
+        drv.key_up(ord("c"), 0)
+        drv.frame(1 / 30)
+        assert app.face.line() == "", "Ctrl+C with no selection drops the line"
+    finally:
+        app.close_session()
+
+
+def test_a_finger_s_drag_scrolls_and_selects_nothing(tmp_path):
+    from runtime import ui_draw
+    ws, app, drv = _desk_or_console(tmp_path / "ws", False)
+    try:
+        drv.paste("echo one\n")
+        drv.frame(1 / 30)
+        ws.pointer.hovers = False
+        at = _cells(app, ui_draw)
+        x, y = at[(0, 2)]
+        drv.touch(x, y)
+        drv.frame(1 / 30)
+        drv.touch_drag(x + 20, y)
+        drv.frame(1 / 30)
+        drv.touch_up()
+        drv.frame(1 / 30)
+        assert app.face.selection() is None
+    finally:
+        app.close_session()

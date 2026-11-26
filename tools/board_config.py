@@ -951,18 +951,35 @@ INPUT_PARAMS = {
 def input_defines(board_dir):
     """board.toml [input] as (DEFINE, value) pairs, in INPUT_PARAMS order;
     an unknown key or a value that is not a whole number >= 0 is refused."""
-    got = load(board_dir).get("input", {})
+    return _param_defines(board_dir, "input", INPUT_PARAMS)
+
+
+# board.toml [net]: the network's parameters a board overrides, each a compile
+# definition every native module sees (native/moy_net/moy_ota.h has the
+# defaults).
+NET_PARAMS = {
+    "http_pool": "MOY_HTTPC_POOL",
+}
+
+
+def net_defines(board_dir):
+    """board.toml [net] as (DEFINE, value) pairs, as input_defines."""
+    return _param_defines(board_dir, "net", NET_PARAMS)
+
+
+def _param_defines(board_dir, table, params):
+    got = load(board_dir).get(table, {})
     out = []
     for key in got:
-        if key not in INPUT_PARAMS:
-            raise ValueError("%s/board.toml [input] has no %r (it takes %s)"
-                             % (board_dir, key, ", ".join(INPUT_PARAMS)))
-    for key, define in INPUT_PARAMS.items():
+        if key not in params:
+            raise ValueError("%s/board.toml [%s] has no %r (it takes %s)"
+                             % (board_dir, table, key, ", ".join(params)))
+    for key, define in params.items():
         if key in got:
             v = got[key]
             if isinstance(v, bool) or not isinstance(v, int) or v < 0:
-                raise ValueError("%s/board.toml [input] %s must be a whole number >= 0"
-                                 % (board_dir, key))
+                raise ValueError("%s/board.toml [%s] %s must be a whole number >= 0"
+                                 % (board_dir, table, key))
             out.append((define, v))
     return out
 
@@ -1003,7 +1020,7 @@ def stage_native(board_dir, root=ROOT, quiet=False):
              # are already built with NDEBUG. The .mk twins need no equivalent:
              # the unix and wasm ports put -DNDEBUG in their own CFLAGS.
              "target_compile_definitions(usermod INTERFACE NDEBUG)"]
-    for define, v in input_defines(board_dir):
+    for define, v in input_defines(board_dir) + net_defines(board_dir):
         lines.append("target_compile_definitions(usermod INTERFACE %s=%d)" % (define, v))
     for define, v in hw_defines(board_dir):
         lines.append("target_compile_definitions(usermod INTERFACE %s=%d)" % (define, v))

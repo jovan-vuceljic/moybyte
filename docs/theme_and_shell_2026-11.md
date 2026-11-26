@@ -317,7 +317,8 @@ renders the owner chose from):
    app, on a handheld its card's one Open row.
 7. **The handheld control center** grew from the battery's component
    (`popover.ControlCenter`): `cc_ui`'s page, the console's group (Volume,
-   Brightness, Wi-Fi), then each app's rows in a group under its app's
+   Brightness where there is a panel light, Wi-Fi where there is a radio:
+   the browser page has neither), then each app's rows in a group under its app's
    name, the page scrolling, its first view ending 6 px under the first
    app's group, over a 50% scrim. The battery has no row: the bar's glyph
    shows it low (the danger ink under 15%) and charging (a bolt), and
@@ -2358,6 +2359,71 @@ and `ws.perf.note_cost`'s `bar.strip.render` count over an idle minute is one
 (the clock's) (`runtime/shell/console_perf.py`). The carousel's motion cost is
 §8.10's and goes to #66; parked windows' memory and the off-heap census are #58's.
 
+### 8.12 UI size and Text size (owner, 2026-11-25)
+
+**The browser has one size setting, UI size; a board keeps Text size.** A
+board's canvas is its panel, so the shell's size there is the font scale
+(Text size, `Appearance.font_scales`). The browser page's canvas is its room
+in device pixels over a whole number N, shown at N device pixels a canvas
+pixel (`firmware/web_runner/page_core.html`, THE GLASS), so text, icons,
+chrome and hints grow as one; Settings' UI size picks N as a percent of the
+CSS pixel, and Text size is gone there (`Appearance.zoom_glass`). The glass
+follows the page live (`Workstation.resize_glass`): what runs keeps running,
+the windows stay, clamped into the new desk, and the desk stands wherever the
+canvas holds its 1024x600; below that the windowed tier holds console mode,
+its windows parked, and room again gives the desk back (`_hold_desk`), never
+one the user left for console mode. A game in console mode takes the largest
+whole scale that fits, every tier's `viewport`, in a letterbox of the
+theme's desktop colour (`wm.bezel`).
+
+**Auto** is the largest N whose canvas holds the desk's 1024x600. Where the
+room does not, the handheld: a window with a pointer takes the largest N whose
+canvas still holds 320x240 (a 690x560 window: N 2, a 345x280 glass), so the
+canvas fills the room to under N device pixels; a touch phone takes the phone
+rule: landscape, a canvas 240 tall at the room's aspect, portrait the 320x240
+console, each scaled to the room (fractional, as the page always did). A glass
+without the desk's room declares no panel, as the T-Deck declares none
+(`web_boot.glass_in`), so it lays out the T-Deck's class at chrome scale 1,
+and its console mode is held with the home as the floor: no back chevron, and
+back on the home does nothing, as on a handheld. Console mode the user chose
+on a glass with the desk's room keeps the way back to the desk. The page has no rows of its own
+(`.claude/rules/web.md`), so the canvas has the whole viewport; a touch
+phone held sideways gives it the full height, centred, and its side
+margins hold the touch controls, the stick left and A/B right sized to the
+margin, the keyboard summon and the burger small in the top corners; each
+margin is what a 4:3 canvas leaves, at least 104 and at most 180 CSS pixels,
+so where a 4:3 game would leave less the canvas narrows instead of a pad
+overlapping it (`room`, `padPlace`). **The choices** are the percents
+that land on whole device pixels and leave the canvas 320x240, up to 400%:
+100%, 200%, 300% at a devicePixelRatio of 1; 67%, 133%, 200% at 1.5; 50%,
+100%, 150%, 200% at 2. The choice is kept per browser.
+
+| case (CSS viewport, devicePixelRatio) | Auto | UI size offers | Text size |
+|---|---|---|---|
+| phone portrait 390x844, 3 | the 320x240 console over the width, the touch controls under it | Auto, 33%, 67%, 100% | none |
+| phone landscape 844x390, 3 | 320x240 full height between the pads, console mode | Auto, 33%..133% | none |
+| window 700x560, 1 | N 2: 350x280, the handheld | Auto, 100%, 200% | none |
+| window 900x600, 1.25 | N 3: 375x250, the handheld | Auto, 80%, 160%, 240% | none |
+| window 1100x650, 1 | 100%: 1100x650, the desk | Auto, 100%, 200% | none |
+| tablet 1024x768, 2 | 100%: 1024x734, the desk | Auto, 50%..300% | none |
+| 1080p laptop at 100%, 1 | 100%: 1920x1046 | Auto, 100%..400% | none |
+| 1080p at 125% (1536x864), 1.25 | 80% (N 1: crisp, under the OS's scale) | Auto, 80%, 160%, 240%, 320% | none |
+| 1080p at 150% (1280x720), 1.5 | 67% (N 1) | Auto, 67%, 133%, 200%, 267% | none |
+| 1440p, 1 | 200%: 1280x703 | Auto, 100%..400% | none |
+| ultrawide 3440x1440, 1 | 200%: 1720x703 | Auto, 100%..400% | none |
+| 4K at 100%, 1 | 300%: 1280x708 | Auto, 100%..400% | none |
+| 4K at 200% (1920x1080), 2 | 150%: 1280x697 | Auto, 50%..400% | none |
+| a browser zoom, a window moved between screens | the devicePixelRatio and the room move; the page replans live | | |
+| fullscreen or not | the room moves; a live resize | | |
+| T-Deck 320x240, Guition S3 320x480 | -- (no UI size) | -- | none: one scale fits |
+| Waveshare and Elecrow 1024x600 | -- | -- | Normal, Large (Large: 512x300 of room, the handheld layout at 2x) |
+| Guition P4 800x1280 | -- | -- | Normal, Large (the handheld layout either way) |
+| a Zero | its page is the browser's | | |
+
+Console and desktop mode are the user's choice and the room's, never a size.
+A desk window's game takes its window's whole scale; the Terminal's columns
+and rows follow the glass, so a larger UI size gives fewer.
+
 ## 9. Scrolling: one scroll model
 
 In §9, L1-L10 are `docs/surface_model_v1.md`'s rules (written "surface-model
@@ -2454,11 +2520,19 @@ input words, `MOY_UI_IN_REP` (four 8-bit direction counts) and
 frame, so the one-shot queue's zero frame between equal keys does not cap
 the rate.
 
-**One repeat, from one place.** The browser's page sends a key's down
-once, whatever the OS repeats (`e.repeat` dropped for every code); the
-host's and the browser's keyboards both reach `ConsoleDriver.key_down` and
-`key_up`, which hold the key's typing level, and the table repeats on every
-tier alike, on the frames' injected clock.
+**One repeat per key, the one its keyboard makes.** A keyboard that
+repeats nothing holds a level the table repeats: the T-Deck's matrix, a BLE
+keyboard, the simulator's keyboard (`ConsoleDriver.key_down` and `key_up`
+hold its typing level, on the frames' injected clock). The browser's
+keyboard repeats its own keys, so the table times none of them (2026-11-25):
+the page forwards each OS repeat as a `kd` with `rep`, the page's driver
+(`ConsoleDriver(ws, own_repeat=True)`) marks its source `own_repeat`
+(`moy_input_set_own_repeat`), and each repeat is one count at the next merge
+(`moy_input_add_steps`, `moy_input_add_key_repeats`), the counts every
+consumer reads. A keyup a busy page delivers late therefore repeats
+nothing; while the table timed the browser's keys, a key whose up came
+behind a long main-thread task typed itself again every period
+(`priiiiiiiintf` in a loaded preflight's Terminal).
 
 Where the level is not known the lever is `None`: the T-Deck keyboard in
 its ASCII fallback (an older keyboard firmware) types edges with no matrix,

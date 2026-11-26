@@ -7,9 +7,11 @@
 #   ZeroUpdate                  the OTA flow, one slice per poll; make_updater builds it
 #   make_addon                  the release's add-on (and the XIAO's official carts) brought to the store; tend_addon runs it, way_back undoes a removal
 #   make_official               /official: the page's Get Carts, this board installing from its shelves
+#   make_wifi                   /wifi: the page's Wi-Fi panel, this board's networks (zero_wifi)
 #   host_class                  the store host: the boards' WebHost
 #   ImprovBoard                 what Improv over the cable asks of this board; make_improv
-#   serve                       bring the store host up and pump it forever
+#   start                       bring the store host up, everything it keeps made in one order (THE HEAP'S SHAPE)
+#   serve                       start, and pump its turn forever; pump takes the loop up again from the REPL
 """The Zero: a pocketable cart-store the browser console pairs with (#41).
 
 This is the re-based Zero (moycore plan 3.2, owner call 2026-08-12): no panel,
@@ -62,6 +64,15 @@ the board to install or remove one, and the board fetches it and writes its
 own store, as it installs its firmware, refusing one its store has no room
 for.
 
+`GET /console.json` and a system batch are the fifth (make_system): the
+page's theme, Settings and badges, kept in this store's `system/settings`
+as a console keeps them and applied to nothing here, so the next page comes
+back on them.
+
+`GET/POST /wifi` is the sixth (make_wifi, zero_wifi.ZeroWifi): the browser
+console's Wi-Fi panel is this board's, its saved networks listed by name and
+a move to another network made with a way back to this one.
+
 A browser signs in with a device key it got by pairing once with this board's
 password (the setup form sets it; native/moy_net/moy_webhost.c's header and
 docs/os_2026-11/system.md section 3), and every route but the bundle and the
@@ -74,6 +85,7 @@ does, because a board nobody can configure is worse than a board that serves
 slowly for a minute.
 """
 
+import gc
 import json
 import os
 import time
@@ -389,13 +401,17 @@ def connect(wait_ms=15000, hostname=None):
     driver, and answer to `hostname`.local. Returns the STA IP or None. The
     wait is per-network and generous for the same reason moy_ota's DIAL_MS
     is: cold association routinely outlives a short poll. The Zero is
-    headless, so this blocking wait holds no frame."""
+    headless, so this blocking wait holds no frame. The list is walked
+    twice: an access point that saw this board leave seconds ago (a reset
+    after a flash) can refuse it for longer than one wait, and a boot that
+    gives up hosts the setup AP until its next reset."""
     moy_net.wifi_on()
     st = moy_net.wifi_status()
     if st[2] and st[4]:
         moy_net.wifi_mdns(hostname or HOSTNAME)
         return st[4]
-    for net in _networks():
+    nets = _networks()
+    for net in nets + nets:
         try:
             moy_net.wifi_connect(net["ssid"],
                                  net.get("password") or net.get("key") or "")
@@ -860,6 +876,18 @@ def host_class():
     return WebHost
 
 
+def make_system():
+    """The system root a page keeps its Settings and badges in
+    (`moy_webhost.StoreSystem`), or None where the store cannot be read: the
+    page then keeps them in the tab, and the carts still sync."""
+    try:
+        from moy_webhost import StoreSystem
+        return StoreSystem(CARTS_DIR)
+    except Exception as exc:             # noqa: BLE001 -- the store serves regardless
+        print("ZERO settings: unavailable:", exc)
+        return None
+
+
 class ImprovBoard:
     """What Improv over the cable asks of this board (zero_improv.Improv):
     its name and firmware, the networks it sees, a join, the saved networks
@@ -928,6 +956,23 @@ class ImprovBoard:
 
     def address(self, fresh=False):
         return moy_net.web_auth(SYSTEM_DIR), moy_net.web_claim(fresh)
+
+
+def make_wifi(name):
+    """The backend of the webhost's `/wifi` (zero_wifi.ZeroWifi), or None
+    where it cannot be built: the store serves regardless."""
+    def stranded():
+        # Neither the new network nor the old answered: every saved one, and
+        # with none the setup the next boot hosts.
+        if connect(hostname=name) is None:
+            import machine
+            machine.reset()
+    try:
+        from zero_wifi import ZeroWifi
+        return ZeroWifi(WIFI_STORE, name, stranded=stranded)
+    except Exception as exc:             # noqa: BLE001 -- the store serves regardless
+        print("ZERO wifi panel: unavailable:", exc)
+        return None
 
 
 def make_improv():
@@ -1114,9 +1159,59 @@ def way_back(addon):
             _PAGE[0] = None
 
 
-def serve():
-    """Bring the store host up and pump it forever. Ctrl-C drops to the REPL
-    (which is how provision.sh and mpremote get the board back)."""
+# THE HEAP'S SHAPE. A Zero without PSRAM (the C3) has one Python heap of
+# 64 KB, made whole at boot and never grown; this host's own modules and
+# objects hold about two thirds of it for good, and what a request works in
+# is the rest. Three rules keep that rest in one run, and
+# tests/test_zero_heap.py holds each of them on a host (#319):
+#
+#   1. WHAT LIVES FOR GOOD IS MADE FIRST. `start` makes every module, object
+#      and kernel block the host keeps, in one order, before its loop turns
+#      once. LASTING and BUILT_IN are every module a running host can
+#      import: a module first imported by a request is a few KB made for
+#      good in the middle of that request's work.
+#   2. THE HEAP COLLECTS EVERY GC_STEP BYTES, from start's first line. Left
+#      to collect only when it runs out, the heap fills with garbage to its
+#      top, and whatever a request keeps -- an answer held for the next
+#      poll, a new state -- is made up there, where it stays and cuts the
+#      free run in two. With the step, nothing that lasts is ever made more
+#      than GC_STEP above what is live.
+#   3. A REQUEST LEAVES WHAT IT FOUND. What a session caches is bounded and
+#      given back when the session's asks stop (zero_wifi's networks, the
+#      system receiver's parts, an install's buffers and listing).
+LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
+           "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
+           "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs")
+# The built-in modules those import inside a function. One costs no code,
+# but its first import takes a slot of sys.modules, and that table grows by
+# a block made wherever the heap then stands.
+BUILT_IN = ("binascii", "deflate", "esp32", "gc", "hashlib", "io", "json", "machine",
+            "moy_improv", "moy_kernel", "moy_net", "moy_sh", "moy_spine", "moy_ufiles",
+            "moy_web", "os", "time", "zlib")
+GC_STEP = 2048
+
+
+def lasting():
+    """Rule 1's modules and the kernel's own late blocks, those this build
+    has: LASTING imported, and the release keys decoded (the kernel decodes
+    them at the first signature it checks, and keeps them)."""
+    for name in LASTING + BUILT_IN:
+        try:
+            __import__(name)
+        except ImportError:
+            pass
+    keys = getattr(moy_net, "ota_keys", None)
+    if keys is not None:
+        keys()
+
+
+def start():
+    """Bring the store host up: everything it keeps, made in one order
+    (THE HEAP'S SHAPE). Answers the loop's one turn, a function, or None
+    where the setup form ended with no network."""
+    if hasattr(gc, "threshold"):
+        gc.threshold(GC_STEP)
+    lasting()
     _mkdir(ROOT)
     _mkdir(CARTS_DIR)
     # BEFORE the radio, on purpose: seeding is local, and a board that cannot
@@ -1126,6 +1221,7 @@ def serve():
     recover_installs(CARTS_DIR)
     sweep_carts(CARTS_DIR)
     seed_carts(CARTS_DIR)
+    gc.collect()
     improv = make_improv()
     if improv is not None:
         moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
@@ -1141,16 +1237,18 @@ def serve():
         import zero_setup
         ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv)
         if ip is None:
-            return
+            return None
         me = identity()
         name = me.get("name") or HOSTNAME
     _mkdir(SYSTEM_DIR)
-    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR)
+    gc.collect()
+    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system())
     ota, task = make_updater(me)
     addon = make_addon(ota)
     official = make_official(ota, addon)
     host.update = task
     host.official = official
+    host.wifi = make_wifi(name)
     if task is not None:
         # BEFORE the first poll: the marker names the slot the last install
         # pointed the bootloader at, and reading it is how a rollback stops
@@ -1189,10 +1287,10 @@ def serve():
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO ssh: unavailable:", exc)
         tail = None
-    while True:
+
+    def turn():
         # The console boards poll between frames; this board HAS no frames, so
-        # a short sleep is its whole duty cycle. 10ms keeps a page load snappy
-        # while idling at ~zero.
+        # its loop is this and a short sleep.
         host.poll()
         if improv is not None:
             improv.poll()
@@ -1222,4 +1320,27 @@ def serve():
         # injected update backend, which is the one place every board's does
         # its slice. A second call here would double this board's install rate
         # for no reason and put the two boards' pumps in different files again.
+
+    return turn
+
+
+_TURN = [None]                          # the turn `start` made, for `pump`
+
+
+def pump():
+    """The loop over the turn `start` made: a turn, then 10 ms, which keeps a
+    page load snappy while the board idles at about zero. Ctrl-C drops to
+    the REPL (which is how provision.sh and mpremote get the board back),
+    and `pump()` there takes the loop up again on the heap as it stood,
+    which is how the on-glass suite reads a serving board's heap between
+    two rounds (tests/test_zero_on_glass.py's `look`)."""
+    turn = _TURN[0]
+    while turn is not None:
+        turn()
         time.sleep_ms(10)
+
+
+def serve():
+    """The store host, started and pumped forever."""
+    _TURN[0] = start()
+    pump()

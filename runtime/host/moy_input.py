@@ -129,6 +129,9 @@ _SIGS = (
     ("moy_input_set_repeat", [_P, _I32, _I32], None),
     ("moy_input_get_repeat", [_P, ctypes.POINTER(_I32), ctypes.POINTER(_I32)], None),
     ("moy_input_add_steps", [_P, _U8, _U32], _I),
+    ("moy_input_add_key_repeats", [_P, _I32, _U32], _I),
+    ("moy_input_set_own_repeat", [_P, _U32, _B], _I),
+    ("moy_input_own_repeat", [_P, _U32], _B),
     ("moy_input_repeats", [_P, _U8], _U32),
     ("moy_input_rep_word", [_P], _U32),
     ("moy_input_key_repeats", [_P, ctypes.POINTER(_I32)], _U32),
@@ -309,6 +312,19 @@ class InputSource:
         _check(_lib().moy_input_set_typing(self.state._t, self.h, int(value or 0)), "typing")
 
     @property
+    def own_repeat(self):
+        return bool(_lib().moy_input_own_repeat(self.state._t, self.h))
+
+    @own_repeat.setter
+    def own_repeat(self, value):
+        """This source's device repeats its own held keys (a browser's
+        keyboard): the merge owes its buttons and its typing level no
+        repeats, and its producer adds the device's (`add_steps`,
+        `add_key_repeats`)."""
+        _check(_lib().moy_input_set_own_repeat(self.state._t, self.h, bool(value)),
+               "own_repeat")
+
+    @property
     def pointer_buttons(self):
         return _lib().moy_input_source_pointer_buttons(self.state._t, self.h)
 
@@ -457,6 +473,13 @@ class InputTable:
         """A producer's `n` steps on `name` this frame (the trackball's)."""
         if n > 0:
             _check(_lib().moy_input_add_steps(self._t, self._index(name), int(n)), "add_steps")
+
+    def add_key_repeats(self, ev, n):
+        """A producer's `n` repeats of key event `ev` this frame (an
+        own_repeat source's): a chord and a key that types no byte add none."""
+        if n > 0:
+            _check(_lib().moy_input_add_key_repeats(self._t, int(ev), int(n)),
+                   "add_key_repeats")
 
     @property
     def rep_word(self):

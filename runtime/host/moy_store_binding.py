@@ -61,6 +61,7 @@ _SIGS = (
     ("moy_fs_read_file", [_P, _S, _PB], c.c_int),
     ("moy_fs_read_stamped", [_P, _PB], c.c_int),
     ("moy_fs_bak_stamp", [_P, _PU32, _PU32], c.c_int),
+    ("moy_fs_bak_into", [_P, c.c_char_p, _S], _S),
     ("moy_fs_stamp", [_P, _S, _PU32, _PU32], None),
     ("moy_fs_claim", [_P, _P, _U32, _U32], c.c_int),
     ("moy_fs_forget_bak", [_P], None),
@@ -423,6 +424,13 @@ def binding():
         if not _lib().moy_fs_bak_stamp(_path(path), c.byref(chars), c.byref(crc)):
             return None
         return (chars.value, crc.value)
+
+    def bak_path(path):
+        p = os.fspath(path).encode("utf-8", "surrogateescape")     # a name stays a name
+        n = _lib().moy_fs_bak_into(p, None, 0)
+        out = c.create_string_buffer(n)
+        _lib().moy_fs_bak_into(p, out, n)
+        return out.value.decode("utf-8")
 
     def stamp(data):
         b = _data(data)

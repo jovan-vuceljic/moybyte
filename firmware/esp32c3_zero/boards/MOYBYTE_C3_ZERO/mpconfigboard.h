@@ -40,22 +40,26 @@
 // deflate stream, and the port's ROM level builds `deflate` read-only).
 #define MICROPY_PY_DEFLATE_COMPRESS         (1)
 
-// THE PYTHON HEAP'S FIRST AREA: 32 KB where the port's C3 default is 64. The
-// port sizes it to double once and still start WiFi; on this board the native
-// tier is the larger tenant (the sync apply, the webhost and the store are C,
-// and the Zero's Python only drives them), and the split heap grows past this
-// whenever the reserve below allows.
-#define MICROPY_GC_INITIAL_HEAP_SIZE        (32 * 1024)
+// THE PYTHON HEAP IS ONE BLOCK OF 64 KB, made when the VM's task starts and
+// never grown (the port's own C3 size, which it makes to double once): the
+// first of the blocks this board keeps for good, at the same address in
+// every boot. A split heap takes its second area whenever an import first
+// runs out, from wherever the C side's heap has a run at that moment, and
+// gives it back whenever a collect finds it empty, so its size and place
+// were the boot's luck and a 32 KB block came and went among the session's.
+// The store host's own modules and objects hold about 42 KB of it; what a
+// request has is the rest, kept in one run by device/zero_host.py's rules
+// (THE HEAP'S SHAPE), which tests/test_zero_heap.py holds.
+#define MICROPY_GC_INITIAL_HEAP_SIZE        (64 * 1024)
 
-// THE PYTHON HEAP'S CEILING (moybyte_patch_gc_split_reserve): a growth of the
-// split heap leaves this much of the internal heap outside it. On this chip
-// that heap is the only one, shared by WiFi's buffers, lwIP, the webhost's and
-// the shell's C blocks and every task stack, and stock growth takes it to the
-// last byte. What it keeps is the room the C takes while it works: an upload's
-// own buffer (up to MOY_HTTP_REQ_MAX, native/moy_net/moy_webhost.c's HEAD_CAP)
-// and an SSH session (the README's SSH paragraph), each in blocks the Python
-// heap's areas would otherwise fragment. The first area is not affected.
-#define MOYBYTE_GC_SPLIT_RESERVE            (100 * 1024)
+// NEVER GROWN (moybyte_patch_gc_split_reserve): a growth of the split heap
+// leaves this much of the C side's heap outside it, and no heap this chip
+// has is this large. That heap is the only one, shared by WiFi's buffers,
+// lwIP, the webhost's and the shell's C blocks and every task stack; what
+// it keeps is the room the C takes while it works: an upload's own buffer
+// (up to MOY_HTTP_REQ_MAX, native/moy_net/moy_webhost.c's HEAD_CAP), a TLS
+// handshake's record and an SSH session (the README's SSH paragraph).
+#define MOYBYTE_GC_SPLIT_RESERVE            (1024 * 1024)
 
 // The serial-only recovery floor takes SAFE after this long (the XIAO's
 // reason: the board's only interface is its USB port).
