@@ -106,6 +106,12 @@ class ThemeServer:
         """CHROME SIZE: live and persisted; not a change to the theme."""
         self.__ws.look.set_chrome_scale(scale)
 
+    def set_pointer(self, g, family, large):
+        """POINTER and its size: a family ("" the theme's own) and Large,
+        live and persisted; not a change to the theme."""
+        self.__ws.look.set_pointer(family)
+        self.__ws.look.set_pointer_size(large)
+
     def edit_file(self, g):
         """Edit theme…: the active theme in the Editor's theme mode
         (`Appearance.edit_file`). True when it opened."""

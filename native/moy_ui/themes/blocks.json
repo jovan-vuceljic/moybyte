@@ -49,6 +49,7 @@
       "card": { "focus": { "mark": "ring", "w": 3, "gap": 2, "c": "accent" },
                 "on": { "mark": "underline", "w": 3, "gap": 2, "c": "value" } } },
     "icons": { "kind": "smooth", "set": "default" },
+    "pointer": "playful",
     "app_buttons": { "calc": { "normal": { "font": "key" }, "tonal": { "font": "op" },
                                "primary": { "font": "op" } } },
     "win_r": 16, "card_r": 14, "key_r": 12,

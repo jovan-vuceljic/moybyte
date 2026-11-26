@@ -161,14 +161,15 @@ EDIT_THEME = "Edit theme\u2026"           # the door to the Editor's theme mode
 
 def test_the_cards_then_the_rows_on_the_handheld_and_the_desk(tmp_path):
     small = _open(_ws(tmp_path / "s"))
-    rows = ["Mode", "Accent", "Tint", "Wallpaper", "Font", "Code font", EDIT_THEME]
+    rows = ["Mode", "Accent", "Tint", "Wallpaper", "Font", "Code font", "Pointer", "Pointer size",
+            EDIT_THEME]
     assert _rows(small) == [_id(r) for r in rows]
     cards = [k.split("/")[0] for k in _kinds(small) if k.endswith("/use")]
     assert cards == small.themes() == ["moy", "blocks", "contrast"]
     wide = _open(_ws(tmp_path / "w", **DESK))
     assert _rows(wide) == [_id(r) for r in (
         "Mode", "Accent", "Tint", "Wallpaper", "Window style", "Font", "Code font", "Chrome size",
-        EDIT_THEME)]
+        "Pointer", "Pointer size", EDIT_THEME)]
     sim = _open(_ws(tmp_path / "b", sys_size=(1024, 600), windowed=True))
     assert "chrome" in _kinds(sim)              # the simulator's desk takes two
 
@@ -551,6 +552,26 @@ def test_chrome_size_steps_live_and_persists(tmp_path):
     assert ws.look.theme_name == "moy"          # not a change to the theme
     again = _ws(tmp_path, sys_size=(1024, 600), windowed=True)
     assert again.look.chrome_scale == 2 and again.layout.cs == 2
+
+
+def test_pointer_steps_through_the_families_live_and_persists(tmp_path):
+    """POINTER starts on the theme's own family and steps through the
+    families; POINTER SIZE takes Large. Each is live, persisted, and no
+    change to the theme."""
+    ws = _ws(tmp_path)
+    app = _open(ws)
+    assert _state(app, "pointer") == "" and ws.look.pointer_at(1) == ("default", 16)
+    _focus(ws, app, "Pointer")
+    _press(ws, app, "right")
+    assert ws.look.pointer_pick == "pixel" and ws.system.get("pointer") == "pixel"
+    _press(ws, app, "right", "right", "right", "right")
+    assert ws.look.pointer_at(1) == ("playful", 16)
+    _focus(ws, app, "Pointer size")
+    _press(ws, app, "right")
+    assert ws.look.pointer_at(1) == ("playful", 32) and ws.system.get("pointer_large") is True
+    assert ws.look.theme_name == "moy" and _custom(tmp_path) is None
+    again = _ws(tmp_path)
+    assert again.look.pointer_at(1) == ("playful", 32)
 
 
 def test_the_page_is_idle_once_drawn(tmp_path):

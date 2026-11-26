@@ -15,7 +15,7 @@ that file.
 Everything here is PURE: the MOY64 palette (NAMES/color), the responsive Layout /
 CodeLayout geometry (#39), the themeable top-bar IconSheet defaults (_ICON / _ICON_ART /
 _default_icon_sheet), and the small helpers (_in / _clamp_scroll / _cursor_delta /
-_ticks_* / _err_text / _from_ascii). Nothing touches a Workstation -- these are the
+_ticks_* / _err_text). Nothing touches a Workstation -- these are the
 functions/constants shared by console.py AND the surface modules (launcher_layer
 imports Layout; every surface gets NAMES and `ui.glyph` injected). console.py imports it
 all back and re-exports under the pre-extraction `console.X` names, so every caller +
@@ -29,7 +29,7 @@ bare-or-package fallback as those modules.
 """
 
 from editors_sheet import IconSheet
-from widgets import _Blit, rect_in as _in, _err_text
+from widgets import rect_in as _in, _err_text
 
 # The toolkit's face: the display type's widths go through its text path.
 import ui_draw as _ui_draw
@@ -48,80 +48,6 @@ from layout_base import CLASSES as _LB_CLASSES, class_of as _lb_class_of, bar_ro
 from layout_base import sys_tile as _sys_tile, metric as _lb_metric, bars as _lb_bars
 from ticks import _ticks_ms, _ticks_us, _ticks_diff
 
-
-def _from_ascii(rows, mapping, transparent="."):
-    h = len(rows)
-    w = max(len(r) for r in rows) if rows else 0
-    pix = []
-    for y in range(h):
-        row = rows[y]
-        for x in range(w):
-            ch = row[x] if x < len(row) else transparent
-            pix.append(-1 if ch == transparent else (mapping[ch] & 63))
-    return _Blit(w, h, pix, -1)
-
-
-# Mouse-style pointer sprite (O=black outline, F=white fill), hotspot at top-left.
-CURSOR = _from_ascii([
-    "O.......", "OO......", "OFO.....", "OFFO....", "OFFFO...", "OFFFFO..",
-    "OFFFFFO.", "OFFFFFFO", "OFFFOOO.", "OFOOFO..", "OO..OFO.", "O...OFO.", "....OO..",
-], {"O": 0, "F": 7}, ".")
-
-
-# The pointer over what a press acts on (AppHost.cursor's "hand"), hotspot at
-# the fingertip (HAND_AT).
-HAND = _from_ascii([
-    "....OO.......", "...OFFO......", "...OFFO......", "...OFFO......", "...OFFOOO....",
-    "...OFFOFFOOO.", ".OOOFFOFFOFFO", "OFFOFFFFFFFFO", "OFFOFFFFFFFFO", ".OFFFFFFFFFFO",
-    "..OFFFFFFFFFO", "..OFFFFFFFFO.", "...OFFFFFFFO.", "....OFFFFFO..", "....OOOOOOO..",
-], {"O": 0, "F": 7}, ".")
-HAND_AT = (4, 0)
-
-# The pointer over a text field (AppHost.cursor's "text"), hotspot at its centre.
-BEAM = _from_ascii([
-    "OOO.OOO", "OFFOFFO", "OOOFOOO", "..OFO..", "..OFO..", "..OFO..", "..OFO..",
-    "..OFO..", "..OFO..", "..OFO..", "OOOFOOO", "OFFOFFO", "OOO.OOO",
-], {"O": 0, "F": 7}, ".")
-
-
-def _arrow_sprite(cells, w, h):
-    """A double-headed arrow from its fill cells: white, outlined black on
-    every side and corner, so it reads on a pixel of any colour."""
-    fill = set(cells)
-    pix = []
-    for y in range(h):
-        for x in range(w):
-            if (x, y) in fill:
-                pix.append(7)
-            elif any((x + i, y + j) in fill for i in (-1, 0, 1) for j in (-1, 0, 1)):
-                pix.append(0)
-            else:
-                pix.append(-1)
-    return _Blit(w, h, pix, -1)
-
-
-def _resize_cursors():
-    n = 13
-    m = n // 2
-    e = n - 2                        # the far tip's row and column
-    ew = [(x, m) for x in range(1, n - 1)]
-    for d in range(4):               # a solid head at each end
-        for j in range(-d, d + 1):
-            ew += [(1 + d, m + j), (e - d, m + j)]
-    ns = [(y, x) for x, y in ew]
-    nwse = [(i, i) for i in range(1, n - 1)]
-    for x in range(1, n - 1):
-        for y in range(1, n - 1):
-            if x + y <= 6 or x + y >= 2 * e - 4:
-                nwse.append((x, y))
-    nesw = [(n - 1 - x, y) for x, y in nwse]
-    return {k: _arrow_sprite(c, n, n)
-            for k, c in (("ew", ew), ("ns", ns), ("nwse", nwse), ("nesw", nesw))}
-
-
-# The pointer over a window's resize zone (WindowedWM.cursor_shape), hotspot at
-# its centre.
-RESIZE_CURSORS = _resize_cursors()
 
 NAMES = {
     "black": 0, "dark_blue": 1, "dark_purple": 2, "dark_green": 3, "brown": 4,

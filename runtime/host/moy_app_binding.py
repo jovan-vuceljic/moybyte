@@ -694,6 +694,9 @@ def binding(sanitize=False):
         def set_chrome_scale(self, *a, **kw):
             return self._app._serve(self._g, "theme", "set_chrome_scale")(self._g, *a, **kw)
 
+        def set_pointer(self, *a, **kw):
+            return self._app._serve(self._g, "theme", "set_pointer")(self._g, *a, **kw)
+
         def edit_file(self, *a, **kw):
             return self._app._serve(self._g, "theme", "edit_file")(self._g, *a, **kw)
 

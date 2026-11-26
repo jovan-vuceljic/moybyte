@@ -147,6 +147,8 @@ class Spine:
         # The chrome scale is read first so that one relayout carries both.
         ws.look.chrome_scale = ws.look.valid_chrome_scale(
             ws.system.get("chrome_scale", 0))
+        ws.look.set_pointer(ws.system.get("pointer", ""), persist=False)
+        ws.look.set_pointer_size(ws.system.get("pointer_large", False), persist=False)
         if ws.look.zoom is None:        # a zoomed glass's scale is its page's
             ws.look.set_font_scale(ws.system.get("font_scale", ws.look.font_scale),
                                    persist=False)

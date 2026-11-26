@@ -863,7 +863,9 @@ shadow's reach).
   the console paints no icon (owner, 2026-11-26), and only the icons the
   Python shell draws take them, never the C toolkit's (#269). The icons
   are the theme's alone; no sheet beside the carts overrides them
-  (2026-10-26).
+  (2026-10-26). Its look's `pointer` names the pointer family it wears
+  (`runtime/toolkit/pointers.py`); a look that names none wears its icon
+  set's.
 
 ### 3.7 Fonts
 
@@ -1567,9 +1569,16 @@ the top's lies above the frame alone, the strip being the drag's, and no zone
 reaches a bar. The pointer shows the resize a zone starts (`cursor_shape`);
 elsewhere the page under it says its shape (`Workstation.pointer_shape`,
 `moy_ui_api_cursor`): a hand on what a press acts on, a text beam on a text
-field, else the arrow. The console draws it where it draws the pointer; the
-browser's mouse is the page's own, so the page sets its CSS cursor to the
-shape (`web_boot._pointer_shape`).
+field, else the arrow. The console draws it where it draws the pointer, in
+a pointer FAMILY (`runtime/toolkit/pointers.py`): pixel, default, coast,
+luna and playful, each drawing the arrow, the hand, the text beam, the four
+resizes, move and busy in its icon set's style, with an exact hotspot, at
+16, 32 and 48 px. A theme wears its look's `pointer` (Blocks: playful), else
+its icon set's family; Appearance's POINTER row picks another and POINTER
+SIZE takes Large, both persisted beside the chrome size. The browser's mouse
+is the page's own, so the page sets its CSS cursor to the shape
+(`web_boot._pointer_shape`), drawn from the family's own pixels
+(`web_boot._cursor_images`).
 A moving edge stops at the desk's edge and at the app's minimum
 (`_min_size`); the WM holds the press, so the content stays frozen through
 the gesture (`docs/surface_model_v1.md` §14.1) and relays out once on

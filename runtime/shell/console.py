@@ -126,6 +126,7 @@ def _first_use(attr, build):
 # (perf_sample/perf_breakdown/...) is the Workstation's, in console_perf.py (the
 # device diag's measurement contract). Same bare-or-package fallback as above.
 import iconsets as _iconsets
+import pointers as _pointers
 from perf_hud import PerfHud
 
 # The firmware-update (OTA) SCREEN's UI layer (#53): the
@@ -366,14 +367,13 @@ from players import PlayerRouter
 
 # The console's stateless base layer -- the MOY64 palette (NAMES), the
 # responsive Layout/CodeLayout geometry (#39), the themeable top-bar IconSheet slot map + art
-# (_ICON), the cursor sprite (CURSOR), and the small pure helpers
+# (_ICON), and the small pure helpers
 # (_clamp_scroll/_cursor_delta/_ticks_*/_err_text) -- lives in chrome.py.
 # Imported back so every bare reference below and every `console.X` a test
 # still makes resolves (`_in` is one of those: nothing here calls it). chrome.py is a leaf (it imports only editors/widgets +
 # surface geometry constants, none of which import back), so there is no cycle.
 # Same bare-or-package fallback as the surfaces above.
-from chrome import (_ticks_ms, _ticks_us, _ticks_diff, _err_text, CURSOR,
-                    RESIZE_CURSORS, HAND, HAND_AT, BEAM, NAMES, THEME_VARIANTS,
+from chrome import (_ticks_ms, _ticks_us, _ticks_diff, _err_text, NAMES, THEME_VARIANTS,
                     _CURSOR_BASE, _CURSOR_ACCEL, Layout, CodeLayout,
                     _ICON, chrome_scale_floor,
                     chrome_scale_choices, _cursor_delta,
@@ -1297,6 +1297,7 @@ class Workstation:
         self.confirm_layer = _ConfirmLayer(self)
         self.about_layer = _AboutLayer(self)
         self.cursor_layer = L("cursor", "system", draw=lambda dt: self._draw_cursor())
+        self._ptr_under = _pointers.Under()     # what lies under the pointer, per buffer
 
     def content_layer(self):
         """The active content layer, keyed by the back-stack top / menu_view (never the
@@ -3917,10 +3918,14 @@ class Workstation:
     # -- desktop shell drawing (#28) -----------------------------------------
 
     def pointer_shape(self):
-        """The pointer's shape where it stands: a resize's arrows over a
-        window's edge (`wm.cursor_shape`), else what the page under it says
+        """The pointer's shape where it stands: "busy" on the frame that shows
+        the LOADING pill (the load runs after it, `toast_owed`), a resize's
+        arrows over a window's edge or "move" while a window is dragged
+        (`wm.cursor_shape`), else what the page under it says
         (`AppHost.cursor`: "hand" over what a press acts on, "text" over a
         text field), else None, the arrow."""
+        if self.deferred and self.toast_owed():
+            return "busy"
         shape = self.wm.cursor_shape()
         if shape is None:
             host = _ui_draw.UNDER[0]
@@ -3931,22 +3936,35 @@ class Workstation:
     def _draw_cursor(self):
         # The pointer lives in SYSTEM-canvas space (it ranges over the panel size),
         # so the cursor draws on the system canvas, on TOP of the composited viewport
-        # (#39). Scaled with the font so it stays visible on a big panel; at scale 1
-        # / a 320x240 system canvas this is exactly today's 1x cursor on the canvas.
+        # (#39), in the look's pointer family at the size the chrome scale takes
+        # (`Appearance.pointer_at`), its hotspot on the pointer.
+        # Its stamp in this buffer goes back first, where nothing painted over it
+        # (`pointers.Under`): drawn again over itself, its blended edges would
+        # darken. Only a frame that draws it writes there: the frame disarms a
+        # board's deferred stamp for the cursor's layer only then (`frame`).
         if self.splash_until is not None:
             return                        # no cursor over the boot logo
         p = self.pointer
         if p is not None and p.visible:
-            s = self.look.font_scale
             cv = self.sys_canvas
-            shape = self.pointer_shape()
-            if shape is None:
-                cv.spr(CURSOR, p.x, p.y, s)
-            elif shape == "hand":         # the fingertip on it
-                cv.spr(HAND, p.x - HAND_AT[0] * s, p.y - HAND_AT[1] * s, s)
-            else:                         # a resize's arrows or the text beam, centred on it
-                img = BEAM if shape == "text" else RESIZE_CURSORS[shape]
-                cv.spr(img, p.x - img.w * s // 2, p.y - img.h * s // 2, s)
+            under = self._ptr_under
+            under.put_back(cv)
+            fam, px = self.look.pointer_at(self.look.effective_chrome_scale())
+            shape = self.pointer_shape() or "arrow"
+            b = _pointers.box(fam, shape, p.x, p.y, px, under.box)
+            if b is not None:
+                under.keep(cv, b[0], b[1], b[2], b[3])
+                _pointers.draw(cv, fam, shape, p.x, p.y, px)
+                under.drawn(cv)
+
+    def pointer_box(self):
+        """(x, y, w, h) the pointer covers on the system canvas this frame, or
+        None where it draws nothing."""
+        p = self.pointer
+        if p is None or not p.visible or self.splash_until is not None:
+            return None
+        fam, px = self.look.pointer_at(self.look.effective_chrome_scale())
+        return _pointers.box(fam, self.pointer_shape() or "arrow", p.x, p.y, px)
 
     def wifi_icon_kind(self):
         """The right-zone wifi STATUS glyph (Part 3): "wifi" when the injected wifi
