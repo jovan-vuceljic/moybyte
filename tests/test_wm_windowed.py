@@ -5125,6 +5125,13 @@ def test_the_user_s_console_mode_stays_across_a_resize(tmp_path):
     ws.home.open_desk()
     drv.frame(1 / 30)
     assert ws.wm.mode == "console" and ws.wm.stack.depth() == ws.wm.floor()
+    # ...and its pause card offers no window: there is no desk to put one on.
+    ws.open()
+    drv.frame(1 / 30)
+    assert ws.wm.stack.top() == "desktop" and not ws.wm.offers_window()
+    assert not ws.wm.play_in_window() and ws.wm.mode == "console"
+    ws.home.go_home()
+    drv.frame(1 / 30)
     ws.resize_glass(1920, 1080, lb.desk_diagonal_in(1920, 1080))
     drv.frame(1 / 30)
     assert ws.wm.mode == "console"
