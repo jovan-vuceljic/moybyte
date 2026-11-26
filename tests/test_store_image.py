@@ -39,6 +39,7 @@ BOARDS = {
     "p4": ("esp32_p4_wifi6_touch_lcd_7b", 0xD50000, (32 << 20) - 0xD50000),
     "guition_p4": ("guition_jc8012p4a1c", 0xD50000, (16 << 20) - 0xD50000),
     "elecrow_p4": ("elecrow_crowpanel_p4_10_1", 0xD50000, (16 << 20) - 0xD50000),
+    "cores3": ("m5stack_cores3_se", 0xC60000, 0x3A0000),
     "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x420000, 0x3E0000),
     "c3_zero": ("esp32c3_zero", 0x1E0000, 0x220000),
 }

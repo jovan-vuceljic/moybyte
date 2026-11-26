@@ -658,6 +658,23 @@ firmware-monitor-guition-s3:
 	$(REQUIRE_PYSERIAL)
 	$(PYTHON) tools/board_flash.py monitor firmware/guition_jc3248w535 --port $(PORT)
 
+# M5Stack CoreS3 SE with the Faces Bottom3 and Gamepad3: the T-Deck's tier with
+# a gamepad -- build via the board dir's build.sh -> dist/cores3/, the
+# flash/monitor facts in its board.toml [flash]/[monitor].
+
+firmware-build-cores3:
+	firmware/m5stack_cores3_se/build.sh
+
+firmware-flash-cores3:
+	$(REQUIRE_PORT)
+	$(REQUIRE_ESPTOOL)
+	$(PYTHON) tools/board_flash.py flash firmware/m5stack_cores3_se --port $(PORT)
+
+firmware-monitor-cores3:
+	$(REQUIRE_PORT)
+	$(REQUIRE_PYSERIAL)
+	$(PYTHON) tools/board_flash.py monitor firmware/m5stack_cores3_se --port $(PORT)
+
 # Guition JC8012P4A1C (the 10.1" ESP32-P4 + C6): the fifth board, a VARIANT of
 # the Waveshare P4's port -- build via the board dir's build.sh ->
 # dist/guition_p4/, flashed at 0x2000 over the P4's own USB-Serial/JTAG; the

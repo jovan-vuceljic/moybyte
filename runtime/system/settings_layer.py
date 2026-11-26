@@ -200,7 +200,7 @@ _HOME_WORDS = ("Theme", "Carousel", "Grid", "Icons")
 # the name a reader knows it by.
 BOARDS = {"tdeck": "T-Deck Plus", "p4": "Waveshare P4 7″", "guition_s3": "Guition 3.5″",
           "guition_p4": "Guition P4 10″", "elecrow_p4": "Elecrow P4 10″",
-          "xiao_zero": "XIAO ESP32-S3"}
+          "xiao_zero": "XIAO ESP32-S3", "cores3": "M5Stack CoreS3 SE"}
 _PAGE_TITLES = {"achievements": "Achievements", "licences": "Licences", "log": "System log",
                 "permissions": "App permissions"}
 

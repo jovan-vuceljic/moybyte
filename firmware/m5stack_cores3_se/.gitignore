@@ -1,0 +1,13 @@
+.build/
+# Shared native modules staged by build.sh (canonical: native/).
+native/.staged/
+# modules/ mixes board-authored files (tracked, whitelisted below) with copies
+# staged at build time; the stager's prune deletes any untracked .py it did not
+# stage, so a new board-authored module is listed here and `git add`ed before
+# its first build.
+modules/*
+!modules/boot.py
+!modules/main.py
+!modules/moybyte_shell.py
+!modules/cores3_smoke.py
+!modules/moy_runtime.py

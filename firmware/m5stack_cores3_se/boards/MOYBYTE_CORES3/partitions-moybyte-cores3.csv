@@ -1,0 +1,11 @@
+# Moybyte CoreS3 SE partition table -- 16MB flash, dual-OTA (#53): the T-Deck's
+# table (partitions-moybyte-tdeck.csv has the arithmetic and the history), so
+# otadata sits at 0x1D000 ([flash] otadata_offset in board.toml).
+nvs,      data, nvs,     0x9000,   0x14000,
+otadata,  data, ota,     0x1D000,  0x2000,
+phy_init, data, phy,     0x1F000,  0x1000,
+ota_0,    app,  ota_0,   0x20000,  0x600000,
+ota_1,    app,  ota_1,   0x620000, 0x600000,
+coredump, data, coredump, 0xC20000, 0x20000,
+pmem,     data, 0x40,    0xC40000, 0x20000,
+vfs,      data, fat,     0xC60000, 0x3A0000,

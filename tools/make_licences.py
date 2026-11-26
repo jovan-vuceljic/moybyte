@@ -148,6 +148,10 @@ def model():
         ("AXS15231B panel setup", "MIT", "MIT License",
          ("The Guition panel's register values, from ESPHome.", "Copyright (c) 2019 ESPHome"),
          ("mit",), ("guition_s3",)),
+        ("M5Stack CoreS3 setup", "MIT", "MIT License",
+         ("The CoreS3 SE's panel, power, amplifier and gamepad register values, from "
+          "M5GFX, M5Unified and M5Faces.", "Copyright (c) 2021-2026 M5Stack Technology CO LTD"),
+         ("mit",), ("cores3",)),
         ("EK79007 panel driver", "Apache-2.0", "Apache License 2.0",
          ("Copyright 2023-2025 Espressif Systems (Shanghai) CO LTD",), ("apache",), ("p4",)),
         ("JD9365 panel driver", "Apache-2.0", "Apache License 2.0",
