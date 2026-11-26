@@ -6390,7 +6390,7 @@ def ota_verification_is_fast_enough(board):
     assert 0 < us < 500_000, "verify took %dus -- something got much slower" % us
 
 
-def ota_updater_is_live(board, board_id):
+def ota_updater_is_live(board, board_id, saw_boot=True):
     """#53 on a P4 board. The partition table has been OTA-shaped since bring-up and
     update_ui frozen in all along; what was missing was moy_ota itself, the
     staging directory (this board has no SD), the identity stamp and the
@@ -6409,9 +6409,12 @@ def ota_updater_is_live(board, board_id):
     # payload is an app-partition image, so the wrong one cannot boot.
     url = board.pyval("ws.updater.manifest_url('unstable')")
     assert url.endswith("/latest-%s.json" % board_id), url
-    # mark_valid ran; without it the bootloader reverts every OTA.
-    assert any("marked app valid" in ln for ln in board.lines), \
-        "no mark_valid at boot -- rollback would undo every update"
+    # mark_valid ran; without it the bootloader reverts every OTA. A board the
+    # suite attaches to (`saw_boot=False`) printed it before the session
+    # opened: rollback_confirm_comes_from_the_frame_loop pins the confirm there.
+    if saw_boot:
+        assert any("marked app valid" in ln for ln in board.lines), \
+            "no mark_valid at boot -- rollback would undo every update"
 
 
 def rollback_confirm_comes_from_the_frame_loop(board):

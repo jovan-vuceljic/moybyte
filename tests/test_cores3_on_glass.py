@@ -14,6 +14,8 @@ Gamepad3, the FT6336U, the AW88298 amplifier, the ES7210 microphone, the
 BM8563 clock and the Faces Bottom3's LED bar (firmware/m5stack_cores3_se/README.md).
 """
 
+import os
+import sys
 import time
 
 import pytest
@@ -68,6 +70,48 @@ def test_the_gamepad_answers_on_its_irq_line(board):
     assert held == [], held
 
 
+# A person at the pad: MOYBYTE_CORES3_HUMAN=1 asks for each press on this
+# terminal and waits PRESS_S for it. The buttons as the pad's byte names them
+# (bit, active low) and the console's buttons each press or chord holds.
+HUMAN = os.environ.get("MOYBYTE_CORES3_HUMAN") == "1"
+PRESS_S = 20.0
+PRESSES = (("UP", (0,), ("up",)), ("DOWN", (1,), ("down",)), ("LEFT", (2,), ("left",)),
+           ("RIGHT", (3,), ("right",)), ("A", (4,), ("a",)), ("B", (5,), ("b",)),
+           ("SELECT + A", (6, 4), ("select", "x")), ("SELECT + B", (6, 5), ("select", "y")))
+
+
+def _ask(text):
+    sys.__stdout__.write("\n>>> %s\n" % text)
+    sys.__stdout__.flush()
+
+
+@pytest.mark.skipif(not HUMAN, reason="a person presses the pad: MOYBYTE_CORES3_HUMAN=1")
+@pytest.mark.parametrize("label,bits,held", PRESSES, ids=[p[0] for p in PRESSES])
+def test_a_press_on_the_pad_reaches_the_console(board, label, bits, held):
+    """Each button, held, is in the Gamepad3's byte (active low) and in the
+    console's held set the frame reads; Select is the shift for x and y. Start
+    is left out: held, it opens the task manager."""
+    _ask("press and hold %s on the gamepad" % label)
+    probe = ("(lambda g: (g.raw, [n for n in %r if ws.input.held(n)]))"
+             "(__import__('moy_input').gamepad())" % (held,))
+    end = time.time() + PRESS_S
+    got = None
+    while time.time() < end:
+        raw, names = board.pyval(probe, strict=True)
+        if all(not raw & (1 << b) for b in bits):
+            got = (raw, names)
+            if sorted(names) == sorted(held):
+                break
+        time.sleep(0.05)
+    _ask("let go")
+    assert got is not None, "no %s press in %.0f s" % (label, PRESS_S)
+    assert sorted(got[1]) == sorted(held), (label, "0x%02x" % got[0], got[1])
+    end = time.time() + PRESS_S
+    while time.time() < end and board.pyval("__import__('moy_input').gamepad().raw",
+                                            strict=True) != 0xFF:
+        time.sleep(0.05)
+
+
 def test_the_hints_show_the_pads_keys(board):
     """The pad is the input from boot, so the hints draw its keys (Select the
     shift for the tabs and the more menu, moy_pad3.c and mpconfigboard.h)."""
@@ -92,6 +136,15 @@ def test_the_battery_reads_the_axp2101(board):
     # step once between the two reads.
     bar = board.pyval("ws.battery.level()", strict=True)
     assert (bar is None) == (lvl is None) and (lvl is None or abs(bar - lvl) <= 1), (bar, lvl)
+
+
+def test_an_ntp_answer_reaches_the_clock_chip(board):
+    """With the network up the clock is synced, and the answer went to the
+    BM8563 (moy_board_rtc_set), so the next boot starts on it."""
+    if board.pyval("__import__('moy_net').clock_state()", strict=True) != 1:
+        pytest.skip("no NTP answer this power-on (no network saved?)")
+    chip = board.pyval(C3 + ".rtc()", strict=True)
+    assert chip is not None and abs(chip - time.time()) < 120, (chip, time.time())
 
 
 def test_the_clock_chip_keeps_the_time(board):
@@ -175,8 +228,42 @@ def test_the_clock_syncs_when_the_network_comes_up(board):
     on_glass.the_clock_syncs_when_the_network_comes_up(board)
 
 
+def test_pkg_installs_a_cart_from_the_carts_repo(board):
+    on_glass.pkg_installs_a_cart_from_the_carts_repo(board)
+
+
+def test_ota_verification_is_fast_enough(board):
+    on_glass.ota_verification_is_fast_enough(board)
+
+
+def test_the_ota_updater_is_live_on_this_board(board):
+    on_glass.ota_updater_is_live(board, "cores3", saw_boot=False)
+
+
+def test_rollback_confirm_comes_from_the_frame_loop(board):
+    on_glass.rollback_confirm_comes_from_the_frame_loop(board)
+
+
 def test_the_web_console_add_on_fits_this_image(board):
     on_glass.web_console_add_on_fits_the_image(board)
+
+
+def test_the_board_serves_its_web_console(board):
+    """`web` serves the browser console from this board over the network it
+    joined: the page answers a GET from this machine, then the service goes
+    off again as the console was found."""
+    import urllib.request
+    line = board.cmd("web", wait_for="WEB ", timeout=60)
+    assert line is not None and "http" in line, line
+    url = line.split()[1]
+    base = url.split("#")[0].split("?")[0]
+    try:
+        with urllib.request.urlopen(base, timeout=20) as r:
+            body = r.read(4096)
+            assert r.status == 200, r.status
+        assert b"<" in body, body[:80]
+    finally:
+        board.pyval("ws.webhost.serving and ws.web.toggle() or 1", timeout=20)
 
 
 def test_a_leaked_session_leaves_the_panel_flushing(board):
