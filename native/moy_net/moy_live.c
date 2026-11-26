@@ -182,6 +182,7 @@
 // goes down with the socket, so a page that comes back says 'U' again; a
 // match on it waits meanwhile, as a missing input does.
 
+#include "moy_platform.h"
 #include "moy_link.h"
 #include "moy_live.h"
 #include "moy_dev_kinds.h"           // MOY_DEV_RELAYS, MOY_DEV_PINS
@@ -262,26 +263,14 @@ static live_t S = {.fd = -1, .ws = -1};
 // answer) both send on the socket, each frame sealed under the next index
 // down, so the seal and the send are one step under it; lwIP takes a send
 // on one task while another reads (LWIP_NETCONN_FULLDUPLEX). Its storage is
-// static, made at the first socket.
-#ifdef ESP_PLATFORM
-#include "freertos/semphr.h"
-static StaticSemaphore_t s_lock_mem;
-static SemaphoreHandle_t s_lock;
+// static (moy_platform.h's mutex, made at its first take).
+static moy_mutex_t s_lock = MOY_MUTEX_INIT;
 static void lock(void) {
-    xSemaphoreTake(s_lock, portMAX_DELAY);
+    moy_mutex_lock(&s_lock);
 }
 static void unlock(void) {
-    xSemaphoreGive(s_lock);
+    moy_mutex_unlock(&s_lock);
 }
-#else
-static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
-static void lock(void) {
-    pthread_mutex_lock(&s_lock);
-}
-static void unlock(void) {
-    pthread_mutex_unlock(&s_lock);
-}
-#endif
 
 // The device channel (moy_live_dev.c), on a board that can relay
 // (moy_dev_kinds.h's MOY_DEV_RELAYS or MOY_DEV_PINS): named strongly there, which is what
@@ -877,11 +866,6 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal, const uint8_t *pre, siz
     } else {
         memset(&L->seal, 0, sizeof L->seal);
     }
-#ifdef ESP_PLATFORM
-    if (s_lock == NULL) {
-        s_lock = xSemaphoreCreateMutexStatic(&s_lock_mem);
-    }
-#endif
     L->up_i = L->down_i = 0;
     L->gen++;
     L->cut = 0;

@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "moy_kmem.h"
 #include "moy_settings.h"
 
 #define ROWS 64                         // rows agreed on, every app's
@@ -79,7 +80,7 @@ static void forget(void) {
 
 static int ready(void) {
     if (R.t == NULL) {
-        R.t = malloc(ROWS * sizeof(agreed_t) + ARENA);
+        R.t = moy_kalloc(ROWS * sizeof(agreed_t) + ARENA, MOY_KMEM_LIBC);
         if (R.t == NULL) {
             return 0;
         }
@@ -142,7 +143,7 @@ void moy_svc_prefs_start(int board) {
     } else {
         R.fresh = 1;
     }
-    free(R.in);
+    moy_kfree(R.in);
     R.in = NULL;
 }
 
@@ -272,8 +273,8 @@ void moy_svc_prefs_give(const uint8_t *p, size_t n, const char *const *apps, int
         return;
     }
     if (at == 0) {
-        free(R.in);
-        R.in = total <= ROW_MAX ? malloc(kn + total + 1) : NULL;
+        moy_kfree(R.in);
+        R.in = total <= ROW_MAX ? moy_kalloc(kn + total + 1, MOY_KMEM_LIBC) : NULL;
         if (R.in == NULL) {
             return;
         }
@@ -284,7 +285,7 @@ void moy_svc_prefs_give(const uint8_t *p, size_t n, const char *const *apps, int
     }
     if (R.in == NULL || at != R.in_at || total != R.in_total || kn != R.in_kn
         || memcmp(R.in, k, kn) != 0 || at + pn > total) {
-        free(R.in);                     // a piece out of order: the row is lost
+        moy_kfree(R.in);                // a piece out of order: the row is lost
         R.in = NULL;
         return;
     }
@@ -304,7 +305,7 @@ void moy_svc_prefs_give(const uint8_t *p, size_t n, const char *const *apps, int
         }
         R.took++;
     }
-    free(R.in);
+    moy_kfree(R.in);
     R.in = NULL;
 }
 

@@ -28,6 +28,7 @@
 #include <string.h>
 
 #include "moy_evq.h"
+#include "moy_kmem.h"
 #include "moy_link.h"
 #include "moy_log.h"
 
@@ -197,9 +198,9 @@ void moy_svc_web_pump(void) {
             moy_evq_ev_t ev;
             int rc = moy_evq_take(W.pid[i], &ev, args, sizeof args);
             if (rc == MOY_EVQ_RANGE) {
-                char *big = malloc(ev.n + 1);
+                char *big = moy_kalloc(ev.n + 1, MOY_KMEM_LIBC);
                 int got = big != NULL ? moy_evq_take(W.pid[i], &ev, big, ev.n + 1) : rc;
-                free(big);
+                moy_kfree(big);
                 W.dropped++;
                 if (got != MOY_EVQ_OK) {
                     break;

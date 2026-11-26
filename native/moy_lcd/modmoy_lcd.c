@@ -175,7 +175,6 @@
 #include "soc/gpio_sig_map.h"
 #include "soc/spi_periph.h"
 #endif
-#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 
 // The SHARED banded-flush engine (native/moy_flush, staged per board.toml).
@@ -185,6 +184,8 @@
 #include "moy_vol.h"      // the store's bus gate, which this panel's rule is
 #include "moy_fold.h"     // the GAME FOLD: the latch, the fence, the gather
 #include "moy_light.h"
+#include "moy_lcd.h"
+#include "moy_kmem.h"     // the frame buffers; moy_platform.h, the clock
 
 // ---- board facts: the spi2 row (header)
 #define MOY_LCD_W            320
@@ -444,7 +445,7 @@ static void moy_lcd_park_pin(int gpio, int level) {
 
 static void moy_lcd_free_all(void) {
     for (int i = 0; i < MOY_LCD_MAX_FBS; i++) {
-        if (s_fbs[i]) { heap_caps_free(s_fbs[i]); s_fbs[i] = NULL; }
+        if (s_fbs[i]) { moy_kfree(s_fbs[i]); s_fbs[i] = NULL; }
     }
     s_nfbs = 0;
     // The band state points into buffers that no longer exist.
@@ -484,7 +485,7 @@ static esp_err_t moy_lcd_bringup(int nfbs, int pclk_hz, const char **what) {
     MOY_LCD_TRY(moy_lcd_board_up(), "board rails");
     #endif
     s_bl_step = 0;
-    s_bl_off_us = esp_timer_get_time();
+    s_bl_off_us = moy_now_us();
     #ifndef MOY_LCD_DC_IS_MISO
     gpio_set_pull_mode(MOY_LCD_PIN_MISO, GPIO_PULLUP_ONLY);
     #endif
@@ -492,7 +493,7 @@ static esp_err_t moy_lcd_bringup(int nfbs, int pclk_hz, const char **what) {
     // Framebuffers in PSRAM, bounce buffers in internal DMA-capable SRAM.
     // Allocated BEFORE the bus so a memory failure leaves nothing half-built.
     for (int i = 0; i < nfbs; i++) {
-        s_fbs[i] = heap_caps_malloc(MOY_LCD_FB_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        s_fbs[i] = moy_kalloc(MOY_LCD_FB_BYTES, MOY_KMEM_PSRAM);
         if (s_fbs[i] == NULL) {
             moy_lcd_free_all();
             *what = "no PSRAM framebuffer";
@@ -648,12 +649,12 @@ void moy_lcd_kbacklight(int level) {
     }
     if (want == 0) {
         gpio_set_level(MOY_HW_BACKLIGHT_BL, 0);
-        s_bl_off_us = esp_timer_get_time();
+        s_bl_off_us = moy_now_us();
         s_bl_step = 0;
         return;
     }
     if (s_bl_step == 0) {
-        int64_t low = esp_timer_get_time() - s_bl_off_us;
+        int64_t low = moy_now_us() - s_bl_off_us;
         if (low < MOY_LCD_BL_OFF_US) {
             esp_rom_delay_us((uint32_t)(MOY_LCD_BL_OFF_US - low));
         }

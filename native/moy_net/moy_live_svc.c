@@ -32,6 +32,7 @@
 #include <string.h>
 
 #include "moy_evq.h"
+#include "moy_kmem.h"
 #include "moy_log.h"
 #include "moy_net.h"
 
@@ -227,12 +228,12 @@ static int relay(int i) {
         size_t at = 4 + an + MOY_EVQ_NAME;
         int rc = moy_evq_take(S.pid[i], &ev, (char *)o + at, cap - at);
         if (rc == MOY_EVQ_RANGE) {
-            char *big = malloc(ev.n + 1);
+            char *big = moy_kalloc(ev.n + 1, MOY_KMEM_LIBC);
             if (big == NULL || moy_evq_take(S.pid[i], &ev, big, ev.n + 1) != MOY_EVQ_OK) {
-                free(big);
+                moy_kfree(big);
                 return 0;
             }
-            free(big);
+            moy_kfree(big);
             S.dropped++;
             continue;
         }

@@ -14,4 +14,6 @@ target_sources(usermod_moy_lcd INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/modmoy_lcd.c
 )
 
+target_include_directories(usermod_moy_lcd INTERFACE ${CMAKE_CURRENT_LIST_DIR})
+
 target_link_libraries(usermod INTERFACE usermod_moy_lcd)

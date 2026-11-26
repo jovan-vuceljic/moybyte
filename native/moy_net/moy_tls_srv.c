@@ -25,6 +25,7 @@
 // webhost's task, which owns the store; the door's task never touches a file.
 
 #include "moy_platform.h"
+#include "moy_kmem.h"
 #include "moy_net.h"
 
 #if defined(MOY_ON_BOARD)
@@ -277,7 +278,7 @@ static void conn_end(int i) {
     mbedtls_ssl_config_free(&c->conf);
     mbedtls_x509_crt_free(&c->crt);
     mbedtls_pk_free(&c->pk);
-    heap_caps_free(c);
+    moy_kfree(c);
     D->c[i] = NULL;
     if (--D->conns == 0) {
         D->idle_at = moy_net_ms();
@@ -363,7 +364,7 @@ static void conn_open(void) {
     socklen_t an = sizeof a;
     memset(&a, 0, sizeof a);
     int fd = accept(D->lfd, (struct sockaddr *)&a, &an);
-    conn_t *c = fd >= 0 && i < MOY_TLS_CONNS ? heap_caps_calloc(1, sizeof(conn_t), MALLOC_CAP_8BIT)
+    conn_t *c = fd >= 0 && i < MOY_TLS_CONNS ? moy_kalloc(sizeof(conn_t), MOY_KMEM_LIBC | MOY_KMEM_ZERO)
                                               : NULL;
     if (c == NULL) {
         if (fd >= 0) {
@@ -446,9 +447,9 @@ static void door_free(void) {
         close(D->lfd);
     }
     mbedtls_ssl_ticket_free(&D->tkt);
-    heap_caps_free(D->buf);
+    moy_kfree(D->buf);
     mbedtls_platform_zeroize(D->der, sizeof D->der);
-    heap_caps_free(D);
+    moy_kfree(D);
     D = NULL;
 }
 
@@ -516,8 +517,8 @@ void moy_tls_at(const char *system) {
 }
 
 int moy_tls_low(void) {
-    return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < MOY_TLS_TERM_FREE
-           || heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+    return heap_caps_get_free_size(MOY_KMEM_SRAM_CAPS) < MOY_TLS_TERM_FREE
+           || heap_caps_get_largest_free_block(MOY_KMEM_SRAM_CAPS)
                   < MOY_TLS_TERM_BLOCK;
 }
 
@@ -532,11 +533,11 @@ int moy_tls_open(uint16_t back) {
     if (s_system[0] == '\0') {
         return -MOY_EINVAL;
     }
-    D = heap_caps_calloc(1, sizeof(door_t), MALLOC_CAP_8BIT);
-    unsigned char *buf = heap_caps_malloc(PUMP, MALLOC_CAP_8BIT);
+    D = moy_kalloc(sizeof(door_t), MOY_KMEM_LIBC | MOY_KMEM_ZERO);
+    unsigned char *buf = moy_kalloc(PUMP, MOY_KMEM_LIBC);
     if (D == NULL || buf == NULL) {
-        heap_caps_free(D);
-        heap_caps_free(buf);
+        moy_kfree(D);
+        moy_kfree(buf);
         D = NULL;
         return -MOY_ENOMEM;
     }

@@ -60,7 +60,11 @@
 // the panel's gate held: the feeder drained and the pad turned to the card
 // (native/moy_lcd's moy_lcd_card_gate, counted, so a volume op that holds it
 // already nests). Weak: a board whose card has a pad of its own calls nothing.
+#if __has_include("moy_lcd.h")
+#include "moy_lcd.h"
+#else
 void moy_lcd_card_gate(int on);
+#endif
 #pragma weak moy_lcd_card_gate
 static void card_gate(int on) {
     if (moy_lcd_card_gate != NULL) {
