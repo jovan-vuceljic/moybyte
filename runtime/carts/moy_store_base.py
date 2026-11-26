@@ -244,7 +244,7 @@ VENDOR_KEY = "moybyte"
 VENDOR_FIELDS = ("type", "system", "order", "permissions", "required", "handles", "receives",
                  "achievements", "config", "edit", "targets", "app", "assets",
                  "graduated", "glass", "pictures", "animates", "native", "audio_ring",
-                 "entries", "wasi", "fixture", "seed", "api")
+                 "entries", "wasi", "fixture", "seed", "api", "service_kib")
 
 # The console API level (docs/app_api_v1.md, "The API level"): one integer that
 # goes up whenever any app-facing table grows or changes. A cart names the level
@@ -256,7 +256,7 @@ API_LEVEL = 1
 # The API is frozen from the first public release; until then the level stays
 # and the fingerprint is re-pinned freely.
 API_FROZEN = False
-# API fingerprint: level 1 sha256 f4907cb04f02a506346257f0db3e984408677803d5f2ecc465c68b3a65cb2d71
+# API fingerprint: level 1 sha256 194227f1366c472f5c31899ca0697c6af8bf6788c6316da4f13ea22ac4345c3f
 API_LOWEST = 1
 
 
