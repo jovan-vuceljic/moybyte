@@ -1261,8 +1261,17 @@ class SettingsLayer(Layer):
         if u is not None:
             free = self._free()
             if free is not None:
-                out.append(("Storage", free))
+                out.append((self._storage_word(), free))
         return tuple(out)
+
+    def _storage_word(self):
+        """The Storage row's label, whose space it is: the board's on a page
+        a board serves, the browser's on one whose carts the browser keeps,
+        the console's own else."""
+        ws = self.ws
+        if getattr(ws, "cart_home", None) == "board":
+            return "Board storage"
+        return "Browser storage" if getattr(ws, "cart_keep", None) is not None else "Storage"
 
     def _free(self):
         """The store's free space as About shows it, or None: the store of
