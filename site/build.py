@@ -191,18 +191,6 @@ def palette():
     return ["#%02x%02x%02x" % tuple(c) for c in moy64()]
 
 
-# Both tabs name their tier EXPLICITLY. An empty query used to be the handheld
-# console; since the desk became the player's default (#73/#175) it boots the
-# 1024x600 desktop, so a blank `q` here silently made both tabs the same tier.
-TIERS = [
-    # id, label, sub-label, query string, aspect ratio
-    ("desktop", "Desktop", "1024 &times; 600 &mdash; windowed, with the editors",
-     "?desktop=1", "1024 / 600"),
-    ("handheld", "Handheld", "320 &times; 240 &mdash; the T-Deck tier",
-     "?handheld=1", "4 / 3"),
-]
-
-
 # The flashable boards. This table is the ONE place the page's flasher and the
 # Makefile's cable flash have to agree, so each field is the browser's copy of a
 # `make firmware-flash-*` argument -- change one, change the other:
@@ -941,27 +929,30 @@ def scheme_script():
 CONSOLE_JS = r"""// THE CONSOLE. Nothing of it is loaded until the visitor starts it: the stage
 // holds a still (captured from the built player at site-build time) and no
 // iframe, so the wasm is not fetched. The start is a click on the still (a
-// button, so Enter too) or on the hero's own button. Tabs own ONE iframe and
-// swap its src, so only one wasm VM is ever live (two would mean two heaps and
-// two frame loops competing for the main thread).
+// button, so Enter too) or on the hero's own button. It is ONE console, which
+// lays itself out from the room its frame gives it (page_core.html, THE
+// GLASS): the desk where the frame holds 1024x600, the handheld below that, a
+// phone's layout on a phone. One iframe, so only one wasm VM is ever live.
 var stage = document.getElementById("stage");
 var still = document.getElementById("still");
-var tabBar = document.getElementById("tabs");
 var expand = document.getElementById("expand");
 var shrink = document.getElementById("shrink");
-var tabs = [].slice.call(document.querySelectorAll(".tab:not(.exp)"));
+// A phone's frame is the handheld's 4:3 (and the pads under it); a wider
+// page's, the desk's. Idle, the stage is the still's.
+var PHONE = window.matchMedia("(max-width: 700px)");
+function aspect() {
+  return !stage.classList.contains("idle") && PHONE.matches ? "4 / 3" : "1024 / 600";
+}
 // What the console is asked to start as: the player skips its own play-button
 // (the visitor's click was this page's). On the desk it opens Star Catcher's
 // Editor as a window with the game playing in its Game pane, the picture the
-// still shows; in console mode (the handheld tier, or a phone's room) a visit
+// still shows; in console mode (a frame without the desk's room) a visit
 // lands on the home, so `only=desk` (web_boot.page_start). The page's colour
 // scheme rides along so a first-run console wears Moy Night or Moy Day to
 // match this page, and a flip of the page's switch restarts a running console
 // in the new one.
-function startQuery(tab) {
-  return "&start=1"
-    + (tab.dataset.tier === "desktop"
-       ? "&edit=moybyte.star_catcher.moy&tab=code&play=1&only=desk" : "")
+function startQuery() {
+  return "?start=1&edit=moybyte.star_catcher.moy&tab=code&play=1&only=desk"
     + "&scheme=" + document.documentElement.dataset.scheme;
 }
 // The stage is the console's aspect ratio PLUS the height the player page needs
@@ -976,7 +967,7 @@ function sizeStage() {
     stage.style.height = "";
     return;
   }
-  var p = (stage.dataset.ar || "4 / 3").split("/");
+  var p = aspect().split("/");
   var ratio = parseFloat(p[0]) / parseFloat(p[1]);
   // Idle, the stage is the still alone; the player's chrome joins it at the start.
   var h = Math.ceil((stage.clientWidth - 2) / ratio) +
@@ -997,35 +988,32 @@ window.addEventListener("message", function (e) {
   sizeStage();
 });
 window.addEventListener("resize", sizeStage);
-function show(tab) {
-  tabs.forEach(function (t) { t.classList.toggle("on", t === tab); });
-  stage.dataset.ar = tab.dataset.ar;
+if (PHONE.addEventListener) PHONE.addEventListener("change", sizeStage);
+function show() {
   stage.classList.remove("idle");
   stage.classList.add("loading");
-  tabBar.hidden = false;
-  // The still is the desktop's; the handheld has none to hold the place.
-  if (tab !== tabs[0]) stage.classList.add("live");
+  expand.hidden = false;
+  // The still is the desk's; a phone's handheld has none to hold the place.
+  if (PHONE.matches) stage.classList.add("live");
   sizeStage();
   // Replace the IFRAME only -- the close button is a child of the stage too, and
   // clearing innerHTML (what this used to do) would take it with them.
   var old = stage.querySelector("iframe");
   if (old) old.parentNode.removeChild(old);
   var f = document.createElement("iframe");
-  f.setAttribute("title", tab.querySelector("b").textContent + " tier");
+  f.setAttribute("title", "The Moybyte console");
   f.setAttribute("allow", "autoplay");
   f.setAttribute("allowfullscreen", "");
-  f.src = "player/index.html" + tab.dataset.q + startQuery(tab);
+  f.src = "player/index.html" + startQuery();
   stage.appendChild(f);
 }
-tabs.forEach(function (t) { t.addEventListener("click", function () { show(t); }); });
 document.addEventListener("moyscheme", function () {
   if (stage.classList.contains("idle")) return;
-  var on = tabs.filter(function (t) { return t.classList.contains("on"); })[0] || tabs[0];
   stage.classList.remove("live");
-  show(on);
+  show();
 });
 function start() {
-  if (stage.classList.contains("idle")) show(tabs[0]);
+  if (stage.classList.contains("idle")) show();
 }
 still.addEventListener("click", start);
 document.getElementById("go").addEventListener("click", function () {
@@ -1235,17 +1223,11 @@ def page(pal, has_player, cards, channel=None, stills=False):
         '<picture><source id="still-night" media="(prefers-color-scheme: dark)" '
         'srcset="media/console-night.png"><img src="media/console-day.png" '
         'width="1024" height="600" alt="%s"></picture>' % STILL_ALT)
-    tabs = "\n".join(
-        '        <button class="tab%s" data-tier="%s" data-q="%s" data-ar="%s">'
-        '<b>%s</b><span>%s</span></button>'
-        % (" on" if i == 0 else "", tid, q, ar, label, sub)
-        for i, (tid, label, sub, q, ar) in enumerate(TIERS))
     missing = "" if has_player else (
         '    <p class="warnbox">The player bundle is not built yet &mdash; run '
         '<code>firmware/web_runner/build.sh</code>, then <code>make site</code>.</p>\n')
     stage = (
-        '    <div class="stage idle" id="stage" data-ar="1024 / 600" '
-        'style="aspect-ratio:1024 / 600">\n'
+        '    <div class="stage idle" id="stage" style="aspect-ratio:1024 / 600">\n'
         '      <button class="still" id="still" type="button" '
         'aria-label="Start the console">%s<span class="go"><i></i>'
         'Start the console</span></button>\n'
@@ -1328,8 +1310,8 @@ def page(pal, has_player, cards, channel=None, stills=False):
 .still:hover .go{background:var(--night-accent);color:var(--night-bg)}
 .still:hover .go i{border-left-color:var(--night-bg)}
 /* From the click to the player's first frame (the wasm is fetched and the OS
-   boots meanwhile) a loader sits over the still, or over black for a tier with
-   no still. */
+   boots meanwhile) a loader sits over the still, or over black on a phone,
+   whose handheld console the desk's still does not show. */
 .boot{position:absolute;left:50%%;top:50%%;transform:translate(-50%%,-50%%);z-index:1;
   display:none;flex-direction:column;align-items:center;gap:12px;padding:16px 22px;
   color:var(--night-ink);background:color-mix(in srgb,var(--night-bg) 88%%,transparent);
@@ -1351,14 +1333,6 @@ def page(pal, has_player, cards, channel=None, stills=False):
 .status .ok{background:var(--ok)} .status .wip{background:var(--wip)}
 .status .warn{background:var(--warn)}
 /* --- the player ------------------------------------------------------------ */
-.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:20px 0 0}
-.tab{appearance:none;cursor:pointer;text-align:left;font:inherit;padding:9px 15px;
-  background:var(--surface);color:var(--muted);border:1px solid var(--line)}
-.tab b{display:block;font-size:14px;color:var(--ink)}
-.tab span{display:block;font:12px/1.5 var(--mono);color:var(--muted)}
-.tab:hover{border-color:var(--link)}
-.tab.on{border-color:var(--accent)}
-.tab.on b{color:var(--accent)}
 .stage{margin:12px 0 0;background:#000;border:1px solid var(--line);overflow:hidden;
   position:relative}
 .stage iframe{display:block;width:100%%;height:100%%;border:0}
@@ -1369,7 +1343,13 @@ def page(pal, has_player, cards, channel=None, stills=False):
    the real sizing (a fixed overlay works everywhere), and fullscreen is asked
    for on top of it where it exists, which additionally hides the browser
    chrome. Either can end first, so the JS syncs both ways. */
-.exp{margin-left:auto;align-self:center}
+.exp{appearance:none;cursor:pointer;margin-left:auto;align-self:center;font:14px/1 var(--sans);
+  padding:7px 11px;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
+.exp:hover{border-color:var(--link);color:var(--link)}
+.exp[hidden]{display:none}
+/* A phone's Expand is the icon alone, a thumb's size. */
+@media (max-width:700px){.exp span{display:none}
+  .exp{font-size:22px;min-width:44px;min-height:44px;padding:0 10px}}
 .stage.big{position:fixed;inset:0;z-index:60;margin:0;border:0;
   aspect-ratio:auto !important;background:#000}
 body.noscroll{overflow:hidden}
@@ -1489,15 +1469,13 @@ body.noscroll{overflow:hidden}
   <div class="console" id="console">
     <p class="slead">The same system the boards run, compiled to WebAssembly.
       Click it to start.</p>
-    <div class="tabs" id="tabs" hidden>
-%(tabs)s
-      <button class="tab exp" id="expand" type="button"><b>Expand &#8663;</b><span>fill the screen</span></button>
-    </div>
 %(stage)s
     <div class="hint">
       <span>Click the screen, then use the arrow keys, Z and X. Pick <b>Make</b> for
         the editors.</span>
       <span>Carts you make are kept in this browser.</span>
+      <button class="exp" id="expand" type="button" hidden title="Fill the screen"
+        aria-label="Expand: fill the screen">&#10530;<span> Expand</span></button>
     </div>
 %(missing)s  </div>
 </div>
@@ -1570,7 +1548,7 @@ pickDevice();
 </body>
 </html>
 """ % {
-        "site_css": site_css(), "nav": site_nav(pal), "footer": SITE_FOOTER, "tabs": tabs,
+        "site_css": site_css(), "nav": site_nav(pal), "footer": SITE_FOOTER,
         "missing": missing, "status": status, "features": features,
         "targets": targets, "boards": boards, "device_options": device_options, "flash_js": flash_js,
         "flash_hint": flash_hint, "stage": stage,

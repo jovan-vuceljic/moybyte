@@ -116,5 +116,8 @@ void moy_wa_stream(int which, const moy_wa_seal_t *s);
 // seen drop), it closes as a session's end does. 1 when another session's was
 // taken.
 int moy_wa_take(int which, const moy_wa_seal_t *s);
+// Whether the stream `which` is held now by the session `s` signed (the
+// webhost's: the live socket's page's own sync).
+int moy_wa_holds(int which, const moy_wa_seal_t *s);
 
 #endif // MOY_WEBAUTH_H

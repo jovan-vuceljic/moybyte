@@ -373,6 +373,7 @@ int ff_del_syncobj(FF_SYNC_t sobj) {
 
 struct moy_vol_file {
     struct moy_vol_file *next;      // the open list moy_vol_unwind walks
+    uint8_t wrote;                  // a write went in: its close is a change
     uintptr_t who;                  // the task that opened it
     size_t bytes;                   // as allocated
     uint8_t kind;
@@ -454,6 +455,7 @@ static int vol_open(const moy_vol_t *v, const char *path, int mode,
         return MOY_ENOMEM;
     }
     f->bytes = bytes;
+    f->wrote = 0;
     f->kind = v->kind;
     f->fs = v->fs;
     int rc = MOY_ENODEV;
@@ -1219,10 +1221,26 @@ int moy_vol_read(moy_vol_file_t *f, void *buf, size_t n, size_t *got) {
     return rc;
 }
 
+// What the volumes changed (moy_vol_changes): a written file's close and
+// every folder or name change that succeeded.
+static uint32_t s_changes;
+
+static int changed(int rc) {
+    if (rc == 0) {
+        __atomic_add_fetch(&s_changes, 1, __ATOMIC_RELAXED);
+    }
+    return rc;
+}
+
+uint32_t moy_vol_changes(void) {
+    return __atomic_load_n(&s_changes, __ATOMIC_RELAXED);
+}
+
 int moy_vol_write(moy_vol_file_t *f, const void *buf, size_t n) {
     moy_store_lock();
     int rc = vol_write(f, buf, n);
     moy_store_unlock();
+    f->wrote |= rc == 0;
     return rc;
 }
 
@@ -1241,10 +1259,11 @@ int moy_vol_seek(moy_vol_file_t *f, uint32_t at) {
 }
 
 int moy_vol_close(moy_vol_file_t *f) {
+    int wrote = f->wrote;
     moy_store_lock();
     int rc = vol_close(f);
     moy_store_unlock();
-    return rc;
+    return wrote ? changed(rc) : rc;
 }
 
 int moy_vol_stat(const moy_vol_t *v, const char *path, moy_vol_stat_t *st) {
@@ -1283,26 +1302,26 @@ int moy_vol_mkdir(const moy_vol_t *v, const char *path) {
     moy_store_lock();
     int rc = vol_mkdir(v, path);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }
 
 int moy_vol_remove(const moy_vol_t *v, const char *path) {
     moy_store_lock();
     int rc = vol_remove(v, path);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }
 
 int moy_vol_rename(const moy_vol_t *v, const char *src, const char *dst) {
     moy_store_lock();
     int rc = vol_rename(v, src, dst);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }
 
 int moy_vol_replace(const moy_vol_t *v, const char *src, const char *dst) {
     moy_store_lock();
     int rc = vol_replace(v, src, dst);
     moy_store_unlock();
-    return rc;
+    return changed(rc);
 }

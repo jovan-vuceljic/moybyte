@@ -337,7 +337,9 @@ spike the owner approved on 2026-11-06):
   that finds an SSH session's is told so. The transport is a WebSocket the
   webhost upgrades, `GET /term?cols=&rows=` (subprotocol `moy.sh`), sealed
   like every route below, handed off the console's task at once, so the
-  frame never carries it.
+  frame never carries it. A Zero's page has it on its live socket instead
+  (the `t` channel, `native/moy_tty/README.md`), and the Zero serves no
+  `/term`.
 - **Its sign-in is the page's**, the browser sign-in below: on a console a
   paired browser can already write and run any cart, so a shell adds no
   exposure. The page says in the Terminal when the board does not answer, no

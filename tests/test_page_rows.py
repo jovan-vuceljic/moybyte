@@ -166,3 +166,25 @@ def test_a_board_s_page_at_a_number_is_saved_from_its_name(tmp_path):
 def test_page_link_tells_a_number_from_a_name():
     assert page_link._is_number("192.168.1.40") and page_link._is_number("fe80::1")
     assert not page_link._is_number("moybyte.local") and not page_link._is_number("localhost")
+
+
+def test_an_iphone_offers_both_full_screens(tmp_path):
+    """An iPhone's or an iPad's element full screen keeps the browser's strip
+    and Close, so its menu offers Full screen, the quick one, and Add to Home
+    Screen, the true one; its home-screen app, full screen already, neither.
+    Android's installed app keeps Full screen."""
+    ws = build_ws(tmp_path)
+    ws.page = page_link.PageLink()
+    drv = make_drv(ws)
+    cases = (({"canfs": True, "ios": True, "app": False}, True, True),
+             ({"canfs": False, "ios": True, "app": False}, False, True),
+             ({"canfs": True, "ios": True, "app": True}, False, False),
+             ({"canfs": True, "ios": False, "app": False}, True, False),
+             ({"canfs": True, "ios": False, "app": True}, True, False))
+    for ev, full, home in cases:
+        ws.sysmenu.open = False
+        ws.page.heard(ws, ev)
+        rows = _menu(ws, drv)
+        assert ("Full screen" in rows, _HOME in rows) == (full, home), (ev, rows)
+    ws.page.home_screen(ws)
+    assert ws.confirm.line_rows()[0][0] == "True full screen, no browser bars:"

@@ -8,7 +8,13 @@ face, `moybyte.media` (hardware.md section 3).
                   "ble", "usb", "midi", "camera", "media"), or None where this console has not the class
   present(name)   whether it has
   apis()          the device APIs this console has, as the permission
-                  table's `needs` names them (runtime/shell/app_perms.py)
+                  table's `needs` names them (runtime/shell/app_perms.py),
+                  RELAYED among them
+  RELAYED         the device APIs this console's board relays to it over the
+                  live socket (the browser console a Zero serves:
+                  firmware/web_runner/web_boot.py's live_kinds): a program
+                  reaches them through the kernel's handle table
+                  (moybyte.dev_*: a Lua or compiled program), never a face
 
 Each face checks its permission against the calling process's grants (the
 `grants` hook: the console's Procs.granted; the shell, pid 1, is not gated),
@@ -43,6 +49,7 @@ cart_of = None
 console = None
 
 _FACES = {}
+RELAYED = ()
 
 # The pid holding the microphone, 0 for none: dev_mic keeps it, and the
 # shell's recording indicator (runtime/wm/wm.py's overlay signature) reads it
@@ -99,7 +106,7 @@ def api(name):
 
 
 def apis():
-    return tuple(n for n in NAMES if n != "http" and present(n))
+    return tuple(n for n in NAMES if n != "http" and (n in RELAYED or present(n)))
 
 
 def error(e):

@@ -763,6 +763,11 @@ int moy_wa_take(int w, const moy_wa_seal_t *s) {
     return taken;
 }
 
+int moy_wa_holds(int w, const moy_wa_seal_t *s) {
+    return A != NULL && w >= 0 && w < MOY_WA_STREAMS && s != NULL && s->on && A->st[w].on
+           && memcmp(A->st[w].sid, s->sid, MOY_SEAL_SID) == 0;
+}
+
 void moy_wa_stream(int w, const moy_wa_seal_t *s) {
     if (A == NULL || w < 0 || w >= MOY_WA_STREAMS) {
         return;

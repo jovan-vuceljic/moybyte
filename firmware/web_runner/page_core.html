@@ -37,6 +37,10 @@ body{width:100%}
 :root{--sa-t:env(safe-area-inset-top,0px);--sa-r:env(safe-area-inset-right,0px);
 --sa-b:env(safe-area-inset-bottom,0px);--sa-l:env(safe-area-inset-left,0px)}
 body{box-sizing:border-box;padding:var(--sa-t) var(--sa-r) var(--sa-b) var(--sa-l)}
+/* Full screen on an iPhone or iPad (html.iosfs, fsMark): the browser lays its
+   exit strip and Close over the top of the page, so the top inset is at
+   least that strip. */
+html.iosfs{--sa-t:max(env(safe-area-inset-top,0px),50px)}
 /* Long-press guard: HOLDING a control (a d-pad direction, A/B)
    used to start the OS text-selection -- iOS magnifier/blue highlight, Android context
    menu -- because plain user-select isn't enough there: iOS wants the -webkit- prefix +
@@ -100,8 +104,10 @@ opacity:0;font-size:16px;background:transparent;color:transparent;caret-color:tr
 @media (pointer:fine),(pointer:none){#ctl{display:none}}
 /* A touch phone in landscape (html.phl, room()): the canvas full height and
    centred, the stick in the left margin and A/B in the right one,
-   sized to it (padPlace), the keyboard summon and the burger small in the top
-   corners. #ctl covers the viewport but takes no taps itself. */
+   sized to it (padPlace), the keyboard summon and the burger small in the
+   bottom corners: the top ones are where a browser puts its own chrome (an
+   iPhone's full screen strip and its Close). #ctl covers the viewport but
+   takes no taps itself. */
 html.phl body{justify-content:center}
 html.phl #ctl{position:fixed;left:var(--sa-l);top:var(--sa-t);right:var(--sa-r);bottom:var(--sa-b);
 width:auto;height:auto;padding:0;display:block;pointer-events:none;z-index:2}
@@ -112,7 +118,7 @@ html.phl #joy{position:absolute;left:var(--jx);top:var(--jy)}
 html.phl .b{position:absolute;margin:0;pointer-events:auto}
 html.phl #joy{pointer-events:auto}
 html.phl #ba{right:0;top:0}html.phl #bb{left:0;bottom:0}
-html.phl #kb{left:6px;top:6px}html.phl #bh{right:6px;top:6px}
+html.phl #kb{left:6px;bottom:6px}html.phl #bh{right:6px;bottom:6px}
 /* The crash itself, ON the page: a phone has no devtools to "see". Above the
    play splash (z-index 20), which a console that crashed while booting has
    left standing. */
@@ -146,10 +152,10 @@ border:1px solid #c2c3c7}
 margin-right:7px;vertical-align:-1px;border:2px solid #ffa300;border-right-color:transparent;
 border-radius:50%;animation:pinspin .8s linear infinite}
 @keyframes pinspin{to{transform:rotate(360deg)}}
-/* Debug HUD (#41): toggled with the ` key; lightweight live stream stats. */
+/* Debug HUD (#41): toggled with the ` key, or on from the load with ?hud=1. */
 #hud{position:fixed;top:6px;left:6px;z-index:9;display:none;padding:6px 8px;border-radius:5px;
 background:rgba(11,15,26,.82);border:1px solid #1d2b53;color:#00e436;font:12px ui-monospace;
-white-space:pre;pointer-events:none}#hud b{color:#ffec27}#hud .w{color:#ff004d}</style></head><body>
+white-space:pre;pointer-events:none}</style></head><body>
 <div id=hud></div>
 <span id=s hidden>starting...</span>
 <pre id=crash></pre>
@@ -173,7 +179,9 @@ var W=320,H=240,ready=false,assCart=undefined,img=null,rgba=null;
 // null = undeclared -> show every control, today's behaviour). applyInputHint() gates the
 // virtual gamepad (#ctl) on "buttons" and the soft-keyboard summon (#kb) on "keyboard".
 var INPUT=null,padWanted=true,kbWanted=true;
-var HUD={on:false,fps:0,kb:0,el:document.getElementById("hud"),last:0};
+var HUD={on:/[?&]hud=1/.test(location.search),fps:0,kb:0,el:document.getElementById("hud"),last:0,
+drawn:0,w:"",pc:{n:0,ms:0,max:0,t:0},pcs:""};
+if(HUD.on)HUD.el.style.display="block";
 // Periodic perf LOG: one console.log line every PERF_MS. recv = frames the page
 // actually presented, render = the smoothed rAF rate, then the two halves of the
 // present (565->RGBA conversion and the putImageData upload) as mean/worst. The
@@ -215,7 +223,9 @@ PERF.mb=0;PERF.sb=0;PERF.mu=0;PERF.su=0;PERF.sn=0;}
 // before the second). A chunk the console marks `fresh` starts a stream
 // after a silence, so the dry run and the wait before it are no underrun
 // and no lull.
-var AUDIO_RATE=22050,actx=null,audioOut=null,audioBlocked=false;
+// ?audio=0 makes no context: the console then has no sink and sends no samples.
+var AUDIO_RATE=22050,actx=null,audioOut=null,audioBlocked=false,
+AUDIO_OFF=/[?&]audio=0/.test(location.search),SINK="none";
 var SS={got:0,played:0,under:0,dry:0,gap:0,dup:0,over:0,lull:0,lullAt:0,low:-1},
 schedNext=-1,schedEnd=0,schedGot=-1;
 var AW_SRC="class MoyPCM extends AudioWorkletProcessor{"+
@@ -237,7 +247,7 @@ var AW_SRC="class MoyPCM extends AudioWorkletProcessor{"+
 "if(++this.k>=4){this.k=0;if(this.q)this.q.postMessage(s);}return true;}}"+
 "registerProcessor('moy-pcm',MoyPCM);";
 function audioInit(){var AC=window.AudioContext||window.webkitAudioContext;
-if(!AC||actx)return;try{actx=new AC();}catch(e){actx=null;return;}
+if(AUDIO_OFF||!AC||actx)return;try{actx=new AC();}catch(e){actx=null;return;}
 AUDIO_RATE=actx.sampleRate;audioOut=actx.createGain();audioOut.connect(actx.destination);}
 audioInit();
 // The worker's sink, said once: a worklet's port, or this page.
@@ -249,9 +259,9 @@ actx.audioWorklet.addModule(u).then(function(){
 var node=new AudioWorkletNode(actx,"moy-pcm",{numberOfInputs:0,outputChannelCount:[1]});
 node.connect(audioOut);var ch=new MessageChannel();
 node.port.postMessage({port:ch.port1},[ch.port1]);
-w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);
-}).catch(function(){w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
-w.postMessage({t:"sink",rate:rate});}
+w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);SINK="worklet";
+}).catch(function(){SINK="page";w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
+SINK="page";w.postMessage({t:"sink",rate:rate});}
 function ensureAudio(){if(!actx){audioInit();if(actx&&WORKER)audioSink(WORKER);}
 if(actx&&actx.state==="suspended")actx.resume();}
 // The page's sink: the samples it has played are those it got less those
@@ -307,7 +317,7 @@ PAD_MIN=104,PAD_MAX=180,SB=36;
 function padPlace(iw,ih,m){var c=document.getElementById("ctl").style,top=SB+12;
 var j=Math.floor(Math.min(m-16,ih-2*top,160)),b=Math.floor(Math.min((m-16)*0.58,(ih-top-16)/2,84));
 var hab=2*b+8,mid=ih*0.55;
-function at(h){return Math.round(Math.max(top,Math.min(mid-h/2,ih-8-h)));}
+function at(h){return Math.round(Math.max(top,Math.min(mid-h/2,ih-12-SB-h)));}
 c.setProperty("--joy",j+"px");c.setProperty("--bb",b+"px");c.setProperty("--sb",SB+"px");
 c.setProperty("--jx",Math.round((m-j)/2)+"px");c.setProperty("--jy",at(j)+"px");
 c.setProperty("--abx","8px");c.setProperty("--abw",Math.round(m-16)+"px");
@@ -559,17 +569,25 @@ var pH={};
 // Cmd+Tab, so there Esc, Alt and Tab. Whether the page is full screen is
 // the console's to know too (its row's words).
 var altTap=false;
-function kLock(){var k=navigator.keyboard,on=!!document.fullscreenElement;
+// Full screen, prefixed or not (an iPhone's browsers have only webkit's).
+function fsOn(){var d=document;return d.fullscreenElement||d.webkitFullscreenElement||null;}
+function fsCan(){var e=document.documentElement;return !!(e.requestFullscreen||e.webkitRequestFullscreen);}
+var IOS=/iPhone|iPad|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+function fsMark(){var on=IOS&&!!fsOn();
+if(document.documentElement.classList.contains("iosfs")!==on){
+document.documentElement.classList.toggle("iosfs",on);glassSoon();fit();}}
+function kLock(){var k=navigator.keyboard,on=!!fsOn();fsMark();
 send({type:"page",fs:on});if(!k||!k.lock)return;
 var lock=["AltLeft","AltRight","Tab","Escape"].concat(MAC?[]:["MetaLeft","MetaRight"]);
 if(on){k.lock(lock).then(function(){window.__moyLocked=1;},function(){window.__moyLocked=0;});}
 else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
+document.addEventListener("webkitfullscreenchange",kLock);
 // Whether the page runs as a home-screen app, and the host it was opened
 // at: the console's Add to Home Screen row and card read them.
 function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
 (matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));}
-send({type:"page",fs:false,canfs:!!document.documentElement.requestFullscreen,app:asApp(),
+send({type:"page",fs:false,canfs:fsCan(),ios:IOS,app:asApp(),
 host:location.hostname});
 // THE ASKS (page_link.py): what the console's rows ask of the browser. A
 // download, Play on the console and going to where the console moved go at once. A browser grants full screen
@@ -588,9 +606,11 @@ function askArm(a){ASKED=a;window.__moyAsked=a.do;
 send({type:"page",say:[a.do==="fullscreen"?"Tap to go full screen":"Tap to choose a file",
 "Esc: never mind","ok"]});}
 function askDo(a){window.__moyAsked=null;var d=document;
-if(a.do==="fullscreen"){if(!a.on){if(d.fullscreenElement)d.exitFullscreen().catch(function(){});return;}
-if(d.documentElement.requestFullscreen)d.documentElement.requestFullscreen()
-.then(function(){cv.focus();},function(){askArm(a);});}
+if(a.do==="fullscreen"){var e=d.documentElement,r;
+if(!a.on){var x=d.exitFullscreen||d.webkitExitFullscreen;
+if(fsOn()&&x){r=x.call(d);if(r&&r.catch)r.catch(function(){});}return;}
+var rq=e.requestFullscreen||e.webkitRequestFullscreen;if(!rq)return;r=rq.call(e);
+if(r&&r.then)r.then(function(){cv.focus();},function(){askArm(a);});else cv.focus();}
 else if(a.do==="open")pickFile(".moy,.zip,.p8,.png,.mp3",pzImport,null);
 else if(a.do==="pick")pickFile("",pkSend,pkCancel);}
 function pickFile(accept,got,none){PICK.accept=accept;PICK.value="";PICKED=[got,none];PICK.click();}
@@ -722,10 +742,17 @@ if(JSON.stringify(fi)!==JSON.stringify(INPUT)){INPUT=fi;applyInputHint();}
 if(fb)blit(fb);
 if(f.pcm)audioWanted();
 var t=(window.performance&&performance.now)?performance.now():Date.now();if(HUD.last){var inst=1000/Math.max(1,t-HUD.last);
-HUD.fps=HUD.fps?HUD.fps+(inst-HUD.fps)*0.2:inst;}HUD.last=t;if(HUD.on)drawHud();
+HUD.fps=HUD.fps?HUD.fps+(inst-HUD.fps)*0.2:inst;}HUD.last=t;if(HUD.on&&t-HUD.drawn>=500){HUD.drawn=t;drawHud();}
 if(!ok){ok=true;sEl.textContent="live";sEl.style.color="#00e436";}}
+// Three lines: the page's presented rate, the worker's last report (wperf),
+// and the sound: its sink, whether the page is a secure context (a worklet
+// needs one), and the page sink's calls a second and cost mean/worst.
 function drawHud(){
-HUD.el.innerHTML="fps <b>"+HUD.fps.toFixed(1)+"</b>   "+HUD.kb.toFixed(0)+" KB/f";}
+HUD.el.textContent="page "+HUD.fps.toFixed(1)+" fps  "+HUD.kb.toFixed(0)+" KB/f\n"+HUD.w
++"\nsound "+(AUDIO_OFF?"off":SINK)+(window.isSecureContext?" https":" http")+HUD.pcs;}
+function hudPcm(ms){var p=HUD.pc,t=PT();p.n++;p.ms+=ms;if(ms>p.max)p.max=ms;
+if(!p.t)p.t=t;else if(t-p.t>=2000){HUD.pcs=" "+(p.n*1000/(t-p.t)).toFixed(0)+"/s "
++(p.ms/p.n).toFixed(2)+"/"+p.max.toFixed(1)+" ms";p.n=0;p.ms=0;p.max=0;p.t=t;}}
 window.addEventListener("keydown",function(e){if(e.key==="`"||e.key==="~"){HUD.on=!HUD.on;
 HUD.el.style.display=HUD.on?"block":"none";if(HUD.on)drawHud();e.preventDefault();}});
 document.addEventListener("pointerdown",ensureAudio);
