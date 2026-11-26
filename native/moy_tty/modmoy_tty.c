@@ -4,6 +4,8 @@
 //
 //   moy_tty.stats() -> (faces, busy, arena_peak, sends,
 //                       web_sessions, web_refused, web_in, web_out, web_frames, web_live)
+//                      the web figures the page's terminal's: GET /term's
+//                      bridge on a console, the live socket's channel on a Zero
 //   moy_tty.tail()     serve a face's hop on this task: the console's task
 //                      where no frame loop calls moy_tty_tail (the Zero's
 //                      poll loop, zero_host.serve), and the kernel's loop
@@ -21,7 +23,13 @@ static mp_obj_t tty_stats(void) {
     moy_tty_stats_t s;
     moy_tty_ws_stats_t w;
     moy_tty_stats(&s);
+    #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+    // a Zero's page has its terminal on the live socket (moy_tty_live.c), and
+    // nothing links the GET /term bridge into its image
+    moy_tty_live_stats(&w);
+    #else
     moy_tty_ws_stats(&w);
+    #endif
     mp_obj_t t[10] = {
         mp_obj_new_int_from_uint(s.faces), mp_obj_new_int_from_uint(s.busy),
         mp_obj_new_int_from_uint(s.arena_peak), mp_obj_new_int_from_uint(s.sends),

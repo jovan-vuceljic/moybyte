@@ -354,7 +354,7 @@ void moy_web_term_cut(int taken) {
 
 void moy_tty_ws_stats(moy_tty_ws_stats_t *out) {
     if (W == NULL) {
-        moy_tty_live_stats(out);            // a board whose terminal is the live socket's
+        memset(out, 0, sizeof *out);
     } else {
         *out = W->stats;
     }

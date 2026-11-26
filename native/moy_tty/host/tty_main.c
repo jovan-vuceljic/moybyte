@@ -265,7 +265,11 @@ int main(int argc, char **argv) {
             }
         }
         moy_tty_ws_stats_t w;
+#if defined(MOY_NET_LIVE) && MOY_NET_LIVE
+        moy_tty_live_stats(&w);         // the page's terminal is the live socket's, as a Zero's
+#else
         moy_tty_ws_stats(&w);
+#endif
         if (first || memcmp(&w, &last, sizeof w) != 0) {
             first = 0;
             last = w;
