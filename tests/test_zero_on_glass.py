@@ -763,6 +763,56 @@ def test_the_live_socket_answers_without_power_save(zero, mirror, tmp_path):
     assert heap is not None, "the board's RAM was not read with the socket open"
 
 
+TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
+        "{term: s.term, live: s.live && {opens: s.live.opens, drops: s.live.drops}}); })")
+
+
+def test_the_page_s_terminal_runs_the_board_s_shell(zero, mirror, tmp_path):
+    """The page's Terminal runs the board's shell (on a Zero, over its live
+    socket's terminal channel: native/moy_tty/moy_tty_live.c), and the
+    board's internal RAM is read while the page holds it open."""
+    _needs_password(zero)
+    shell = "ln => /\\$\\s*$/.test(ln)"
+    steps = sign_in(zero) + [
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.term && "
+                    "s.term.some(%s)); })" % shell, "timeout": 60000},
+    ] + [{"key": c} for c in "echo zero-$((6*7))"] + [
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.term.some("
+                    "function (ln) { return ln.indexOf('zero-42') >= 0; }); })",
+         "timeout": 30000},
+        {"js": TERM % "TERM"},
+        {"wait": 25000},
+    ]
+    path = _scenario(tmp_path / "term", steps, "?dev=1&desktop=1&cart=Terminal")
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "term")],
+                            cwd=str(RUNNER), env=dict(os.environ, MOY_BASE=zero.url),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, heap = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if heap is None and 'js -> "TERM ' in line:
+                with zero.repl(clean=False) as r:
+                    r.run("import gc\ngc.collect()")
+                    info = r.eval("__import__('esp32').idf_heap_info(%d)" % Z.INTERNAL_HEAP)
+                    heap = Z.internal_heap(info) + (sum(x[3] for x in info if x),)
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    got = _tagged(out, "TERM")
+    assert got and any("zero-42" in ln for ln in got["term"]), out[-3000:]
+    assert heap is not None, "the board's RAM was not read with the Terminal open"
+    zero.take("zero internal free terminal", heap[0] / 1024.0)
+    zero.take("zero internal largest terminal", heap[1] / 1024.0)
+    zero.take("zero internal low-water terminal", heap[2] / 1024.0)
+    print("%s with the page and its Terminal open: internal %d free, %d largest, "
+          "%d low-water; live socket %s" % (zero.name, heap[0], heap[1], heap[2], got["live"]))
+
+
 # -- the board's Wi-Fi from its page -------------------------------------------------------
 
 
