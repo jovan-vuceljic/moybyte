@@ -67,9 +67,9 @@ The hints draw these chords (`MOY_UI_PAD_TABS`, `MOY_UI_PAD_MORE` in
 `boards/MOYBYTE_CORES3/mpconfigboard.h`). Touch works beside the pad, and a
 paired BLE keyboard is a desk keyboard.
 
-The card is the store's when its volume mounts (FAT or exFAT, on an MBR
-partition table or none); a card partitioned GPT mounts nothing, so the
-console runs on its internal store, as with no card.
+The card is the store's when its volume mounts: FAT or exFAT, on an MBR
+partition table, none, or GPT, whose first FAT partition is the volume
+(`native/moy_store/moy_card.c`, GPT_FIND).
 
 ## Power
 
