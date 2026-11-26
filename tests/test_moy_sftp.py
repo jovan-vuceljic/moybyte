@@ -9,7 +9,8 @@ files folder; `ls`, mkdir, rmdir, rename and remove change the store as the
 shell would; /etc is the store's system folder; the root lists the shell's
 root; a change in a cart folder tells the shelf to re-read that folder once
 the client goes quiet; and the SFTP server is the session's one face, so a
-shell running in the same connection refuses it until the shell ends.
+shell running in the same connection refuses it until the shell ends, and
+the web terminal's face refuses it with why.
 """
 
 import os
@@ -202,3 +203,17 @@ def test_sftp_is_the_one_face_a_shell_in_the_same_connection_holds(h, tmp_path):
         master.kill()
         master.wait()
         shutil.rmtree(short, ignore_errors=True)
+
+
+def test_a_face_the_web_terminal_holds_tells_sftp_why(h):
+    """While the browser console's Terminal holds the one face, SFTP's
+    channel is refused with why on the client's stderr, before sftp's own
+    failure; once the page lets it go SFTP runs."""
+    assert SSH.say(h, "web", "WEB ") == "WEB 0"
+    try:
+        r = sftp(h, "pwd")
+        assert r.returncode != 0 and r.stderr.startswith(SSH.BUSY + b"\n"), r
+    finally:
+        assert SSH.say(h, "noweb", "NOWEB") == "NOWEB"
+    r = sftp(h, "pwd")
+    assert r.returncode == 0, r.stderr

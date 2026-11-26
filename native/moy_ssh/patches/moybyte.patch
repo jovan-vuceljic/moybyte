@@ -16,13 +16,18 @@ the server runs inside the kernel's process, one session served at a time.
   the listening socket, and a second connection's session signing in beside
   the one served (moy_ssh.c, THE TAKEOVER).
 - common-channel.c and channel.h: moy_channels_end, every channel told why
-  and closed, for the session a newer sign-in ends.
+  and closed, for the session a newer sign-in ends; moy_channel_refuse, a
+  channel told why on its stderr and left to close, for a refused command.
 - svr-chansession.c: no fork, no pty, no SIGCHLD: a session's command is
   moy_ssh_command (the shell's face over a socket pair), its end
   moy_ssh_reap, its signal moy_ssh_signal; a pty request keeps the size.
   A command's end does not flush its output: the output ends at the face's
   close, which follows its status, so the bytes still crossing the board's
-  loopback when the status is reaped are read, not dropped.
+  loopback when the status is reaped are read, not dropped. A command
+  moy_ssh_command refuses with a reason (the face another transport holds)
+  is a request taken: the reason on the client's stderr, its status 1, and
+  the channel's close, where a channel failure would tell the client
+  nothing.
 - chansession.h: the size a pty request asked for.
 - dbrandom.c: the seed is the SoC's hardware generator (moy_ssh_entropy).
 - gensignkey.c: the host key is renamed into place (FAT has no link()).
@@ -108,15 +113,16 @@ index 3572844..9fe6112 100644
  extern const struct dropbear_cipher dropbear_nocipher;
  extern const struct dropbear_cipher_mode dropbear_mode_none;
 diff --git a/src/channel.h b/src/channel.h
-index fdb6777..761670b 100644
+index fdb6777..6f78367 100644
 --- a/src/channel.h
 +++ b/src/channel.h
-@@ -107,6 +107,9 @@ void channel_connect_done(int result, int sock, void* user_data, const char* err
+@@ -107,6 +107,10 @@ void channel_connect_done(int result, int sock, void* user_data, const char* err
  
  void chaninitialise(const struct ChanType *chantypes[]);
  void chancleanup(void);
 +#if DROPBEAR_MOY
 +void moy_channels_end(const char *msg);
++void moy_channel_refuse(struct Channel *channel, const char *msg);
 +#endif
  void setchannelfds(fd_set *readfds, fd_set *writefds, int allow_reads);
  void channelio(const fd_set *readfd, const fd_set *writefd);
@@ -256,19 +262,35 @@ index c68eafb..4e38bdb 100644
 +}
 +#endif
 diff --git a/src/common-channel.c b/src/common-channel.c
-index aea20e5..e467a0c 100644
+index aea20e5..5de8b83 100644
 --- a/src/common-channel.c
 +++ b/src/common-channel.c
-@@ -392,6 +392,35 @@ static void send_msg_channel_close(struct Channel *channel) {
+@@ -392,6 +392,51 @@ static void send_msg_channel_close(struct Channel *channel) {
  	TRACE(("leave send_msg_channel_close"))
  }
  
 +#if DROPBEAR_MOY
-+/* Every open channel told `msg` on its stderr, where its window takes it,
-+ * and closed: a session the server ends (moy_ssh.c, THE TAKEOVER). Nothing
-+ * while a key exchange holds the channels' data back. */
++/* `msg` on the channel's stderr, where its window takes it; nothing after
++ * its EOF. */
++static void moy_channel_say(struct Channel *channel, const char *msg) {
++	unsigned int len = strlen(msg);
++	if (!channel->sent_eof && channel->transwindow >= len
++			&& channel->transmaxpacket >= len) {
++		CHECKCLEARTOWRITE();
++		buf_putbyte(ses.writepayload, SSH_MSG_CHANNEL_EXTENDED_DATA);
++		buf_putint(ses.writepayload, channel->remotechan);
++		buf_putint(ses.writepayload, SSH_EXTENDED_DATA_STDERR);
++		buf_putstring(ses.writepayload, msg, len);
++		encrypt_packet();
++		channel->transwindow -= len;
++	}
++}
++
++/* Every open channel told `msg` on its stderr and closed: a session the
++ * server ends (moy_ssh.c, THE TAKEOVER). Nothing while a key exchange holds
++ * the channels' data back. */
 +void moy_channels_end(const char *msg) {
-+	unsigned int i, len = strlen(msg);
++	unsigned int i;
 +	if (!ses.dataallowed) {
 +		return;
 +	}
@@ -277,18 +299,18 @@ index aea20e5..e467a0c 100644
 +		if (channel == NULL || channel->sent_close) {
 +			continue;
 +		}
-+		if (!channel->sent_eof && channel->transwindow >= len
-+				&& channel->transmaxpacket >= len) {
-+			CHECKCLEARTOWRITE();
-+			buf_putbyte(ses.writepayload, SSH_MSG_CHANNEL_EXTENDED_DATA);
-+			buf_putint(ses.writepayload, channel->remotechan);
-+			buf_putint(ses.writepayload, SSH_EXTENDED_DATA_STDERR);
-+			buf_putstring(ses.writepayload, msg, len);
-+			encrypt_packet();
-+			channel->transwindow -= len;
-+		}
++		moy_channel_say(channel, msg);
 +		send_msg_channel_close(channel);
 +	}
++}
++
++/* A command the server refuses with `msg` (moy_ssh_command's answer): `msg`
++ * on the channel's stderr, and the channel, no descriptor to read or write,
++ * sends its EOF, its session's exit status and its close at its next check
++ * (check_close). A key exchange queues the packet behind it. */
++void moy_channel_refuse(struct Channel *channel, const char *msg) {
++	moy_channel_say(channel, msg);
++	channel->readfd = channel->writefd = FD_CLOSED;
 +}
 +#endif
 +
@@ -739,7 +761,7 @@ index 938b52d..e2e4fd6 100644
  	/* check file permissions, also whether file exists */
  	if (checkpubkeyperms() == DROPBEAR_FAILURE) {
 diff --git a/src/svr-chansession.c b/src/svr-chansession.c
-index a2ea1fc..df20df4 100644
+index a2ea1fc..237efcc 100644
 --- a/src/svr-chansession.c
 +++ b/src/svr-chansession.c
 @@ -78,9 +78,16 @@ static int sesscheckclose(struct Channel *channel) {
@@ -872,30 +894,41 @@ index a2ea1fc..df20df4 100644
  	/* allocate the pty */
  	if (chansess->master != -1) {
  		dropbear_exit("Multiple pty requests");
-@@ -741,6 +803,22 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
+@@ -741,6 +803,33 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
  	make_connection_string(chansess);
  #endif
  
 +#if DROPBEAR_MOY
 +	{
 +		int fd;
++		const char *says;
 +		if (moy_ssh_command(chansess->cmd, chansess->term != NULL,
-+				chansess->moy_cols, chansess->moy_rows, &fd, &chansess->pid) < 0) {
-+			ret = DROPBEAR_FAILURE;
-+		} else {
++				chansess->moy_cols, chansess->moy_rows, &fd, &chansess->pid,
++				&says) == 0) {
 +			channel->readfd = channel->writefd = fd;
 +			channel->bidir_fd = 1;
 +			ses.maxfd = MAX(ses.maxfd, fd);
 +			setnonblocking(fd);
 +			addchildpid(chansess, chansess->pid);
 +			ret = DROPBEAR_SUCCESS;
++		} else if (says != NULL) {
++			/* refused, and told why: the request is taken, `says` is the
++			   client's stderr and 1 the command's status, no command ran */
++			moy_channel_refuse(channel, says);
++			chansess->exit.exitpid = 0;
++			chansess->exit.exitstatus = 1;
++			chansess->exit.exitsignal = -1;
++			chansess->exit.exitcore = 0;
++			ret = DROPBEAR_SUCCESS;
++		} else {
++			ret = DROPBEAR_FAILURE;
 +		}
 +	}
 +#else
  	if (chansess->term == NULL) {
  		/* no pty */
  		ret = noptycommand(channel, chansess);
-@@ -752,6 +830,7 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
+@@ -752,6 +841,7 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
  		/* want pty */
  		ret = ptycommand(channel, chansess);
  	}
@@ -903,7 +936,7 @@ index a2ea1fc..df20df4 100644
  
  #if !DROPBEAR_VFORK
  	m_free(chansess->connection_string);
-@@ -765,6 +844,7 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
+@@ -765,6 +855,7 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
  	return ret;
  }
  
@@ -911,7 +944,7 @@ index a2ea1fc..df20df4 100644
  /* Execute a command and set up redirection of stdin/stdout/stderr without a
   * pty.
   * Returns DROPBEAR_SUCCESS or DROPBEAR_FAILURE */
-@@ -937,6 +1017,8 @@ static int ptycommand(struct Channel *channel, struct ChanSess *chansess) {
+@@ -937,6 +1028,8 @@ static int ptycommand(struct Channel *channel, struct ChanSess *chansess) {
  	return DROPBEAR_SUCCESS;
  }
  
@@ -920,7 +953,7 @@ index a2ea1fc..df20df4 100644
  /* Add the pid of a child to the list for exit-handling */
  static void addchildpid(struct ChanSess *chansess, pid_t pid) {
  
-@@ -960,6 +1042,7 @@ static void addchildpid(struct ChanSess *chansess, pid_t pid) {
+@@ -960,6 +1053,7 @@ static void addchildpid(struct ChanSess *chansess, pid_t pid) {
  
  }
  
@@ -928,7 +961,7 @@ index a2ea1fc..df20df4 100644
  /* Clean up, drop to user privileges, set up the environment and execute
   * the command/shell. This function does not return. */
  static void execchild(const void *user_data) {
-@@ -1067,6 +1150,7 @@ static void execchild(const void *user_data) {
+@@ -1067,6 +1161,7 @@ static void execchild(const void *user_data) {
  	/* only reached on error */
  	dropbear_exit("Child failed");
  }
@@ -936,7 +969,7 @@ index a2ea1fc..df20df4 100644
  
  /* Set up the general chansession environment, in particular child-exit
   * handling */
-@@ -1080,12 +1164,16 @@ void svr_chansessinitialise() {
+@@ -1080,12 +1175,16 @@ void svr_chansessinitialise() {
  	svr_ses.childpids[0].chansess = NULL;
  	svr_ses.childpidsize = 1;
  	svr_ses.lastexit.exitpid = -1; /* Nothing has exited yet */

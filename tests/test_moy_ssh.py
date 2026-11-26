@@ -16,7 +16,8 @@ run (moy_ssh_run.c): `passwd -d` over SSH stops the server once its session
 ends, its tasks report parked only after it, and `passwd x` in the same
 session withdraws that stop. A new connection that signs in ends the
 session served, whose terminal reads why, and is served in turn; a wrong
-password or a connection that never signs in ends nothing.
+password or a connection that never signs in ends nothing. While the web
+terminal holds the face, a session reads why and ends with status 1.
 """
 
 import fcntl
@@ -136,7 +137,7 @@ def serve(exe, out, store="sd/moybyte"):
     out.mkdir(parents=True, exist_ok=True)
     log = open(out / "server.log", "w+")
     env = dict(os.environ, MOY_SH_ROOT=str(tree), ASAN_OPTIONS="detect_leaks=0")
-    server = subprocess.Popen([exe, str(port), str(system)], stdout=log,
+    server = subprocess.Popen([exe, str(port), str(system)], stdin=subprocess.PIPE, stdout=log,
                               stderr=subprocess.STDOUT, env=env)
     for _ in range(200):
         log.seek(0)
@@ -159,7 +160,27 @@ def serve(exe, out, store="sd/moybyte"):
 def end(h):
     h["server"].kill()
     h["server"].wait()
+    h["server"].stdin.close()
     h["log"].close()
+
+
+def say(h, line, answer, wait=10.0):
+    """`line` to the harness's standard input; its `answer` line, once the
+    log has it. The log is read through a handle of its own: the server
+    writes at the offset of the one it was given."""
+    def log():
+        with open(h["log"].name) as f:
+            return f.read()
+    seen = log().count(answer)
+    h["server"].stdin.write(line.encode() + b"\n")
+    h["server"].stdin.flush()
+    deadline = time.time() + wait
+    while time.time() < deadline:
+        text = log()
+        if text.count(answer) > seen:
+            return text[text.rindex(answer):].split("\n", 1)[0]
+        time.sleep(0.05)
+    raise AssertionError("the harness never answered %r to %r" % (answer, line))
 
 
 @pytest.fixture(scope="module")
@@ -717,6 +738,31 @@ def test_the_session_that_took_over_is_taken_over_in_turn(harness):
         for p in (first, second):
             if p.poll() is None:
                 p.kill()
+
+
+BUSY = b"the terminal is open in a browser; close it there and try again"
+
+
+def test_a_face_the_web_terminal_holds_tells_the_ssh_client_why(harness):
+    """One face at a time (native/moy_tty/moy_tty.h): while the browser
+    console's Terminal holds it, an exec and a terminal session each read
+    why on their stderr, a terminal's line ending CR LF, and end with status
+    1, the channel closed; once the page lets it go the next session runs,
+    and the refused ones took nothing."""
+    n = int(settled(harness)["ended"])
+    held = int(settled(harness)["heap_now"])
+    assert say(harness, "web", "WEB ") == "WEB 0"
+    try:
+        r = ssh(harness, PASSWORD, "moy@127.0.0.1", "echo in")
+        assert (r.returncode, r.stdout, r.stderr) == (1, b"", BUSY + b"\n"), r
+        r = ssh(harness, PASSWORD, "-tt", "moy@127.0.0.1")
+        assert (r.returncode, r.stdout, r.stderr) == (1, b"", BUSY + b"\r\n"), r
+    finally:
+        assert say(harness, "noweb", "NOWEB") == "NOWEB"
+    r = ssh(harness, PASSWORD, "moy@127.0.0.1", "echo in")
+    assert (r.returncode, r.stdout) == (0, b"in\n"), r
+    ended(harness, n + 3)
+    assert int(settled(harness)["heap_now"]) == held
 
 
 def _spilling(h):

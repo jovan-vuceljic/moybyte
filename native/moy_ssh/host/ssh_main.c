@@ -12,9 +12,13 @@
 // park. The face's socket pair is a board's: a byte one end sends crosses
 // another task before the other end can read it, as lwIP's loopback hands it
 // to its own, and an end closed with bytes it never read is a reset, as
-// lwIP's close is. Usage: ssh_main PORT SYSTEM_DIR
+// lwIP's close is. Standard input takes a line at a time: `web` opens a face
+// as the web terminal does (a `sleep 30`), so an SSH session finds the face
+// another transport's, and `noweb` ends it with a Ctrl-C; each answers a
+// line. Usage: ssh_main PORT SYSTEM_DIR
 
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -339,9 +343,39 @@ int main(int argc, char **argv) {
     moy_tty_set_shell(&moy_tty_moy_sh);
     pthread_t t;
     pthread_create(&t, NULL, console, NULL);
+    fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
+    char line[16];
+    size_t ln = 0;
+    int web_fd = -1;
+    pid_t web_pid = 0;
     uint32_t ended = UINT32_MAX;
     int listening = -1, parked = -1;
     for (;;) {
+        char c;
+        while (read(0, &c, 1) == 1) {
+            if (c != '\n') {
+                if (ln < sizeof line - 1) {
+                    line[ln++] = c;
+                }
+                continue;
+            }
+            line[ln] = 0;
+            ln = 0;
+            if (strcmp(line, "web") == 0 && web_fd < 0) {
+                moy_tty_hold(MOY_TTY_WEB, 1);
+                int r = moy_tty_open(MOY_TTY_WEB, "sleep 30", 0, 80, 24, NULL, &web_fd, &web_pid);
+                printf("WEB %d\n", r);
+                fflush(stdout);
+            } else if (strcmp(line, "noweb") == 0 && web_fd >= 0) {
+                moy_tty_signal(web_pid, SIGINT);
+                close(web_fd);
+                web_fd = -1;
+                moy_tty_reap_all(MOY_TTY_WEB, 5000);
+                moy_tty_hold(MOY_TTY_WEB, 0);
+                printf("NOWEB\n");
+                fflush(stdout);
+            }
+        }
         moy_ssh_stats_t s;
         moy_ssh_stats(&s);
         s.listening = moy_ssh_run_listening();

@@ -806,16 +806,27 @@ static int sessioncommand(struct Channel *channel, struct ChanSess *chansess,
 #if DROPBEAR_MOY
 	{
 		int fd;
+		const char *says;
 		if (moy_ssh_command(chansess->cmd, chansess->term != NULL,
-				chansess->moy_cols, chansess->moy_rows, &fd, &chansess->pid) < 0) {
-			ret = DROPBEAR_FAILURE;
-		} else {
+				chansess->moy_cols, chansess->moy_rows, &fd, &chansess->pid,
+				&says) == 0) {
 			channel->readfd = channel->writefd = fd;
 			channel->bidir_fd = 1;
 			ses.maxfd = MAX(ses.maxfd, fd);
 			setnonblocking(fd);
 			addchildpid(chansess, chansess->pid);
 			ret = DROPBEAR_SUCCESS;
+		} else if (says != NULL) {
+			/* refused, and told why: the request is taken, `says` is the
+			   client's stderr and 1 the command's status, no command ran */
+			moy_channel_refuse(channel, says);
+			chansess->exit.exitpid = 0;
+			chansess->exit.exitstatus = 1;
+			chansess->exit.exitsignal = -1;
+			chansess->exit.exitcore = 0;
+			ret = DROPBEAR_SUCCESS;
+		} else {
+			ret = DROPBEAR_FAILURE;
 		}
 	}
 #else

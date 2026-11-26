@@ -475,12 +475,21 @@ static void mark_shell(void) {
 
 // -- Dropbear's side of the face (port/moy_ssh_port.h) -------------------------------
 
+// One face at a time (native/moy_tty/moy_tty.h): while the browser console's
+// Terminal holds it, a shell, a command or `sftp` is refused and the client
+// reads why on its stderr, its status 1 (the patch's moy_channel_refuse),
+// where a channel failure would read only "shell request failed". Out of
+// memory stays a channel failure.
+#define BUSY_SAYS "the terminal is open in a browser; close it there and try again"
+
 // The `sftp` subsystem arrives as the command SFTPSERVER_PATH
 // (port/localoptions.h), and so does an `exec` of that name, as on OpenSSH.
 // A board with no PSRAM refuses it: its buffers (native/moy_tty/README.md,
 // Memory) do not fit beside a session in the one internal heap, and a refusal
 // is what the client reports, where running out would cut a transfer short.
-int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t *pid) {
+int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t *pid,
+                    const char **says) {
+    *says = NULL;
     if (cmd != NULL && strcmp(cmd, SFTPSERVER_PATH) == 0) {
         #if defined(MOY_ON_BOARD) && !defined(MOY_HAS_PSRAM)
         return -1;
@@ -488,7 +497,11 @@ int moy_ssh_command(const char *cmd, int pty, int cols, int rows, int *fd, pid_t
         cmd = NULL;
         pty = MOY_TTY_SFTP;
     }
-    return moy_tty_open(MOY_TTY_SSH, cmd, pty, cols, rows, mark_shell, fd, pid) == 0 ? 0 : -1;
+    int r = moy_tty_open(MOY_TTY_SSH, cmd, pty, cols, rows, mark_shell, fd, pid);
+    if (r == MOY_TTY_EBUSY) {
+        *says = pty == 1 ? BUSY_SAYS "\r\n" : BUSY_SAYS "\n";   // a terminal's line ends CR LF
+    }
+    return r == 0 ? 0 : -1;
 }
 
 int moy_ssh_reap(pid_t *pid, int *status) {
