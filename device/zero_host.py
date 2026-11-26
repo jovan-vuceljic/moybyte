@@ -1167,9 +1167,9 @@ def way_back(addon):
 #
 #   1. WHAT LIVES FOR GOOD IS MADE FIRST. `start` makes every module, object
 #      and kernel block the host keeps, in one order, before its loop turns
-#      once. LASTING is every staged module a running host can import: a
-#      module first imported by a request is a few KB made for good in the
-#      middle of that request's work.
+#      once. LASTING and BUILT_IN are every module a running host can
+#      import: a module first imported by a request is a few KB made for
+#      good in the middle of that request's work.
 #   2. THE HEAP COLLECTS EVERY GC_STEP BYTES, from start's first line. Left
 #      to collect only when it runs out, the heap fills with garbage to its
 #      top, and whatever a request keeps -- an answer held for the next
@@ -1182,6 +1182,12 @@ def way_back(addon):
 LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
            "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
            "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs")
+# The built-in modules those import inside a function. One costs no code,
+# but its first import takes a slot of sys.modules, and that table grows by
+# a block made wherever the heap then stands.
+BUILT_IN = ("binascii", "deflate", "esp32", "gc", "hashlib", "io", "json", "machine",
+            "moy_improv", "moy_kernel", "moy_net", "moy_sh", "moy_spine", "moy_ufiles",
+            "moy_web", "os", "time", "zlib")
 GC_STEP = 2048
 
 
@@ -1189,7 +1195,7 @@ def lasting():
     """Rule 1's modules and the kernel's own late blocks, those this build
     has: LASTING imported, and the release keys decoded (the kernel decodes
     them at the first signature it checks, and keeps them)."""
-    for name in LASTING:
+    for name in LASTING + BUILT_IN:
         try:
             __import__(name)
         except ImportError:

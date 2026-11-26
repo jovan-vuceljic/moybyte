@@ -125,6 +125,36 @@ def test_every_module_a_running_zero_can_import_is_made_at_its_start(board):
         % (board, late))
 
 
+# The modules a staged module imports inside a function that no Zero has:
+# the import fails there, or its line is never reached.
+NOT_ON_A_ZERO = {
+    "runtime": "the host's package",
+    "blocks": "the block compiler: a console's editor",
+    "cover_png": "a console's cover reader",
+    "shell_servers": "a console's servers",
+    "traceback": "the host's",
+    "ubinascii": "the name an older MicroPython gave binascii",
+    "wallclock": "a console's clock",
+    "carts_data": "the image's roster, read by the seed inside start",
+}
+
+
+@pytest.mark.parametrize("board", ["esp32c3_zero", "seeed_xiao_esp32s3_zero"])
+def test_every_built_in_a_request_can_import_is_imported_at_the_start(board):
+    """A built-in's first import grows sys.modules where the heap then
+    stands: each one a staged module imports inside a function is in
+    BUILT_IN, or in NOT_ON_A_ZERO with why."""
+    staged = board_config.staged_modules(ROOT / "firmware" / board, ROOT)
+    mods = {n[:-3] for n in staged}
+    late = set()
+    for name in staged:
+        late |= _imports(_source(name))[1]
+    unknown = sorted(late - mods - set(zero_host.BUILT_IN) - set(NOT_ON_A_ZERO))
+    assert unknown == [], (
+        "%s: %s imported inside a function of a staged module: add it to "
+        "zero_host.BUILT_IN, or to NOT_ON_A_ZERO with why" % (board, unknown))
+
+
 def test_lasting_names_only_modules_a_zero_stages():
     staged = set()
     for board in ("esp32c3_zero", "seeed_xiao_esp32s3_zero"):
