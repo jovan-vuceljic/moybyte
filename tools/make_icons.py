@@ -22,13 +22,22 @@ Every set fills the slots of `pixel/slots.txt`.
 
   build    every set -> native/moy_ui/icons/<set>[.fill]-<size>.fnt and
            set.json (the files, the sets each tier takes, the slots, the
-           rasteriser's version), and the pixel set from pixel_icons.py.
+           rasteriser's version), the pixel set from pixel_icons.py, and
+           every pointer family -> pointer/ptr-<family>-<size>.fnt.
   check    rebuild in memory and compare with the committed files; refused
            under another resvg, since a different rasteriser moves pixels.
   report   the bytes each tier's icons cost.
 
 A tier takes the sets a seed theme names (native/moy_ui/themes/), at the
 tier's sizes; tools/make_font.py's `module` freezes them beside the fonts.
+
+The POINTERS are pointer/pointer_art.py's families, one font file a family and
+size: shape s's layer l is the glyph at byte FIRST + 3 s + l, its pen the
+shape's hotspot (the font's ascent 0, so a glyph drawn at (x, y) puts its
+hotspot there), 1 bpp for 1-bit art (every 16 px file, every size of the
+pixel family) and 4 bpp for the smooth ones (`pointer_art.bpp`).
+A tier takes every family, at its POINTER_SIZES: a pointer drawn at a scale
+takes the size nearest it (runtime/toolkit/pointers.py).
 
 Run: python tools/make_icons.py [build | check | report]
 """
@@ -46,6 +55,7 @@ THEMES = os.path.join(ROOT, "native", "moy_ui", "themes")
 PIXEL = os.path.join(ICONS, "pixel", "system_icons.moygfx")
 
 SIZES = {"handheld": (16,), "desktop": (16, 20, 24)}
+POINTER_SIZES = {"handheld": (16, 32), "desktop": (32, 48)}
 FIRST = 0x21                # slot n's byte is FIRST + n, through 0xff
 MIRRORED = {"redo": "undo"}
 PIXEL_ONLY = ("moy",)
@@ -166,6 +176,48 @@ def build_font(set_name, layer, size, names=None):
     return data[:12] + struct.pack("<I", len(data)) + data[16:]
 
 
+def _pointers():
+    sys.path.insert(0, os.path.join(ICONS, "pointer"))
+    try:
+        import pointer_art
+    finally:
+        sys.path.pop(0)
+    return pointer_art
+
+
+def pointer_file(family, size):
+    return "ptr-%s-%d.fnt" % (family, size)
+
+
+POINTERS = os.path.join(ICONS, "pointer")
+
+
+def build_pointer_font(family, size):
+    """A version 2 font file: every shape of pointer family `family` at `size`
+    px, each layer a glyph whose pen is the shape's hotspot."""
+    pt = _pointers()
+    bpp = pt.bpp(family, size)
+    index = [0] * 256
+    recs = [struct.pack("<I", 0)[:3] + struct.pack("<BBbbB", 0, 0, 0, 0, size)]
+    cov = bytearray()
+    for s, shape in enumerate(pt.SHAPES):
+        hx, hy, w, h, layers = pt.render(family, shape, size)
+        for li, layer in enumerate(pt.LAYERS):
+            lv = _levels(layers[layer], bpp)
+            ys = [y for y in range(h) if any(lv[y * w:(y + 1) * w])]
+            if not ys:
+                continue
+            xs = [x for x in range(w) if any(lv[y * w + x] for y in ys)]
+            x0, x1, y0, y1 = xs[0], xs[-1] + 1, ys[0], ys[-1] + 1
+            index[FIRST + len(pt.LAYERS) * s + li] = len(recs)
+            recs.append(struct.pack("<I", len(cov))[:3]
+                        + struct.pack("<BBbbB", x1 - x0, y1 - y0, x0 - hx, hy - y0, size))
+            cov += _pack([lv[y * w + x] for y in range(y0, y1) for x in range(x0, x1)], bpp)
+    head = b"MFNT" + bytes((2, bpp, size, 0, size, len(recs))) + struct.pack("<HI", 0, 0)
+    data = head + bytes(index) + b"".join(recs) + bytes(cov)
+    return data[:12] + struct.pack("<I", len(data)) + data[16:]
+
+
 def seed_sets():
     """The smooth sets the seed themes name: what an image freezes."""
     names = set()
@@ -206,6 +258,16 @@ def build_all():
     for tier, sizes in SIZES.items():
         tiers[tier] = sorted(k for k, v in table.items()
                              if v["set"] in frozen and v["size"] in sizes)
+    pt = _pointers()
+    ptrs = {}
+    for family in pt.FAMILIES:
+        for size in sorted({s for t in POINTER_SIZES.values() for s in t}):
+            fn = pointer_file(family, size)
+            data = build_pointer_font(family, size)
+            files[os.path.join("pointer", fn)] = data
+            ptrs[fn[:-4]] = {"family": family, "size": size, "bytes": len(data)}
+    ptr_tiers = {tier: sorted(k for k, v in ptrs.items() if v["size"] in sizes)
+                 for tier, sizes in POINTER_SIZES.items()}
     meta = {"about": "The icon sets tools/make_icons.py builds (docs/history/look_2026-10.md "
                      "step 16): a smooth set's masks, a font file per layer and size, "
                      "slot n at byte `first` + n; a board takes its tier's files and "
@@ -213,7 +275,9 @@ def build_all():
             "built_with": versions(), "first": FIRST, "slots": slots(),
             "mirrored": MIRRORED, "pixel_only": list(PIXEL_ONLY),
             "fills": {k: v for k, v in FILLS.items() if k in sets()},
-            "fill_default": FILL_DEFAULT, "sets": sets(), "tiers": tiers, "masks": table}
+            "fill_default": FILL_DEFAULT, "sets": sets(), "tiers": tiers, "masks": table,
+            "pointers": {"families": list(pt.FAMILIES), "shapes": list(pt.SHAPES),
+                         "layers": list(pt.LAYERS), "tiers": ptr_tiers, "files": ptrs}}
     files["set.json"] = (json.dumps(meta, indent=1, sort_keys=True) + "\n").encode()
     files[os.path.join("pixel", "system_icons.moygfx")] = pixel_text().encode()
     return files
@@ -227,12 +291,14 @@ def module_lines(tiers):
         tiers = (tiers,)
     with open(os.path.join(ICONS, "set.json"), "rb") as f:
         meta_b = f.read()
-    meta = json.loads(meta_b)["tiers"]
-    names = sorted({n for t in tiers for n in meta.get(t, [])})
+    meta = json.loads(meta_b)
+    names = sorted({n for t in tiers for n in meta["tiers"].get(t, [])})
+    ptrs = sorted({n for t in tiers for n in meta["pointers"]["tiers"].get(t, [])})
     out = ["ICONS = {"]
-    for n in names:
-        with open(os.path.join(ICONS, n + ".fnt"), "rb") as f:
-            out.append("    %r: %r," % (n + ".fnt", f.read()))
+    for d, group in ((ICONS, names), (POINTERS, ptrs)):
+        for n in group:
+            with open(os.path.join(d, n + ".fnt"), "rb") as f:
+                out.append("    %r: %r," % (n + ".fnt", f.read()))
     with open(PIXEL, "rb") as f:
         out.append("    %r: %r," % ("system_icons.moygfx", f.read()))
     out.append("}")
@@ -247,13 +313,19 @@ def main(argv):
     if cmd == "report":
         meta = json.load(open(os.path.join(ICONS, "set.json")))
         px = os.path.getsize(PIXEL)
+        ptrs = meta["pointers"]["files"]
         for tier, names in meta["tiers"].items():
             masks = sum(meta["masks"][n]["bytes"] for n in names)
-            print("%s: %d mask files, %d bytes; the pixel set %d bytes"
-                  % (tier, len(names), masks, px))
+            pts = sum(ptrs[n]["bytes"] for n in meta["pointers"]["tiers"].get(tier, ()))
+            print("%s: %d mask files, %d bytes; the pointers %d bytes; the pixel set %d bytes"
+                  % (tier, len(names), masks, pts, px))
         for name in meta["sets"]:
             got = {k: v["bytes"] for k, v in meta["masks"].items() if v["set"] == name}
             print("  %s: %s" % (name, ", ".join("%s %d" % kv for kv in sorted(got.items()))))
+        for fam in meta["pointers"]["families"]:
+            got = {k: v["bytes"] for k, v in ptrs.items() if v["family"] == fam}
+            print("  pointer %s: %s (%d)" % (fam, ", ".join("%s %d" % kv for kv in
+                                                          sorted(got.items())), sum(got.values())))
         return 0
     if cmd == "check":
         meta = json.load(open(os.path.join(ICONS, "set.json")))
@@ -268,6 +340,7 @@ def main(argv):
             if not os.path.exists(p) or open(p, "rb").read() != d:
                 bad.append(n)
         have = {f for f in os.listdir(ICONS) if f.endswith(".fnt")}
+        have |= {os.path.join("pointer", f) for f in os.listdir(POINTERS) if f.endswith(".fnt")}
         bad += sorted(have - set(files))
         if bad:
             print("make_icons check: these differ from their sources: " + ", ".join(bad))
@@ -277,9 +350,10 @@ def main(argv):
     if cmd != "build":
         print(__doc__)
         return 2
-    for f in os.listdir(ICONS):
-        if f.endswith(".fnt"):
-            os.remove(os.path.join(ICONS, f))
+    for d in (ICONS, POINTERS):
+        for f in os.listdir(d):
+            if f.endswith(".fnt"):
+                os.remove(os.path.join(d, f))
     for n, d in files.items():
         with open(os.path.join(ICONS, n), "wb") as f:
             f.write(d)

@@ -106,7 +106,9 @@ def test_masks_build_from_their_sources():
     files = make_icons.build_all()
     for name, data in files.items():
         assert (ICONS / name).read_bytes() == data, name + " differs from its sources"
-    assert {p.name for p in ICONS.glob("*.fnt")} == {n for n in files if n.endswith(".fnt")}
+    have = {p.name for p in ICONS.glob("*.fnt")}
+    have |= {"pointer/" + p.name for p in (ICONS / "pointer").glob("*.fnt")}
+    assert have == {n for n in files if n.endswith(".fnt")}
 
 
 def test_a_tier_freezes_the_seed_sets_at_its_sizes():

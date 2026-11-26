@@ -311,7 +311,8 @@
     {"name": "uitree.dump", "server": "c", "in": ["out:out"], "ret": "len", "how": "direct", "wasm": true},
     {"name": "uitree.action_chars", "server": "c", "in": ["a:int", "chars:str"], "ret": "int", "how": "direct", "wasm": true},
     {"name": "uitree.arg", "server": "c", "in": ["out:out"], "ret": "len", "how": "direct", "wasm": true},
-    {"name": "uitree.draw_row", "server": "c", "in": [], "ret": "int", "how": "direct", "wasm": true}
+    {"name": "uitree.draw_row", "server": "c", "in": [], "ret": "int", "how": "direct", "wasm": true},
+    {"name": "theme.set_pointer", "server": "shell"}
   ],
   "permissions": [
     {"perm": "graphics", "grants": "floor", "prompt": null, "needs": null, "py": [], "doc": "nothing extra: the floor every cart has", "spec": true},

@@ -863,7 +863,9 @@ shadow's reach).
   the console paints no icon (owner, 2026-11-26), and only the icons the
   Python shell draws take them, never the C toolkit's (#269). The icons
   are the theme's alone; no sheet beside the carts overrides them
-  (2026-10-26).
+  (2026-10-26). Its look's `pointer` names the pointer family it wears
+  (`runtime/toolkit/pointers.py`); a look that names none wears its icon
+  set's.
 
 ### 3.7 Fonts
 
@@ -1567,9 +1569,20 @@ the top's lies above the frame alone, the strip being the drag's, and no zone
 reaches a bar. The pointer shows the resize a zone starts (`cursor_shape`);
 elsewhere the page under it says its shape (`Workstation.pointer_shape`,
 `moy_ui_api_cursor`): a hand on what a press acts on, a text beam on a text
-field, else the arrow. The console draws it where it draws the pointer; the
-browser's mouse is the page's own, so the page sets its CSS cursor to the
-shape (`web_boot._pointer_shape`).
+field, else the arrow. The console draws it where it draws the pointer, in
+a pointer FAMILY (`runtime/toolkit/pointers.py`): pixel, moy, coast, luna
+and blocks, each drawing the arrow, the hand, the text beam, the four
+resizes, move and busy (an hourglass, shown on the frame that shows the
+LOADING pill) in its own style, with its hotspot on the outline's apex, at
+16 px as 1-bit art and at 32 and 48 px smooth. A family is named after the
+theme it is the default of (owner, 2026-11-26): Moy and Contrast wear moy,
+Blocks blocks, through their looks' `pointer`; a look that names none wears
+its icon set's family. Blocks' fill follows the accent picked in the Accent
+row (owner, 2026-11-26; `pointers.tint`), the browser's cursor too. Appearance's POINTER row picks another and POINTER
+SIZE takes Large, both persisted beside the chrome size. The browser's mouse
+is the page's own, so the page sets its CSS cursor to the shape
+(`web_boot._pointer_shape`), drawn from the family's own pixels
+(`web_boot._cursor_images`).
 A moving edge stops at the desk's edge and at the app's minimum
 (`_min_size`); the WM holds the press, so the content stays frozen through
 the gesture (`docs/surface_model_v1.md` §14.1) and relays out once on

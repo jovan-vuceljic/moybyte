@@ -84,15 +84,11 @@ def _dim_of(ws):
 
 
 def _cursor_stamp(ws):
-    """The cursor sprite's footprint on the system canvas this frame, or None
-    when it isn't drawn -- recorded with each shelf paint (#113) so a blitted
-    frame can repaint the stale stamp the shift dragged along (CURSOR is 8x13
-    at the system font scale, hotspot top-left)."""
-    p = ws.pointer
-    if p is None or not getattr(p, "visible", False):
-        return None
-    fs = ws.look.font_scale
-    return (p.x, p.y, 8 * fs, 13 * fs)
+    """The pointer's footprint on the system canvas this frame
+    (`Workstation.pointer_box`), or None when it isn't drawn -- recorded with
+    each shelf paint (#113) so a blitted frame can repaint the stale stamp the
+    shift dragged along."""
+    return ws.pointer_box()
 
 
 def _statics_base(ws, cv, grid):
@@ -201,17 +197,16 @@ def _band_frame(layer, cv, dt, grid, kind, fill, strip, timed=False, steps=False
     if top is not None and top() != kind:
         return False
     bx, by, bw, bh = grid.band_rect()
-    fs = ws.look.font_scale
-    p = ws.pointer
-    if p is not None and getattr(p, "visible", False):
+    stamp = _cursor_stamp(ws)
+    if stamp is not None:
         # The composited cursor must land fully inside the redrawn band,
         # or its previous stamp would ghost on the untouched chrome.
-        if not (bx <= p.x and p.x + 8 * fs <= bx + bw
-                and by <= p.y and p.y + 13 * fs <= by + bh):
+        sx, sy, sw, sh = stamp
+        if not (bx <= sx and sx + sw <= bx + bw and by <= sy and sy + sh <= by + bh):
             return False
     _t0 = _ticks_ms() if timed and getattr(ws, "perf_capture", False) else None
     end = grid.repaint_band(cv, ws.covers.sheet_icon, fill,
-                            _band_key(layer, cv, dt, grid, steps, True), _cursor_stamp(ws),
+                            _band_key(layer, cv, dt, grid, steps, True), stamp,
                             layer._beside if steps else None, True)
     if end is None:
         return False

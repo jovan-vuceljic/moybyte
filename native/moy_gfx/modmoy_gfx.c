@@ -1310,6 +1310,23 @@ static mp_obj_t moy_gfx_copy_block(size_t n_args, const mp_obj_t *a) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(moy_gfx_copy_block_obj, 10, 10, moy_gfx_copy_block);
 
+// restore_under(buf, stride, x, y, w, h, saved, drawn) -- the w x h block at (x, y)
+// put back from `saved` wherever it still holds `drawn` (mg_restore_under): a
+// pointer's save-under, what something painted there since kept.
+static mp_obj_t moy_gfx_restore_under(size_t n_args, const mp_obj_t *a) {
+    (void)n_args;
+    size_t cap, scap, dcap;
+    uint16_t *px = moy_gfx_buf_w(a[0], &cap);
+    const uint16_t *saved = moy_gfx_buf_r(a[6], &scap);
+    const uint16_t *drawn = moy_gfx_buf_r(a[7], &dcap);
+    mg_restore_under(px, cap, mp_obj_get_int(a[1]), mp_obj_get_int(a[2]), mp_obj_get_int(a[3]),
+                     mp_obj_get_int(a[4]), mp_obj_get_int(a[5]), saved, drawn,
+                     scap < dcap ? scap : dcap);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(moy_gfx_restore_under_obj, 8, 8,
+                                           moy_gfx_restore_under);
+
 // blit_indices(dst, dw, dh, dx, dy, indices, iw, ih, pal565) -- place an iw x ih palette-
 // INDEX bitmap (1 byte/pixel, like blit_map's cells) at (dx, dy) into the RGB565 `dst` (dw
 // px/row), converting each index through `pal565` (an index->RGB565 table, 1 uint16/entry).
@@ -2440,6 +2457,7 @@ static const mp_rom_map_elem_t moy_gfx_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_scroll_rect), MP_ROM_PTR(&moy_gfx_scroll_rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_shift_rect), MP_ROM_PTR(&moy_gfx_shift_rect_obj) },
     { MP_ROM_QSTR(MP_QSTR_copy_block), MP_ROM_PTR(&moy_gfx_copy_block_obj) },
+    { MP_ROM_QSTR(MP_QSTR_restore_under), MP_ROM_PTR(&moy_gfx_restore_under_obj) },
     { MP_ROM_QSTR(MP_QSTR_blit_indices), MP_ROM_PTR(&moy_gfx_blit_indices_obj) },
     { MP_ROM_QSTR(MP_QSTR_blit_indices_scale), MP_ROM_PTR(&moy_gfx_blit_indices_scale_obj) },
     { MP_ROM_QSTR(MP_QSTR_ifill), MP_ROM_PTR(&moy_gfx_ifill_obj) },

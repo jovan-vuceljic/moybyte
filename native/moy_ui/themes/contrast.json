@@ -51,6 +51,7 @@
                 "on": { "mark": "fill", "c": "value", "ink": "value_ink" } } },
     "accents": false,
     "icons": { "kind": "smooth", "set": "default" },
+    "pointer": "moy",
     "app_buttons": { "calc": { "normal": { "font": "key" }, "tonal": { "font": "op" },
       "primary": { "font": "op" } } },
     "buttons": { "toggle": { "check": true } },

@@ -763,6 +763,11 @@ int moy_text(const moy_text_target_t *t, uint32_t font, uint8_t source,
 
 int moy_text_glyph(const moy_text_target_t *t, uint32_t font, int index, int x, int y,
                    uint16_t col, int scale) {
+    return moy_text_glyph_a(t, font, index, x, y, col, scale, 256);
+}
+
+int moy_text_glyph_a(const moy_text_target_t *t, uint32_t font, int index, int x, int y,
+                     uint16_t col, int scale, int alpha) {
     const row_t *r = font_row(font);
     if (r == NULL || r->version != 2 || index < 0 || index >= MOY_FONT_INDEX) {
         return -1;
@@ -773,7 +778,7 @@ int moy_text_glyph(const moy_text_target_t *t, uint32_t font, int index, int x, 
     const font2_t *f = &r->f2;
     if (t != NULL && t->px != NULL) {
         pass_t p = {t, r, {0}, scale, 1, 0, 0, 0, INT32_MIN, f->bpp == 1};
-        mg_ink(&p.ink, col, f->bpp, 256, MOY_TEXT_BG_READ, moy_gfx_swapped);
+        mg_ink(&p.ink, col, f->bpp, alpha, MOY_TEXT_BG_READ, moy_gfx_swapped);
         glyph2(&p, index, x, y);
     }
     return rec_of(f, index)[7] * scale;

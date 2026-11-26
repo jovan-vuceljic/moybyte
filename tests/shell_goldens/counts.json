@@ -102,7 +102,7 @@
   },
   "guition_p4_1280x800_windowed": {
     "about": [9, 6],
-    "app_appearance": [40, 32],
+    "app_appearance": [44, 37],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
@@ -274,7 +274,7 @@
   },
   "p4_1024x600_cs2_fs1_contrast_light": {
     "about": [10, 6],
-    "app_appearance": [33, 31],
+    "app_appearance": [34, 31],
     "app_artwork": [0, 0],
     "app_calc": [0, 0],
     "app_files": [0, 0],
