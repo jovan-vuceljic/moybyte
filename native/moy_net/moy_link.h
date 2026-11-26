@@ -106,7 +106,8 @@ typedef struct {
 } moy_link_stats_t;
 
 // Bring ESP-NOW up over the running WiFi with a ring of `rxbuf` bytes (kept
-// across a stop; resized only while the link is down). Idempotent.
+// across a stop on a board with PSRAM, given back at the stop on one
+// without; resized only while the link is down). Idempotent.
 int moy_link_start(uint32_t rxbuf);
 void moy_link_stop(void);
 int moy_link_rate(int rate);

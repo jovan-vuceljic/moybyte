@@ -174,8 +174,9 @@ chip changes.
   through one of `LIVE_PIECE` bytes (`native/moy_net/moy_webhost.c`), both
   given back once it is answered, as an HTTP request's upload buffer is.
   The radio's receive ring (`MOY_LIVE_RING`, a quarter of the XIAO's)
-  is the kernel link's, made at the first match and kept, as the link keeps
-  it on every board (`native/moy_net/moy_link.c`). A socket whose buffers do
+  is the kernel link's, made when a match brings the radio up and given
+  back when it goes down, where a board with PSRAM keeps it
+  (`native/moy_net/moy_link.c`). A socket whose buffers do
   not fit is refused like a second page's, and the page tries again. The
   whole protocol is wired; what the C3 leaves out is room, not a feature: a
   match beside an SSH session competes for the internal heap that session
