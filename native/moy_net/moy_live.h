@@ -30,6 +30,14 @@ int moy_web_live_link(uint8_t mac[6]);
 // 1 where the socket carries the web terminal (its 't' channel), and the
 // board serves no GET /term.
 int moy_web_live_term(void);
+// The terminal channel ('t'), native/moy_tty/moy_tty_live.c's: the socket
+// handed over (on the console's task), a message from the page, the face's
+// end to watch (-1: none), its bytes to the page, and the socket's end.
+int moy_live_term_take(void);
+int moy_live_term_message(const uint8_t *p, size_t n);
+int moy_live_term_fd(void);
+int moy_live_term_pump(void);
+void moy_live_term_end(void);
 // THE HINTS (moy_live.c): `topics` (letters) told to the page at the
 // bridge's next pass; and the webhost's word that the socket's own page's
 // sync applies (`on` 1 before, 0 after), whose changes are no news to it.
