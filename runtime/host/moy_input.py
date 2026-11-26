@@ -8,6 +8,7 @@
 #   Bus                          a machine.I2C-shaped fake as the drivers' C bus
 #   KbdDriver                    the T-Deck keyboard's C driver over a Bus
 #   TouchDriver                  a touch controller's C driver over a Bus
+#   Pad3Driver                   the Faces Gamepad3's C driver over a Bus
 #   HeldPoint                    the no-news contract on its own
 #   map_point                    a raw point onto the glass
 #   HidMachine                   the BLE keyboard central's machine over a fake stack
