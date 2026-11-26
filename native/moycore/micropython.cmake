@@ -36,8 +36,11 @@ target_include_directories(usermod_moycore INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/../moy_store
     ${CMAKE_CURRENT_LIST_DIR}/../moy_glass
     ${CMAKE_CURRENT_LIST_DIR}/../moy_gfx
-    ${CMAKE_CURRENT_LIST_DIR}/../moy_ui
 )
+# The widget toolkit's headers, where the image takes it (the Zero does not).
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../moy_ui)
+    target_include_directories(usermod_moycore INTERFACE ${CMAKE_CURRENT_LIST_DIR}/../moy_ui)
+endif()
 
 # MOY_PIXEL_RGB565 changes sizeof(moy_pixel) and therefore moy_canvas's layout,
 # so it must match every translation unit that sees moy.h -- moy_gfx compiles

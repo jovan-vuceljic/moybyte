@@ -1656,8 +1656,26 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             self._covers = self._covers_to_fetch(self.carts)
         self._build_rows()
         self._go("done")
-        self._say("%s is on your shelf" % self.cur["cart"]["name"])
+        why = self._board_reason(self.cur["cart"]["folder"])
+        if why is not None:
+            self._say(why, "warn")
+        else:
+            self._say("%s is on your shelf" % self.cur["cart"]["name"])
         self._focus = vid(self._go_verb())
+
+    def _board_reason(self, folder):
+        """Why the installed app's service will run in the page and not on
+        the board that serves it (scheduler.board_reason), or None."""
+        c = self._inst.find(folder)
+        if not c or not c.get("path"):
+            return None
+        try:
+            import json
+            import scheduler
+            with open(c["path"] + "/manifest.json") as f:
+                return scheduler.board_reason(json.load(f))
+        except (ImportError, OSError, ValueError):
+            return None
 
     def _cancel(self):
         """B, or a tap on CANCEL -- never A, which a kid presses at anything.

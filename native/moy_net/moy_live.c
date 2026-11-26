@@ -24,6 +24,8 @@
 //        has the face: this board then serves no GET /term.
 //   'r'  the requests: the webhost's routes asked on the socket (THE
 //        REQUESTS, below).
+//   'm'  the apps' messages: an app's window on the page and its service
+//        on the board (THE APPS' MESSAGES, below; moy_live_svc.c).
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
 //
@@ -95,6 +97,22 @@
 // Reads, gets and xfers never cross: the page answers a read from the
 // records, a get from the last record read or the last 'G', and an xfer BAD.
 //
+// THE PINS: the board's pins, where it serves them to its page (moy_gpio.c),
+// are the kind "pins" (the probe's "kinds" names it, with no lists), one row
+// a page, opened 'O' id 4 "pins" and answered 'A' as a kind's open. Its
+// messages are its own, the ops moy_gpio_op's:
+//
+//   'W' id {pin(1) level(1)}  up: each pin driven as it arrives, in order;
+//                             answered only where refused: 'A' id 'W' rc(4)
+//                             pin(1), rc moy_dev's (BAD off the allowlist,
+//                             BUSY held by another process, IO)
+//   'S' id pins(1 each)       up: the pins the page watches, the last 'S'
+//                             replaced (at most 16)
+//   'G' id vals(4 each)       down: each watched pin's level (or its code),
+//                             in the order 'S' named them, after an 'S' and
+//                             whenever one changed: read after each message
+//                             of the row and each pass of the bridge's
+//
 // THE REQUESTS. The page's requests to the webhost's sealed routes go on
 // the socket, never over HTTP, where a board with the socket refuses them
 // 410 {"error":"live"}. Each is sealed as a sealed route's request is (its
@@ -127,6 +145,32 @@
 // the socket ends goes with it, and the answer to one the webhost took
 // goes nowhere (moy_live_req_say: the socket of its session is gone).
 //
+// THE APPS' MESSAGES. Each end keeps a stand-in for the other end's
+// processes of each app whose service runs on the board, a process of that
+// app hearing every message sent to it (moy_evq.h's MOY_EVQ_ANY), and what
+// it takes crosses here, where the other end's stand-in sends it again
+// (moy_live_svc.c's header). Down to the page:
+//
+//   'H' budget ';' apps       the RAM the board gives its apps' services,
+//                             "<KiB>,<KiB free>" ("-" where it sets none),
+//                             and the apps whose services run on it, ','
+//                             between: at the socket's start and at each
+//                             change
+//
+// and either way:
+//
+//   'M' an(1) app nn(1) name args   message `name` sent to app `app`, its
+//                             arguments a JSON array
+//   'P' kn(1) key total(4) at(4) piece   a served app's prefs row `key`
+//                             (`<app>_...`), `total` bytes of JSON text of
+//                             which this piece starts at `at` (both little-
+//                             endian; total 0xFFFFFFFF: the row deleted),
+//                             moy_svc_prefs.c
+//
+// The services hear the page come and go (the OS message "page", [1] or
+// [0]); a window hears the board's socket do so on the page
+// (moy_svc_web.c: "board", [1] or [0, why]).
+//
 // Nothing waits on the radio or the page: the bridge's task (one a page's
 // socket, made with its buffers when the webhost hands the socket over and
 // gone with them at its end) wakes on the socket and every MOY_LIVE_WAIT_MS
@@ -140,7 +184,7 @@
 
 #include "moy_link.h"
 #include "moy_live.h"
-#include "moy_dev_kinds.h"           // MOY_DEV_RELAYS
+#include "moy_dev_kinds.h"           // MOY_DEV_RELAYS, MOY_DEV_PINS
 
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK
 
@@ -240,10 +284,10 @@ static void unlock(void) {
 #endif
 
 // The device channel (moy_live_dev.c), on a board that can relay
-// (moy_dev_kinds.h's MOY_DEV_RELAYS): named strongly there, which is what
+// (moy_dev_kinds.h's MOY_DEV_RELAYS or MOY_DEV_PINS): named strongly there, which is what
 // pulls it out of the component's archive; weak on any other, which links
 // none of it.
-#if defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS
+#if (defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS) || (defined(MOY_DEV_PINS) && MOY_DEV_PINS)
 #define DEV_HAS(f) 1
 #else
 #pragma weak moy_live_dev_message
@@ -260,6 +304,13 @@ static void unlock(void) {
 #pragma weak moy_live_term_fd
 #pragma weak moy_live_term_pump
 #pragma weak moy_live_term_end
+
+// The apps' messages (moy_live_svc.c): weak, for an image without them.
+#pragma weak moy_live_svc_start
+#pragma weak moy_live_svc_end
+#pragma weak moy_live_svc_message
+#pragma weak moy_live_svc_pump
+#pragma weak moy_live_svc_stats
 
 static live_t *const L = &S;
 
@@ -499,6 +550,9 @@ static int message(int ws, uint8_t *p, size_t n) {
     if (p[0] == 'r') {
         return request(ws, p + 1, n - 1);
     }
+    if (p[0] == 'm') {
+        return moy_live_svc_message != NULL ? moy_live_svc_message(p, n) : 0;
+    }
     if (p[0] != 'n') {
         return 0;
     }
@@ -615,9 +669,11 @@ static int beat(int ws) {
 //        device/moy_webhost.py)
 //
 // Hints a pass gathered go in one message at its end; a page asks at most
-// once a topic for several. The page's own sync is no news to it: while the
-// webhost applies a batch the socket's session sent, the store's changes
-// are counted as seen (moy_live_store_mine).
+// once a topic for several. The page's own changes are no news to it: while
+// the webhost applies a batch the socket's session sent, or the VM steps an
+// official install or removal that page asked for (device/moy_webhost.py),
+// the store's changes are counted as seen (moy_live_store_mine). Another
+// page's install is hinted 's' as its sync is.
 uint32_t moy_vol_changes(void);
 #pragma weak moy_vol_changes
 
@@ -685,6 +741,9 @@ static void pump(int ws) {
         return;
     }
     hints_start();
+    if (moy_live_svc_start != NULL) {
+        moy_live_svc_start();
+    }
     if (n > 0 && frames_in(ws, &n) < 0) {
         return;
     }
@@ -735,6 +794,11 @@ static void pump(int ws) {
         if (DEV_HAS(moy_live_dev_pump) && (devs = moy_live_dev_pump()) < 0) {
             return;
         }
+        int apps = moy_live_svc_pump != NULL ? moy_live_svc_pump() : 0;
+        if (apps < 0) {
+            return;
+        }
+        devs += apps;
         if (hints(ws) < 0) {
             return;
         }
@@ -754,6 +818,9 @@ static void serve(int ws) {
     moy_net_free(moy_live_req_take());
     if (DEV_HAS(moy_live_dev_end)) {
         moy_live_dev_end();
+    }
+    if (moy_live_svc_end != NULL) {
+        moy_live_svc_end();
     }
     if (moy_live_term_end != NULL) {
         moy_live_term_end();
@@ -859,6 +926,10 @@ void moy_web_live_cut(int taken) {
 
 void moy_live_stats(moy_live_stats_t *out) {
     *out = L->stats;
+    if (moy_live_svc_stats != NULL) {
+        uint32_t dropped;
+        moy_live_svc_stats(&out->msgs_up, &out->msgs_down, &dropped);
+    }
     if (DEV_HAS(moy_live_dev_stats)) {
         moy_live_dev_stats(out);
     }

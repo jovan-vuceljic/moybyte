@@ -76,6 +76,10 @@ DEFAULT_PORT = 80
 # The live socket's hints (a Zero's, moy_net.live_hint), None on a board
 # without the socket.
 _HINT = getattr(moy_net, "live_hint", None)
+# ...whether the request the VM answers is that page's own, and its word
+# that the store's changes being made are that page's (moy_live_store_mine).
+_ASKED = getattr(moy_net, "web_live_asked", None)
+_MINE = getattr(moy_net, "live_mine", None)
 
 # The answer a board with no updatable firmware answers /update with: 503
 # means "a board, but nothing to update", where a 404 means "not a board".
@@ -306,13 +310,19 @@ class StoreSystem:
     batch reads it into rows of its own and frees them before it answers.
     Rows a host kept would be blocks made mid-session and remade as a page
     changes them, which on a board with one small heap (the C3) are the
-    islands that split its free RAM."""
+    islands that split its free RAM. A host that runs app services
+    (device/zero_svc.py) hands its `rows` instead, the kernel's, made at its
+    start: the services' prefs live in them, and a page's batch and a
+    service's write then have one writer."""
 
-    def __init__(self, carts_root):
+    def __init__(self, carts_root, rows=None):
         self.carts_root = carts_root
         self._rx = moy_sync.SystemReceiver()
+        self.rows = rows
 
     def _rows(self):
+        if self.rows is not None:
+            return self.rows
         import moy_carts
         import moy_spine
         root = self.carts_root
@@ -320,12 +330,16 @@ class StoreSystem:
         rows.adopt(moy_carts.load_system(root))
         return rows
 
+    def _done(self, rows):
+        if rows is not self.rows:
+            rows.__del__()
+
     def pull(self):
         rows = self._rows()
         try:
             return moy_sync.system_pull(rows)
         finally:
-            rows.__del__()
+            self._done(rows)
 
     def apply(self, ops):
         """(applied, [(index, reason)]) of one batch's ops."""
@@ -333,7 +347,7 @@ class StoreSystem:
         try:
             applied, errors, _changed = self._rx.apply(ops, rows, self.carts_root)
         finally:
-            rows.__del__()
+            self._done(rows)
         return applied, errors
 
 
@@ -381,6 +395,7 @@ class WebHost:
         self.official = official
         self.wifi = wifi
         self._went = {}                  # a backend's last step did work (_stepped)
+        self._mine = False               # the official request in hand is the socket page's
         self.system = system
         self.on_stop = on_stop
         self.on_serving = on_serving
@@ -571,11 +586,20 @@ class WebHost:
                 print("UPDATE ERR %s: %s" % (type(exc).__name__, exc))
         o = self.official
         if o is not None and (o.busy() or self._went.get("o")):
+            # An install or a removal the socket's page asked for changes the
+            # store as its own sync does: no news to it (it pulls that cart
+            # itself), and hinted 's' to it when another page asked.
+            mine = self._mine and _MINE is not None
+            if mine:
+                _MINE(1)
             try:
                 if self._stepped("o", o.busy() and o.step(OFFICIAL_SLICE_MS)):
                     did = True
             except Exception as exc:     # noqa: BLE001 -- never break a frame
                 print("OFFICIAL ERR %s: %s" % (type(exc).__name__, exc))
+            finally:
+                if mine:
+                    _MINE(0)
         w = self.wifi
         if w is not None and (w.busy() or self._went.get("w")):
             try:
@@ -781,6 +805,8 @@ class WebHost:
         except (ValueError, AttributeError):
             return http_response(400, '{"error":"bad json"}')
         ok, msg = o.request(action, folder, sent)
+        if ok and action in ("install", "agree", "remove"):
+            self._mine = bool(_ASKED is not None and _ASKED())
         return http_response(200 if ok else 409, o.answer(ok, msg))
 
     def _wifi(self, body):

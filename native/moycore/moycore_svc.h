@@ -156,6 +156,13 @@ enum {
 #define MOYCORE_SVCS 4u                 // services at once
 #define MOYCORE_SVC_STOP_MS 2000u       // a start's or a stop's limit (TERM to KILL)
 #define MOYCORE_SVC_HEAP_MAX (1024u * 1024u)
+// THE BUDGET: the bytes every service's state holds at once, a board's
+// board.toml [services] ram_kib (tools/board_config.py); a board without it
+// holds each service to MOYCORE_SVC_HEAP_MAX alone. An allocation past it
+// fails as one past the cap does (the state's "not enough memory").
+#ifdef MOYCORE_SVC_BUDGET_KIB
+#define MOYCORE_SVC_BUDGET ((uint32_t)MOYCORE_SVC_BUDGET_KIB * 1024u)
+#endif
 #define MOYCORE_SVC_WHY 96u
 
 // A crash's exit status; a kill's is the process table's MOY_PROC_KILLED
@@ -198,6 +205,9 @@ int moycore_svc_start(uint32_t pid, const char *id, const moycore_svc_chunk_t *c
                       const struct moy_app_run *app, uint32_t start_ms, uint32_t *h);
 // The TERM: its `moy_stop` runs next on its task. OK, STALE.
 int moycore_svc_stop(uint32_t h);
+// The budget and the bytes the services hold now, summed: 0 where the board
+// sets none (THE BUDGET).
+uint32_t moycore_svc_budget(uint32_t *held);
 int moycore_svc_info(uint32_t h, moycore_svc_info_t *out);
 // An exited service's row freed: OK, STALE, or BAD while it has not exited.
 int moycore_svc_reap(uint32_t h);

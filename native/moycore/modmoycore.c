@@ -60,9 +60,9 @@
 // -- helpers -----------------------------------------------------------------
 
 // The kernel's Player, where the image has it (weak: moycore stands alone).
+#include "moy_json.h"
 #if __has_include("moy_play.h")
 #include "moy_play.h"
-#include "moy_json.h"
 #else
 bool moy_play_lock_seed(uint32_t *seed);
 #endif
@@ -1165,14 +1165,9 @@ int moycore_wasm_open_c(const moycore_open_c_t *o, char *err, size_t n)
 #endif
 }
 
-// The kernel's stop (native/moy_kernel): nonzero while the VM goes for a VM
-// stop rather than a soft reset. Weak, for an image without the stop.
-#include "moy_kernel.h"
-#pragma weak moy_kernel_stop_pending
-
 // The VM is going (native/moy_kernel's soft reset, a VM stop's included): a
-// run still open closes with it, while its objects are still the VM's; the
-// Lua services run on through a VM stop and end with a soft reset.
+// run still open closes with it, while its objects are still the VM's. The
+// Lua services are the kernel's to end (moycore_svc_vm_stop).
 void moycore_vm_stop(void)
 {
     for (int i = 0; i < MOYCORE_RUNS; i++) {
@@ -1181,7 +1176,6 @@ void moycore_vm_stop(void)
         moycore_run_use(r);
         moycore_close_c();
     }
-    moycore_svc_vm_stop(moy_kernel_stop_pending != NULL && moy_kernel_stop_pending() != 0);
     MP_STATE_VM(moycore_keep) = MP_OBJ_NULL;    // the list is the heap going
 }
 
@@ -1400,6 +1394,9 @@ static MP_DEFINE_CONST_FUN_OBJ_0(mod_pool_check_obj, mod_pool_check);
 //                                  app: its app's run, moy_app's `run()`)
 //   svc_info(h) -> (state, exit, heap, cpu_us, strikes, why, wakes, mail), None when stale
 //   svc_tasks() -> bool   svc_step() -> ms to the next deadline   svc_reset()
+//   svc_budget() -> (budget, held)   the board's budget for every service's
+//                                 state (None where it sets none) and the
+//                                 bytes they hold now (moycore_svc.h, THE BUDGET)
 
 static void svc_check(int rc)
 {
@@ -1495,6 +1492,18 @@ static mp_obj_t mod_svc_reset(void)
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_svc_reset_obj, mod_svc_reset);
 
+static mp_obj_t mod_svc_budget(void)
+{
+    uint32_t held;
+    uint32_t budget = moycore_svc_budget(&held);
+    mp_obj_t t[2] = {
+        budget ? mp_obj_new_int_from_uint(budget) : mp_const_none,
+        mp_obj_new_int_from_uint(held),
+    };
+    return mp_obj_new_tuple(2, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_svc_budget_obj, mod_svc_budget);
+
 static const mp_rom_map_elem_t moycore_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),    MP_OBJ_NEW_QSTR(MP_QSTR_moycore) },
     { MP_ROM_QSTR(MP_QSTR_run_begin),   MP_ROM_PTR(&mod_run_begin_obj) },
@@ -1556,6 +1565,7 @@ static const mp_rom_map_elem_t moycore_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR_svc_tasks),   MP_ROM_PTR(&mod_svc_tasks_obj) },
     { MP_ROM_QSTR(MP_QSTR_svc_step),    MP_ROM_PTR(&mod_svc_step_obj) },
     { MP_ROM_QSTR(MP_QSTR_svc_reset),   MP_ROM_PTR(&mod_svc_reset_obj) },
+    { MP_ROM_QSTR(MP_QSTR_svc_budget),  MP_ROM_PTR(&mod_svc_budget_obj) },
     { MP_ROM_QSTR(MP_QSTR_set_sram_floor), MP_ROM_PTR(&mod_set_sram_floor_obj) },
     { MP_ROM_QSTR(MP_QSTR_alloc_stats), MP_ROM_PTR(&mod_alloc_stats_obj) },
     { MP_ROM_QSTR(MP_QSTR_sram_report), MP_ROM_PTR(&mod_sram_report_obj) },

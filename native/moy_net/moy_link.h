@@ -141,8 +141,9 @@ typedef struct {
 // The plaintexts queued since the last take, each behind its 2-byte
 // little-endian length, into `out`: the bytes, 0 when none (or `cap` short).
 size_t moy_link_web_take(uint8_t *out, size_t cap);
-// One plaintext the board sent: the link channel's ('n' first), or the
-// device channel's ('d', handed to moy_dev_web_give).
+// One plaintext the board sent: the link channel's ('n' first), the
+// device channel's ('d', handed to moy_dev_web_give) or the apps' messages'
+// ('m', moy_svc_web_give).
 void moy_link_web_give(const uint8_t *p, size_t n);
 // The socket opened (1) or closed (0).
 void moy_link_web_open(int on);
@@ -165,6 +166,37 @@ void moy_dev_web_kinds(const char *spec, size_t n);
 void moy_dev_web_give(const uint8_t *p, size_t n);
 void moy_dev_web_socket(int on);
 void moy_dev_web_info(moy_dev_web_info_t *out);
+// The page's half of the apps' messages (moy_svc_web.c, its header the
+// contract): one 'm' plaintext the board sent, the socket opened or closed,
+// the stand-ins' messages queued (before each take), and its counts.
+void moy_svc_web_give(const uint8_t *p, size_t n);
+void moy_svc_web_socket(int on);
+void moy_svc_web_pump(void);
+void moy_svc_web_stats(uint32_t *apps, uint32_t *up, uint32_t *down, uint32_t *dropped);
+// The apps whose services run on the board (its 'H', while the socket is
+// open), ',' between, into `out` (cap bytes): their length.
+size_t moy_svc_web_served(char *out, size_t cap);
+// The board's budget for its apps' services, as its 'H' said: 1 and the
+// KiB it gives them and the KiB free, or 0 where it sets none.
+int moy_svc_web_budget(uint32_t *kib, uint32_t *free_kib);
+#endif
+
+#if (defined(MOY_NET_LIVE) && MOY_NET_LIVE) || (defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE)
+// An app's prefs rows shared by its service on the board and its windows
+// on the page (moy_svc_prefs.c, its header the contract): the rows they are
+// (the kernel's settings rows; NULL: none cross), a session's start (the
+// board forgets what was agreed, the page scans again), the rows of `apps`
+// taken as agreed (the page, at the board's 'H'), the rows changed since
+// the last scan sent as 'P' plaintexts through `say` (0, -1 when a say
+// failed), a 'P' plaintext taken, and the rows sent and taken.
+struct moy_settings;
+void moy_svc_prefs_rows(struct moy_settings *rows);
+void moy_svc_prefs_start(int board);
+void moy_svc_prefs_baseline(const char *const *apps, int napps);
+int moy_svc_prefs_scan(const char *const *apps, int napps, uint8_t *buf, size_t cap,
+                       int (*say)(void *, uint8_t *, size_t), void *ctx);
+void moy_svc_prefs_give(const uint8_t *p, size_t n, const char *const *apps, int napps);
+void moy_svc_prefs_stats(uint32_t *sent, uint32_t *took);
 #endif
 
 #endif

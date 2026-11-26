@@ -10,7 +10,8 @@ console's Python gives them:
     board has no frame: its poll loop calls `tail()` each turn
     (zero_host.serve), and between turns a hop waits.
   * THE DOOR (native/moy_sh/moy_sh_board.h, the ROLE door's row
-    MOY_SH_DOOR): `passwd`, `df`, `mem` and `ps` answered here, and
+    MOY_SH_DOOR): `passwd`, `df`, `mem`, `ps` and, where the board runs
+    apps' services (zero_svc), `service` answered here, and
     /proc/console's name, board and firmware (neofetch's rows); everything
     else is the console's (its processes, /proc's and /dev's rows, the
     installed and the other role commands), which this board has not got, so
@@ -91,6 +92,8 @@ class Door:
             self.io.write(2, ("%s: %s\n" % (name, text)).encode())
 
     def v_role(self, job, *argv):
+        if argv and argv[0] == "service":
+            return self.service(list(argv[1:]))
         if not argv or argv[0] != "passwd":
             return NEEDS_VM
         import ssh_service
@@ -99,6 +102,44 @@ class Door:
         except OSError as e:
             self.err("passwd", str(e))
             return 1
+
+    def service(self, a):
+        """`service [status] | start|stop|restart APP | policy [APP [POLICY]]`
+        over the board's apps' services (zero_svc), as the console's
+        (runtime/shell/sh_roles.py's r_service) words them."""
+        import zero_host
+        svc = zero_host.SERVICES[0]
+        if svc is None:
+            return NEEDS_VM
+        if not a or a[0] == "status":
+            for app_id, pid, state, heap, why in svc.info():
+                self.out("%d %s %s %d %s\n" % (pid, app_id, "exited" if state == 4 else "running",
+                                                heap, svc.policy(app_id)))
+            return 0
+        if a[0] == "policy" and len(a) <= 3:
+            if len(a) == 3:
+                try:
+                    svc.set_policy(a[1], a[2])
+                except ValueError as e:
+                    self.err("service", str(e))
+                    return 2
+                return 0
+            names = [a[1]] if len(a) == 2 else [n for n, _f, _m in svc.installed()]
+            for n in names:
+                self.out("%s %s\n" % (n, svc.policy(n)))
+            return 0
+        if a[0] not in ("start", "stop", "restart") or len(a) != 2:
+            self.err("service", "usage: service [status] | start|stop|restart APP"
+                                " | policy [APP [never|on-crash|always]]")
+            return 2
+        if a[0] in ("stop", "restart"):
+            svc.stop(a[1])
+        if a[0] == "start" and svc.start_by_hand(a[1]) is None:
+            self.err("service", "%s did not start: its log says why" % a[1])
+            return 1
+        if a[0] == "restart":
+            svc.restart_by_hand(a[1])
+        return 0
 
     def v_read(self, path):
         # /proc/console: what neofetch shows beside the shell's own rows,
@@ -115,7 +156,13 @@ class Door:
 
     def v_ps(self):
         used = gc.mem_alloc() if hasattr(gc, "mem_alloc") else 0
-        return "%d 0 shell running %d - zero_host\n" % (SHELL, used)
+        out = "%d 0 shell running %d - zero_host\n" % (SHELL, used)
+        import zero_host
+        svc = zero_host.SERVICES[0]
+        for app_id, pid, state, heap, _why in (svc.info() if svc is not None else ()):
+            out += "%d %d %s %s %d - service\n" % (
+                pid, SHELL, app_id, "exited" if state == 4 else "background", heap)
+        return out
 
     def v_df(self, path):
         # A path no volume holds (/sd: this board has no card slot) is

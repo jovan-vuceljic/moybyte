@@ -38,7 +38,12 @@
 
 #include "moy_app_run.h"
 #include "moy_htab.h"
+#if __has_include("moy_input.h")
 #include "moy_input.h"
+#define MOY_APP_POINTER 1
+#else
+typedef struct moy_input_ptr moy_input_ptr_t;      // an image with no pointer (the Zero)
+#endif
 #include "moy_settings.h"
 #include "moy_ufiles.h"
 

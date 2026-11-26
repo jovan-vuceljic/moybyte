@@ -272,7 +272,7 @@ self.moySetup = (() => {
                 + (info.firmware || "Moybyte") + " " + info.version + "."));
             const name = el("input", { class: "field", name: "name", placeholder: "Name (kitchen)", autocomplete: "off",
                                        maxlength: "24", required: "" });
-            name.value = info.name && info.name != "moybyte-zero" ? info.name : "";
+            name.value = info.name && !/^moybyte-zero(-[0-9a-f]{4})?$/.test(info.name) ? info.name : "";
             const pick = el("select", { class: "field", name: "net" });
             for (const n of nets) pick.append(el("option", { value: n.ssid }, n.ssid + (n.locked ? "" : " (open)")));
             pick.append(el("option", { value: "" }, "Another network..."));

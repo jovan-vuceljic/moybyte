@@ -18,8 +18,14 @@
 # where a transposed digit between two S3 boards is a real hazard (the T-Deck's
 # 0x1D000 vs the P4's 0xD000 has already been typed wrong once, by hand).
 #
-# THE SLOT SIZE, and what it is sized against: 2 MiB (0x200000) per slot
-# since 2026-11-17, when the browser console left the image for its add-on
+# THE SLOT SIZE, and what it is sized against: 2.4375 MiB (0x270000) per slot
+# since 2026-11-26 (owner: "1MB for carts is still plenty"), when the image
+# took moycore, moy_lua, moy_gfx, moy_glass and moy_app whole to run the
+# apps' services on the board (#256; docs/perf/image.md has its size), and
+# no more: the 3 MiB store holds the first boot's carts, the seed's reserve
+# and a kid's carts, the browser console being online (board.toml's `[web]`,
+# owner, 2026-11-26; tools/store_image.py --check); 2 MiB from 2026-11-17,
+# when the browser console left the image for its add-on
 # cart (native/moy_net/moy_page.h) and its 1.9 MB with it; before that 3.5 MiB
 # (2026-11-07, owner, for the C shell, the SSH server and SFTP), 3.25 MiB
 # (2026-10-18), 3 MiB (2026-10-07) and the first table's 2.75 MiB. The shell,
@@ -27,18 +33,17 @@
 # the headroom on every run.
 #
 #   Arithmetic, on 8 MiB (0x800000) of flash:
-#     ota_0  0x020000 + 0x200000 = 0x220000   (2,097,152 B, 64 KB aligned)
-#     ota_1  0x220000 + 0x200000 = 0x420000   (64 KB aligned)
-#     vfs    0x420000 + 0x3E0000 = 0x800000   (3,968 KiB, ends on the last byte)
+#     ota_0  0x020000 + 0x270000 = 0x290000   (2,555,904 B, 64 KB aligned)
+#     ota_1  0x290000 + 0x270000 = 0x500000   (64 KB aligned)
+#     vfs    0x500000 + 0x300000 = 0x800000   (3 MiB, ends on the last byte)
 #
 #   The store sets the ceiling: this board is a CART STORE, and it holds the
-#   browser console add-on (one pack, about 1.9 MB) beside the seed roster and
-#   a kid's carts. By blocks (littlefs, 4 KiB; a file costs a block, a folder
+#   seed roster and a kid's carts (the browser console add-on only where its
+#   owner asks for it to work offline). By blocks (littlefs, 4 KiB; a file costs a block, a folder
 #   two) the seed roster's files and folders filled the 352 blocks of the
 #   1.375 MiB store (measured on glass 2026-10-23). Every slot byte is paid
 #   for twice and comes off the store; a table change wipes the store, the
-#   image's roster seeds the empty one on first boot, and provisioning
-#   installs the add-on.
+#   image's roster seeds the empty one on first boot.
 #
 # NO COREDUMP PARTITION (2026-11-09), where every console board has one
 # (docs/os_2026-11/processes.md section 10). This board runs no native module
@@ -62,6 +67,6 @@
 nvs,      data, nvs,     0x9000,   0x14000,
 otadata,  data, ota,     0x1D000,  0x2000,
 phy_init, data, phy,     0x1F000,  0x1000,
-ota_0,    app,  ota_0,   0x20000,  0x200000,
-ota_1,    app,  ota_1,   0x220000, 0x200000,
-vfs,      data, fat,     0x420000, 0x3E0000,
+ota_0,    app,  ota_0,   0x20000,  0x270000,
+ota_1,    app,  ota_1,   0x290000, 0x270000,
+vfs,      data, fat,     0x500000, 0x300000,

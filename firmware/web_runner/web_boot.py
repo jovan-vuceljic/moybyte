@@ -402,6 +402,9 @@ def boot(carts_root=web_vfs.CARTS, cart=None, width=320, height=240,
     ws.cart_pick = seams[2]
     ws.cart_home = seams[3]
     ws.cart_board = seams[4]
+    if seams[4] is not None and _S.get("offline"):
+        from offline_link import ConsoleOffline
+        ws.console_offline = ConsoleOffline(seams[4], ws)
     ws.cart_own = _S.get("cart_own") if seams[0] is not None else None
     ws.media_net = _media_net(ws, _S.get("store_mode"), carts_root)
     # The Moybyte shell's achievements are gamification for the kid console,
@@ -1372,7 +1375,28 @@ def state_json():
     lk = getattr(_S["ws"], "link", None)
     st["link_stats"] = lk.stats() if lk is not None else None
     st["devs"] = _live_devs()
+    g = _S.get("gpio")
+    st["gpio"] = {"live": g.live, "rt": g.rt} if g is not None else None
+    st["svc"] = _services()
     return json.dumps(st)
+
+
+def _services():
+    """The apps' services as this page sees them (#256): those its board
+    runs (its live socket's 'H'), its budget for them, those running here
+    by name, the channel's counts and the served apps' prefs rows here."""
+    import scheduler
+    here = [p.name for p in scheduler.SCHED.procs.values()
+            if p.kind == scheduler.SERVICE and p.state not in (scheduler.EXITED,)]
+    import moy_net
+    msgs = moy_net.live_msgs() if hasattr(moy_net, "live_msgs") else None
+    rows = {}
+    system = getattr(_S.get("ws"), "system", None)
+    for k in (system.keys() if system is not None else ()):
+        if any(k.startswith(a + "_") for a in scheduler.ON_BOARD):
+            rows[k] = system.get(k, None)
+    return {"board": list(scheduler.ON_BOARD), "here": here, "msgs": msgs,
+            "budget": scheduler.BOARD_BUDGET, "said": list(scheduler.SAID), "rows": rows}
 
 
 def _live_devs():
@@ -1695,12 +1719,15 @@ def wifi_moved(ssid):
     return ""
 
 
-def official_enable():
+def official_enable(offline=False):
     """The serving console answered the /official probe: it installs
-    carts when this page asks. Called before
+    carts when this page asks, and with `offline` its console is online and
+    its own copy is its owner's choice (Settings' Works offline,
+    offline_link.ConsoleOffline). Called before
     `boot`, which hands Get Carts the asking (`_cart_seams`), so the app
     never opens on a page that says the console gets its own."""
     _S["official"] = True
+    _S["offline"] = bool(offline)
     return ""
 
 
@@ -1923,8 +1950,12 @@ def live_kinds(spec):
         import devices
         if not hasattr(moy_net, "live_kinds"):
             return ""
-        moy_net.live_kinds(spec)
-        devices.RELAYED = tuple(k.split(":")[0] for k in spec.split(";") if k)
+        # "pins" is the pin verbs' (gpio_link.py, THE PINS), not a device API
+        kinds = [k for k in spec.split(";") if k]
+        _S["pins_live"] = "pins" in kinds
+        kinds = [k for k in kinds if k != "pins"]
+        moy_net.live_kinds(";".join(kinds))
+        devices.RELAYED = tuple(k.split(":")[0] for k in kinds)
     except Exception as exc:         # noqa: BLE001 -- never block a boot
         print("live kinds unavailable:", exc)
     return ""
@@ -1983,28 +2014,37 @@ def live_state(open_, why=""):
         if held:
             _live_say(ws, "link_back" if on else "link_lost")
     st["open"] = on
+    g = _S.get("gpio")
+    if g is not None:
+        g.live_open(on and _S.get("pins_live", False))
     return ""
 
 
 def live_feed(b64):
-    """Plaintexts of the link channel the board sent, each behind its 2-byte
-    length, base64 as the worker carries them, into the link."""
+    """Plaintexts of the link and device channels the board sent, each
+    behind its 2-byte length, base64 as the worker carries them, into the
+    link, but the pins row's, which are the pin verbs' (gpio_link.py)."""
     if _S.get("live") is None:
         return ""
     import binascii
     import moy_net
     data = binascii.a2b_base64(b64)
+    g = _S.get("gpio")
     at = 0
     while at + 2 <= len(data):
         n = data[at] | data[at + 1] << 8
-        moy_net.live_give(data[at + 2:at + 2 + n])
+        pl = data[at + 2:at + 2 + n]
+        if g is not None and n >= 3 and pl[0] == 0x64 and pl[2] == g.ROW:
+            g.live_in(pl)
+        else:
+            moy_net.live_give(pl)
         at += 2 + n
     return ""
 
 
 def live_pump(gap_ms=0, hidden=0):
-    """Between frames: the link's poll, then what it queued for the board,
-    base64 (each plaintext behind its length), or "". `gap_ms` is the time
+    """Between frames: the link's poll, then what it and the pin verbs
+    queued for the board, base64 (each plaintext behind its length), or "". `gap_ms` is the time
     since the frame before, `hidden` whether the page's tab is hidden: a
     live match that waited through a gap says so once it moves again."""
     st = _S.get("live")
@@ -2028,7 +2068,19 @@ def live_pump(gap_ms=0, hidden=0):
     else:
         st["gap"] = st["hidden"] = False
     import moy_net
-    out = moy_net.live_take()
+    out = moy_net.live_take() or b""
+    served = moy_net.live_served() if hasattr(moy_net, "live_served") else ""
+    budget = moy_net.live_budget(ws.system) if hasattr(moy_net, "live_budget") else None
+    if served != st.get("served", "") or budget != st.get("budget"):
+        # The board's 'H': the apps whose services run there and the RAM it
+        # gives its services (#256).
+        st["served"], st["budget"] = served, budget
+        import scheduler
+        scheduler.on_board(served.split(",") if served else (), budget=budget)
+    g = _S.get("gpio")
+    if g is not None:
+        for pl in g.take_live():
+            out += bytes([len(pl) & 255, len(pl) >> 8]) + pl
     if not out:
         return ""
     import binascii

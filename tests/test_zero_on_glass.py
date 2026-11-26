@@ -17,9 +17,8 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   network or the one MOYBYTE_BENCH_SSID names; without it the test skips. No
   password prints: a URL prints without its fragment (the claim).
 
-  THE BROWSER CONSOLE. The XIAO serves its add-on's page; the C3's console is
-  online (`[web] console`), its root the loader, which boots the pack its
-  image names from this machine's serve.py (run here on the port the image
+  THE BROWSER CONSOLE. Both Zeros' consoles are online (`[web] console`),
+  the root the loader, which boots the pack its image names from this machine's serve.py (run here on the port the image
   names) or the browser's cache. Both sign in and sync a cart.
 
   THE LIVE SOCKET. The page's echo round trip to its board (`__moyState().
@@ -183,6 +182,20 @@ class Zero:
         finally:
             self.restart(then)
 
+    def peek(self, expr):
+        """`expr` evaluated at the REPL with the host's loop stopped, then
+        the loop taken up again where it stood (zero_host.pump), nothing
+        reset: what runs on its own tasks (an app's service) runs on."""
+        r = Z.Repl(self.b.ser)
+        r.enter(clean=False)
+        try:
+            got = r.eval(expr)
+        finally:
+            self.b.ser.write(b"import zero_host\nzero_host.pump()\x04")
+            self.b.ser.flush()
+            r._until(lambda b: b.endswith(b"OK"), 10, "sign of the loop taken up again")
+        return got
+
     def look(self):
         """A serving board's heaps between two requests, read at the REPL
         with the host's loop stopped and then taken up again where it stood
@@ -328,9 +341,10 @@ def mirror(zero):
     """For an online board, this worktree's serve.py on the port of the
     mirror on this machine the image names (gen_web_blob's DEV_PORT, unless
     the build was given MOYBYTE_WEB_MIRRORS), or the one already there when
-    it serves this pack."""
+    it serves this pack. Yields what it started (None: nothing), which a
+    test may stop (`_stop_mirror`)."""
     if not zero.online:
-        yield
+        yield None
         return
     here = "http://%s:" % gen_web_blob.lan_address()
     mine = [m for m in _mirrors(zero) if m.startswith(here)]
@@ -359,11 +373,22 @@ def mirror(zero):
             pytest.fail("serve.py did not serve this tree's pack (is dist/ the one "
                         "the image was built from?)")
     try:
-        yield
+        yield server
     finally:
-        if server is not None:
+        if server is not None and server.poll() is None:
             server.terminate()
             server.wait(timeout=10)
+
+
+def _stop_mirror(server, zero):
+    """The mirror on this machine stopped for the rest of the module: True,
+    or False where another serve.py serves it, which this suite cannot stop."""
+    if server is None:
+        return not zero.online
+    if server.poll() is None:
+        server.terminate()
+        server.wait(timeout=10)
+    return True
 
 
 def _scrub(text, z):
@@ -510,10 +535,10 @@ def test_improv_over_the_cable_joins_a_board_with_no_network(zero):
 
 def test_sync_names_the_pack_the_image_names(zero):
     """GET /sync carries both digests of the pack this build wrote beside
-    the image; `local` says whether the board serves its copy: the C3, whose
-    console is online, keeps none; `tls` that it opens the secure door
-    (native/moy_net/moy_net.h, HTTPS on demand), where its board defines
-    MOY_NET_HTTPS."""
+    the image; `local` says whether the board serves its copy: a Zero, whose
+    console is online, keeps none unless its owner chose Works offline;
+    `tls` that it opens the secure door (native/moy_net/moy_net.h, HTTPS on
+    demand), where its board defines MOY_NET_HTTPS."""
     page, whole = _pack(zero)
     doc = json.loads(_get(zero.url + "/sync")[0])
     want = {"sync": 1, "page": page, "pack": whole, "local": 0 if zero.online else 1}
@@ -867,6 +892,160 @@ def test_the_page_signs_in_and_asks_on_its_live_socket_alone(zero, mirror, tmp_p
           "page %s; socket requests %s" % (zero.name, boot, heap[0], heap[1], heap[2],
                                             held, live[15] if len(live) > 15 else None))
     assert held["reqs"] >= 3 and live[15] >= 3, (held, live)
+
+
+PIN_LIGHT = "moybyte.pin_light.moy"
+PINS_STATE = ("window.__moyState().then(function (s) { return 'PINS ' + JSON.stringify("
+              "{gpio: s.gpio, live: s.live && {opens: s.live.opens, drops: s.live.drops}}); })")
+PIN_PRESSES = 24
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_pin_write_reaches_the_pin_and_comes_back(zero, mirror, tmp_path):
+    """Pin Light on the page, its A pressed again and again: each press is a
+    pin_write of the board's LED and its next draw a pin_read of it, so the
+    page's queue (firmware/web_runner/gpio_link.py) times each write to the
+    board's report of that level. Two arms: the live socket's pins
+    (native/moy_net/moy_live.c, THE PINS) and /gpio's 33 ms batches
+    (`?pins=0`), the write-to-read-back round trips of each taken."""
+    _needs_password(zero)
+    roster = board_config.roster_only(str(zero.dir)) + board_config.roster_install(str(zero.dir))
+    if PIN_LIGHT[:-4] not in roster:
+        pytest.skip("%s's roster has no Pin Light" % zero.name)
+    arms = {}
+    for arm, extra in (("http", "&pins=0"), ("socket", "")):
+        steps = sign_in(zero) + [
+            {"waitFor": "window.__moyState().then(function (s) { return !!(s.gpio && "
+                        "s.gpio.live === %s); })" % ("false" if extra else "true"),
+             "timeout": 120000},
+            {"wait": 3000}] + _keys(*("z",) * PIN_PRESSES, wait=400) + [{"js": PINS_STATE}]
+        out = _browse(zero, zero.url, steps, tmp_path / arm,
+                      query="?handheld=1&dev=1&start=1&cart=%s%s" % (PIN_LIGHT, extra))
+        got = _tagged(out, "PINS")
+        assert got and got["gpio"], out[-2000:]
+        rt = got["gpio"]["rt"]
+        assert len(rt) >= PIN_PRESSES // 2, (arm, got)
+        arms[arm] = rt
+        med, p90 = Z.rtt(rt)
+        zero.take("zero pin write to read-back median %s" % arm, med, rt)
+        zero.take("zero pin write to read-back p90 %s" % arm, p90, rt)
+        print("%s pins over %s: write to read-back over %d presses: min %d, median %.1f, "
+              "p90 %.1f, max %d ms; live %s" % (zero.name, arm, len(rt), min(rt), med, p90,
+                                                max(rt), got["live"]))
+    assert Z.rtt(arms["socket"])[0] < Z.rtt(arms["http"])[0], arms
+
+
+MESH_CART = ROOT / "tests" / "fixtures" / "apps" / "moymesh.moy"
+MESH_SVC = ("window.__moyState().then(function (s) { return 'MESH ' + JSON.stringify("
+            "{cart: s.cart, svc: s.svc, devs: s.devs}); })")
+MESH_TEXT = "hi-from-the-page"
+SVC_LOOK = ("(lambda s: (s.info(), __import__('moycore').svc_budget(), "
+            "s.rows.get('moymesh_log', None), __import__('moy_lora').owner(), "
+            "__import__('moy_log').read(0, 32), __import__('moy_net').live_stats()[16:]) "
+            "if s else None)"
+            "(__import__('zero_host').SERVICES[0])")
+
+
+MEM_LOOK = ("(lambda e: (__import__('gc').collect(), e.idf_heap_info(%d), "
+            "e.idf_heap_info(0x400)))(__import__('esp32'))" % Z.INTERNAL_HEAP)
+
+
+def _mem(zero):
+    """(internal free, internal largest, PSRAM free) bytes, nothing reset."""
+    _, internal, psram = zero.peek(MEM_LOOK)
+    free, largest = Z.internal_heap(internal)
+    return free, largest, sum(x[1] for x in psram if x)
+
+
+def _svc_look(zero):
+    """The board's services, its services' budget, Moy Mesh's log of
+    messages, the radio's owner, the OS log and the live socket's apps'
+    messages up and down, nothing reset."""
+    return zero.peek(SVC_LOOK)
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_moy_mesh_s_window_on_the_page_reaches_its_service_on_the_board(zero, mirror, tmp_path):
+    """Moy Mesh's service runs on the XIAO (device/zero_svc.py, #256): up at
+    the board's start (its manifest asks for `autostart`; the bench copy
+    adds it), holding the radio. The page opens Moy Mesh, its board names
+    the app ('H'), so the page runs no service of its own, and the window's
+    message crosses the live socket's channel 'm' to the service, which
+    sends it on the radio and logs it in the app's prefs on the board. The
+    page closed, the service runs on. No second LoRa node is on the bench:
+    what is held is the transmit and the service's own record."""
+    _needs_password(zero)
+    if zero.name != "xiao_zero":
+        pytest.skip("%s takes no Lua tier" % zero.name)
+    with zero.repl(clean=False) as r:
+        dst = CARTS + "/moymesh.moy"
+        r.mkdirs(dst)
+        for f in sorted(os.listdir(MESH_CART)):
+            data = (MESH_CART / f).read_bytes()
+            if f == "manifest.json":
+                m = json.loads(data)
+                m["moybyte"]["permissions"].append("autostart")
+                data = json.dumps(m).encode()
+            r.write(dst + "/" + f, data)
+    # the board reset (the REPL's end): the pushed cart's service up at its
+    # start, its radio opened once its node key is made
+    for _ in range(12):
+        time.sleep(5)
+        info, budget, _log, owner, _said, _msgs = _svc_look(zero)
+        if owner:
+            break
+    assert [i[0] for i in info] == ["moymesh"] and info[0][2] != 4, info
+    assert owner == info[0][1], "the service holds the radio: owner %r" % owner
+    pid = info[0][1]
+    idle = _mem(zero)
+    print("moymesh on %s: %s, the budget %s; internal free %d largest %d, PSRAM free %d"
+          % ((zero.name, info, budget) + idle))
+    steps = sign_in(zero) + [
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.svc && "
+                    "s.svc.board.indexOf('moymesh') >= 0); })", "timeout": 120000},
+        {"js": "WORKER.postMessage({t: 'open', cart: 'moymesh.moy'}), 1"},
+        # its first run on the page asks (the card names the radio): Open
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.card && "
+                    "/LoRa/.test(s.card.lines.join(' '))); })", "timeout": 60000},
+        {"js": "cv.focus(), 'focused'"}, {"key": "ArrowRight"}, {"wait": 300},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.cart == 'Moy Mesh'; })",
+         "timeout": 60000},
+        {"wait": 3000}, {"key": "Enter"}, {"wait": 1500},
+        {"key": "Enter"}, {"wait": 500}]        # the thread open, its field edited
+    steps += [{"key": c} for c in MESH_TEXT]
+    steps += [{"key": "Enter"}, {"wait": 5000}, {"js": MESH_SVC}, {"wait": 15000}]
+    held = []
+
+    def look(line):
+        if not held and 'js -> "MESH ' in line:
+            held.append(_mem(zero) + (zero.peek("__import__('moycore').svc_budget()[1]"),))
+
+    out = _browse(zero, zero.url, steps, tmp_path / "mesh", query="?dev=1&desktop=1",
+                  on_line=look)
+    got = _tagged(out, "MESH")
+    assert got and got["svc"]["board"] == ["moymesh"], got
+    assert got["devs"]["opens"] == 0, "the page opened no device of the board's: %s" % got
+    assert "moymesh" not in got["svc"]["here"], "the page ran its own service: %s" % got
+    assert got["svc"]["budget"] and got["svc"]["budget"][0] == 1024, got["svc"]
+    assert MESH_TEXT in json.dumps(got["svc"]["rows"].get("moymesh_log")), \
+        "the service's log reached the window's prefs: %s" % got["svc"]["rows"].keys()
+    assert got["svc"]["msgs"][5] >= 1, "rows taken from the board: %s" % got["svc"]["msgs"]
+    assert held, "the board was read with the page open"
+    print("moymesh on %s with the page open: internal free %d largest %d, PSRAM free %d, "
+          "the service's heap %d" % ((zero.name,) + held[0]))
+    info, budget, log, owner, said, msgs = _svc_look(zero)
+    assert [i[0] for i in info] == ["moymesh"] and info[0][2] != 4, \
+        "the service runs on with the page closed: %s" % info
+    assert info[0][1] == pid and len(said) == 1, \
+        "the same service, never restarted: %s, %s" % (info, said)
+    assert msgs[0] >= 1, "the window's message came up the socket: %s" % (msgs,)
+    texts = [m.get("text") for m in (log or ()) if isinstance(m, dict)]
+    print("moymesh on %s after the page: %s, the budget %s, the radio's owner %s, its log %s; "
+          "the board's log %s; its messages up and down %s; the page's %s"
+          % (zero.name, info, budget, owner, log, said, msgs, got["svc"]["msgs"]))
+    assert owner == info[0][1], "the page's end left the service the radio: %r" % owner
+    assert MESH_TEXT in texts, "the window's message reached the service: %s" % log
 
 
 TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
@@ -2573,6 +2752,72 @@ def test_zy_a_session_soak_keeps_the_board_s_ram(zero, mirror, ssh, tmp_path):
         "the largest block fell %.1f KB over the soak" % ((big0 - big1) / 1024.0)
     assert free0 - free1 <= SOAK_FREE_BAND, \
         "free internal RAM fell %.1f KB over the soak" % ((free0 - free1) / 1024.0)
+
+
+# -- works offline -----------------------------------------------------------------------------
+
+
+# Settings' "Works offline" row (firmware/web_runner/offline_link.py), walked
+# to as a hand does and pressed.
+TO_OFFLINE = web_e2e.menu_pick("Settings") + web_e2e.settings_row("offline")
+OFFLINE_MS = 300000          # the add-on's download and install, on the bench network
+
+
+def _local_is(zero, want, ms=OFFLINE_MS):
+    """Waits until GET /sync's `local` is `want`: True when it is."""
+    t0 = time.time()
+    while (time.time() - t0) * 1000 < ms:
+        try:
+            if json.loads(_get(zero.url + "/sync")[0]).get("local") == want:
+                return True
+        except (OSError, ValueError):
+            pass
+        time.sleep(3)
+    return False
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_works_offline_installs_the_console_and_remove_takes_it_back(zero, mirror, tmp_path):
+    """On a board whose console is online and which has an updater (the
+    XIAO), Settings' Works offline is the owner's choice (owner,
+    2026-11-26): pressed, the board keeps the choice and its add-on step asks
+    its release's signed index for the add-on its image fits, which a
+    worktree's image finds none of, so the one its build made goes in over
+    the cable as `tools/board.py BOARD addon` puts it (the download is the
+    step's own, tests/test_web_addon.py). Through the restart the choice
+    holds, the board serves its own pack, and with this machine's mirror
+    stopped a fresh browser boots the console from the board. Pressed again,
+    the add-on goes and `/sync` says so."""
+    if not zero.online or zero.name != "xiao_zero":
+        pytest.skip("Works offline is the XIAO's: an online console with an updater")
+    _needs_password(zero)
+    assert json.loads(_get(zero.url + "/sync")[0])["local"] == 0
+    log = []
+    out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}] + TO_OFFLINE + [{"wait": 8000}],
+                  tmp_path / "install", on_line=lambda _l: log.extend(_board_lines(zero)))
+    assert re.search(r'ROW \\"offline', out), out[-1500:]
+    log.extend(_board_lines(zero, 3.0))
+    said = [ln for ln in log if "release:" in ln]
+    print("%s: Works offline: %s" % (zero.name, said[-4:]))
+    assert any("bringing the browser console add-on" in ln for ln in said), log[-12:]
+    import board_flash
+    (tmp_path / "addon").mkdir()
+    folder = board_flash.addon_folder(zero.dir, str(tmp_path / "addon"))
+    with zero.repl() as r:
+        assert r.eval("__import__('zero_offline').chosen()"), "the board kept the choice"
+        r.put_folder(folder, CARTS + "/" + os.path.basename(folder))
+    assert _local_is(zero, 1, 120000), "the board never served its own copy"
+    assert _stop_mirror(mirror, zero), "another serve.py serves the mirror: stop it"
+    steps = sign_in(zero) + [{"waitFor": BOOTED, "timeout": 120000},
+                             {"js": "'BOOT ' + JSON.stringify({boot: window.moyBoot || null})"}]
+    out = _browse(zero, zero.url, steps, tmp_path / "offline")
+    boot = _tagged(out, "BOOT")
+    print("%s: the console from the board with no mirror: %s" % (zero.name, boot))
+    assert boot and boot["boot"] and boot["boot"]["from"] == "board", boot
+    out = _browse(zero, zero.url, sign_in(zero) + [{"wait": 3000}] + TO_OFFLINE + [{"wait": 8000}],
+                  tmp_path / "remove")
+    assert re.search(r'ROW \\"offline', out), out[-1500:]
+    assert _local_is(zero, 0, 60000), "the add-on stayed on the board"
 
 
 # -- given back -------------------------------------------------------------------------------

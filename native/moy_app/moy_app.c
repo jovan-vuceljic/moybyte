@@ -717,6 +717,7 @@ int moy_app_surface_pointer(moy_appabi_t *a, uint32_t g, int32_t out[5]) {
     if (s == NULL) {
         return rc;
     }
+#ifdef MOY_APP_POINTER
     const moy_input_ptr_t *p = a->ptr;
     if (p == NULL) {
         return MOY_APP_ABSENT;
@@ -727,6 +728,11 @@ int moy_app_surface_pointer(moy_appabi_t *a, uint32_t g, int32_t out[5]) {
     out[3] = p->click ? 1 : 0;
     out[4] = p->visible ? 1 : 0;
     return MOY_APP_OK;
+#else
+    (void)s;
+    (void)out;
+    return MOY_APP_ABSENT;
+#endif
 }
 
 // -- theme -------------------------------------------------------------------------------

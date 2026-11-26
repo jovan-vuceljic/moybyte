@@ -28,6 +28,7 @@ target_sources(usermod_moy_net INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/moy_tls_srv.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live_dev.c
+    ${CMAKE_CURRENT_LIST_DIR}/moy_live_svc.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_seal.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_crypto.c
     ${CMAKE_CURRENT_LIST_DIR}/monocypher/monocypher.c
@@ -53,6 +54,13 @@ target_include_directories(usermod_moy_net INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/../moy_spine
     ${CMAKE_CURRENT_LIST_DIR}/../moy_store
     ${CMAKE_CURRENT_LIST_DIR}/../moy_web)
+
+# An app's prefs rows shared by its service here and its window in the page
+# (moy_svc_prefs.c), where the image runs the apps' services (it takes
+# moycore: the XIAO Zero, #256); the board's half links to it weakly.
+if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../moycore)
+    target_sources(usermod_moy_net INTERFACE ${CMAKE_CURRENT_LIST_DIR}/moy_svc_prefs.c)
+endif()
 
 # The ring sources the device APIs post to (moy_fetch.c, moy_lora.c), where
 # the image takes moy_input; the headless Zero does not, and they post nothing.

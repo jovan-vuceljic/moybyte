@@ -113,7 +113,7 @@ from ticks import _ticks_ms as ticks_ms, _ticks_diff as ticks_diff
 
 AP_PREFIX = "moybyte-zero-"
 SETUP_PORT = 80
-DEFAULT_NAME = "moybyte-zero"
+OLD_DEFAULT = "moybyte-zero"   # the form's default before the board's own name (2026-11-26)
 
 # The SoftAP's own address. `run()` reads the real one off the interface and
 # passes it down; this is what the host tests and a `SetupServer` built without
@@ -150,7 +150,9 @@ CURRENT_TRIES = 5
 
 
 def ap_ssid(mac):
-    """`moybyte-zero-XXXX` from the AP interface's MAC (its last two bytes).
+    """`moybyte-zero-XXXX` from the AP interface's MAC (its last two bytes):
+    the setup access point's name, and the board's own name on the network
+    (zero_host.board_name) until its owner names it.
 
     The tail rather than a counter or a random number: two Zeros on one desk
     must not collide, the MAC is the only per-board fact available before any
@@ -520,11 +522,13 @@ _CURRENT = """<label><span>this board's password now (it already has one)</span>
 """
 
 
-def page(ap_name, error=None, name=DEFAULT_NAME, current=False):
+def page(ap_name, error=None, name=None, current=False):
+    """The form, its name field holding `name`, else the board's own (the
+    access point's, `ap_ssid`, which is the name it answers to)."""
     return _PAGE % (
         "connected to %s &mdash; tell this board where to live" % ap_name,
         ('<p class="err">%s</p>' % error) if error else "",
-        name, _CURRENT if current else "")
+        name or ap_name, _CURRENT if current else "")
 
 
 class SetupServer:
@@ -721,14 +725,16 @@ def _scan():
             for ssid, rssi, auth in moy_net.wifi_scan()]
 
 
-def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv=None):
+def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv=None,
+        turn=None):
     """Host the setup AP and serve the form until it is filled in: a good POST
     resets the board into STA. The access point is the kernel's WiFi
     driver's provisioning mode, the station beside it up for the form's scans.
     `improv` (zero_improv.Improv) answers the cable meanwhile; a network it
     joins ends the access point and returns the station's IP, the board
     serving from there without a reset, so the client waiting on the cable
-    hears its answer (zero_improv's module docstring)."""
+    hears its answer (zero_improv's module docstring). `turn`, where the
+    board runs apps' services (zero_svc), is their loop's turn, each pass."""
     import machine
     import time
 
@@ -748,6 +754,8 @@ def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv
     while True:
         srv.poll()
         dns.poll()
+        if turn is not None:
+            turn()
         if improv is not None:
             improv.poll()
             if improv.joined is not None:

@@ -100,11 +100,20 @@ extern const moy_dev_ops_t moy_dev_media;
 // row of its board.toml names the API of a kind with a list (its MOY_API_
 // define, board_config.hw_defines), each such kind named here
 // (tests/test_live_dev.py holds the two lists equal). A board with none
-// (the C3 Zero) links no device channel.
+// (the C3 Zero) links none of the kinds' half.
 #ifndef MOY_DEV_RELAYS
 #if defined(MOY_API_LORA)
 #define MOY_DEV_RELAYS 1
 #endif
+#endif
+//
+// The pins (moy_live_dev.c's THE PINS) are relayed on the same channel where
+// a board serves them to its page over /gpio (MOY_NET_GPIO_ROUTE: the
+// Zeros), with or without a kind: their ops are the webhost's (moy_gpio.c),
+// not this table's, so a board relaying only its pins (the C3 Zero) links
+// the channel and none of the kinds.
+#if !defined(MOY_DEV_PINS) && defined(MOY_NET_GPIO_ROUTE) && MOY_NET_GPIO_ROUTE
+#define MOY_DEV_PINS 1
 #endif
 //
 // The kinds this board relays, "name:packet:state" each, split by ';', into

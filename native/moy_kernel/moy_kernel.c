@@ -1187,6 +1187,9 @@ soft_reset_exit:
         }
     }
     moy_play_vm_stop();
+    if (moycore_svc_vm_stop != NULL) {
+        moycore_svc_vm_stop(s_stop != MOY_STOP_NONE);
+    }
     moy_glass_vm_stop();
     moy_text_vm_stop();
     moy_net_vm_stop();

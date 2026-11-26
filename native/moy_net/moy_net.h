@@ -411,6 +411,9 @@ int moy_web_signout(void);
 // The parked request: 1 and its spans (good until moy_web_answer), or 0.
 int moy_web_take(const char **method, size_t *method_n, const char **target,
                  size_t *target_n, const char **body, size_t *body_n);
+// 1 while the parked request taken is the live socket's page's (moy_live.c,
+// THE REQUESTS), 0 for one off a connection or with none.
+int moy_web_live_asked(void);
 // Answer the parked request with a complete response and close it.
 void moy_web_answer(const void *resp, size_t n);
 // Close the connection a poll was serving when the VM's store raised under it.
@@ -567,6 +570,13 @@ int moy_gpio_sense(int pin);
 void moy_gpio_reset(int pin);
 // Every pin lease the page holds dropped (the webhost's stop).
 void moy_gpio_release(void);
+// One pin op of the page's, under the same allowlist and leases (each of
+// /gpio's ops; the live socket's pins relay, moy_live_dev.c): `pin` driven to
+// `level` where `out`, else read: 0 or the level read, else a MOY_GPIO_E*.
+#define MOY_GPIO_EPIN (-1)              // not on the board's allowlist
+#define MOY_GPIO_EBUSY (-2)             // another process holds it
+#define MOY_GPIO_EIO (-3)               // not driven, or not read
+int moy_gpio_op(int pin, int out, int level);
 
 #define MOY_DNS_PORT 53
 #define MOY_DNS_QUERY_MAX 512          // RFC 1035's UDP size; a real query is ~40 bytes

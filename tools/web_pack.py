@@ -14,7 +14,7 @@
 #   official_entries every official cart as an entry of the release
 #   official_assets  the official carts' assets no index references
 #   addon_assets     the add-on carts no index references
-#   console_online   whether a board's browser console is online, so its index names no add-on
+#   console_online   whether a board's browser console is online, its add-on its owner's choice
 #   index_doc        the board's index: the official entries, this add-on, then the earlier add-ons it keeps
 #   publish_addon    the carts, their licence and the board's index, in one folder
 """The browser console add-on and the official carts, as a release and a LAN
@@ -48,9 +48,7 @@ Beside every payload, whether or not any console has the add-on installed:
     carts-<board>.json             an index in the store's format (version 1,
                                    runtime/carts/cart_index.py): an entry per
                                    official cart of THIS build, naming its API
-                                   level in moybyte.api, then, but where the
-                                   board's console is online (console_online),
-                                   one per add-on
+                                   level in moybyte.api, then one per add-on
                                    published for the board, newest first, each
                                    naming its page's digest in moybyte.fits, as
                                    many as INDEX_BUDGET holds (index_doc; the
@@ -560,9 +558,10 @@ def addon_assets(names, indexes):
 def console_online(board, root=ROOT):
     """True where the board whose board.toml's `[board] ota` is `board`
     declares its browser console online (`[web] console`,
-    board_config.web_console): its consoles install no add-on, so its index
-    names none, and its loader reads the pack from the pack store, which
-    takes it from the add-on cart by the cart's name (tools/pack_store.py)."""
+    board_config.web_console): its consoles install the add-on only where
+    their owner asks for it (zero_offline.Offline), and its loader reads the
+    pack from the pack store, which takes it from the add-on cart by the
+    cart's name (tools/pack_store.py)."""
     firmware = os.path.join(root, "firmware")
     for name in sorted(os.listdir(firmware)):
         d = os.path.join(firmware, name)
@@ -612,7 +611,8 @@ def publish_addon(page, folder, board, version, key_pem=None, earlier=None,
     index (its bytes; None reads the one already in `folder`), the earlier
     add-ons `keep` answers true for (index_doc), signed with `key_pem` when
     given; the index of a board whose console is online (console_online)
-    names no add-on, its cart published all the same. Returns {"cart", "index", "official"}: the add-on's
+    names it too, for a console whose owner asks for its own copy
+    ("Works offline", zero_offline.Offline). Returns {"cart", "index", "official"}: the add-on's
     and the index's names, and the official entries' count."""
     index = INDEX_NAME % board
     path = os.path.join(folder, index)
@@ -622,7 +622,7 @@ def publish_addon(page, folder, board, version, key_pem=None, earlier=None,
     shutil.copyfile(LICENCE_SRC, os.path.join(folder, LICENCE_NAME))
     cart = publish_cart(page, folder)
     official = official_entries(folder, seeds, modules) if seeds else []
-    entry = None if console_online(board) else index_entry(page[1], version, cart, folder)
+    entry = index_entry(page[1], version, cart, folder)
     doc = index_doc(board, entry, earlier, official, keep)
     if key_pem:
         import ota_sign

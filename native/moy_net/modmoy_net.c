@@ -18,6 +18,7 @@
 #include "moy_seal.h"
 #include "moy_ota.h"
 #include "moy_page.h"
+#include "moy_route.h"
 
 #pragma weak moy_c6_version
 
@@ -419,14 +420,14 @@ MP_DEFINE_CONST_OBJ_TYPE(moy_net_link_type, MP_QSTR_Link, MP_TYPE_FLAG_NONE,
 static mp_obj_t mod_live_stats(void) {
     moy_live_stats_t l;
     moy_live_stats(&l);
-    uint32_t v[16] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
+    uint32_t v[18] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
                       l.echoes, l.live, l.radio, l.devs, l.dev_calls, l.dev_writes,
-                      l.dev_pushes, l.hints, l.reqs};
-    mp_obj_t t[16];
-    for (int i = 0; i < 16; i++) {
+                      l.dev_pushes, l.hints, l.reqs, l.msgs_up, l.msgs_down};
+    mp_obj_t t[18];
+    for (int i = 0; i < 18; i++) {
         t[i] = mp_obj_new_int_from_uint(v[i]);
     }
-    return mp_obj_new_tuple(16, t);
+    return mp_obj_new_tuple(18, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_stats_obj, mod_live_stats);
 
@@ -438,6 +439,29 @@ static mp_obj_t mod_live_hint(mp_obj_t topics) {
     return mp_const_none;
 }
 static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_hint_obj, mod_live_hint);
+
+// live_mine(on): the store's changes made between on (1) and off (0) are the
+// live socket's page's own, no news to it (moy_live_store_mine).
+static mp_obj_t mod_live_mine(mp_obj_t on) {
+    moy_live_store_mine(mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_mine_obj, mod_live_mine);
+
+// live_serve(app, on): app `app`'s service runs on this board, its page's
+// windows served over the live socket's channel 'm' (on), or no longer
+// (moy_live_svc_serve). Where the image runs services (native/moycore's
+// moycore_svc.h): the board half links with it.
+#if defined(__has_include) && __has_include("moycore_svc.h")
+#define LIVE_SERVE 1
+static mp_obj_t mod_live_serve(mp_obj_t app, mp_obj_t on) {
+    const moy_spine_kernel_t *k = moy_spine_kernel(NULL);
+    moy_svc_prefs_rows(k != NULL ? k->settings : NULL);
+    moy_live_svc_serve(mp_obj_str_get_str(app), mp_obj_is_true(on));
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_2(mod_live_serve_obj, mod_live_serve);
+#endif
 #endif
 
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
@@ -506,6 +530,47 @@ static mp_obj_t mod_live_devs(void) {
     return mp_obj_new_tuple(13, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_devs_obj, mod_live_devs);
+
+// live_served() -> str: the apps whose services run on the page's board, ','
+// between, as its 'H' said; "" while the socket is shut (moy_svc_web.c).
+static mp_obj_t mod_live_served(void) {
+    char apps[256];
+    size_t n = moy_svc_web_served(apps, sizeof apps);
+    return mp_obj_new_str(apps, n);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_served_obj, mod_live_served);
+
+// live_msgs() -> (apps, up, down, dropped, rows sent, rows taken): the
+// stand-ins open, the apps' messages sent up and taken down, those dropped,
+// and their prefs rows each way (moy_svc_web.c, moy_svc_prefs.c).
+static mp_obj_t mod_live_msgs(void) {
+    uint32_t v[6];
+    moy_svc_web_stats(&v[0], &v[1], &v[2], &v[3]);
+    moy_svc_prefs_stats(&v[4], &v[5]);
+    mp_obj_t t[6];
+    for (int i = 0; i < 6; i++) {
+        t[i] = mp_obj_new_int_from_uint(v[i]);
+    }
+    return mp_obj_new_tuple(6, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_msgs_obj, mod_live_msgs);
+
+// live_budget(rows) -> (kib, free_kib) | None: the board's budget for its
+// apps' services, as its 'H' said, None where it names none (moy_svc_web.c).
+// `rows` is the console's Settings (moy_spine), whose rows are the page's
+// end of the served apps' prefs (moy_svc_prefs.c).
+moy_settings_t *moy_spine_settings_of(mp_obj_t o);
+
+static mp_obj_t mod_live_budget(mp_obj_t rows) {
+    moy_svc_prefs_rows(moy_spine_settings_of(rows));
+    uint32_t kib, free_kib;
+    if (!moy_svc_web_budget(&kib, &free_kib)) {
+        return mp_const_none;
+    }
+    mp_obj_t t[2] = {mp_obj_new_int_from_uint(kib), mp_obj_new_int_from_uint(free_kib)};
+    return mp_obj_new_tuple(2, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_budget_obj, mod_live_budget);
 #endif
 
 #endif
@@ -930,6 +995,12 @@ static mp_obj_t mod_web_take(void) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_take_obj, mod_web_take);
 
+// web_live_asked() -> whether the request taken is the live socket's page's.
+static mp_obj_t mod_web_live_asked(void) {
+    return mp_obj_new_bool(moy_web_live_asked());
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_web_live_asked_obj, mod_web_live_asked);
+
 // web_pack(root, kinds[, bytes]) -> the store under `root` as the pull's JSON
 // text, every file as bytes where `bytes` is true.
 static mp_obj_t mod_web_pack(size_t n_args, const mp_obj_t *args) {
@@ -1217,6 +1288,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_web_keys), MP_ROM_PTR(&mod_web_keys_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_shelf), MP_ROM_PTR(&mod_web_shelf_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_take), MP_ROM_PTR(&mod_web_take_obj)},
+    {MP_ROM_QSTR(MP_QSTR_web_live_asked), MP_ROM_PTR(&mod_web_live_asked_obj)},
     {MP_ROM_QSTR(MP_QSTR_web_pack), MP_ROM_PTR(&mod_web_pack_obj)},
     {MP_ROM_QSTR(MP_QSTR_wc_on), MP_ROM_PTR(&mod_wc_on_obj)},
     {MP_ROM_QSTR(MP_QSTR_wc_state), MP_ROM_PTR(&mod_wc_state_obj)},
@@ -1259,6 +1331,10 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
     {MP_ROM_QSTR(MP_QSTR_live_stats), MP_ROM_PTR(&mod_live_stats_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_hint), MP_ROM_PTR(&mod_live_hint_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_mine), MP_ROM_PTR(&mod_live_mine_obj)},
+    #ifdef LIVE_SERVE
+    {MP_ROM_QSTR(MP_QSTR_live_serve), MP_ROM_PTR(&mod_live_serve_obj)},
+    #endif
     #endif
     #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
     {MP_ROM_QSTR(MP_QSTR_live_take), MP_ROM_PTR(&mod_live_take_obj)},
@@ -1267,6 +1343,9 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_live_info), MP_ROM_PTR(&mod_live_info_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_kinds), MP_ROM_PTR(&mod_live_kinds_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_devs), MP_ROM_PTR(&mod_live_devs_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_served), MP_ROM_PTR(&mod_live_served_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_msgs), MP_ROM_PTR(&mod_live_msgs_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_budget), MP_ROM_PTR(&mod_live_budget_obj)},
     #endif
     #endif
 };

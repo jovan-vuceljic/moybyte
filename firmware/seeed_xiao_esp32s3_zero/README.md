@@ -33,14 +33,18 @@ became the thing a kid's carts actually live on. Three properties a pushed tree
 cannot have started to matter:
 
 - **The browser console is the page the image names.** The image carries
-  the digests of the pack it was built with, and the board serves only the
-  add-on cart whose pack has that digest (`native/moy_net/moy_page.h`), so the
-  page a board serves cannot drift behind the board serving it. It keeps its
-  copy (`[web] console` unset), so `/` sends a browser to it, and
-  `/loader.html` serves the loader (`docs/web_console_online_2026-11.md` §3),
-  which boots the same pack from the browser's cache, this board's copy
-  (`/p/<12 hex>/moybyte_web.pack`, whole) or a mirror. It is the C3 Zero's root,
-  whose store holds no copy. This board had
+  the digests of the pack it was built with, so the page a board serves
+  cannot drift behind the board serving it. Its console is online (board.toml's
+  `[web] console`, owner, 2026-11-26, as the C3 Zero's): `/` serves the loader
+  (`docs/web_console_online_2026-11.md` §3), which boots that pack from the
+  browser's cache or a mirror, and the store keeps no copy unless its owner
+  chose Works offline in the page's Settings (the board then installs the
+  add-on its image fits and serves its own pack:
+  `docs/web_console_online_2026-11.md`'s owner paragraph of 2026-11-26).
+  The add-on is nearly the whole of the store's room beside its seed carts
+  (`tools/store_image.py --check`), so an installed app or two more and the
+  row says it does not fit, with both sizes.
+  This board had
   no image, so it was the last place the drift survived — its bundle was only
   ever a copy somebody pushed.
 - **A second app slot**, so the board can be updated by anyone who is not
@@ -55,9 +59,8 @@ cannot have started to matter:
   net every console board rides.
 
 `provision.sh` survives and **changed jobs**: it provisions the credentials and,
-with `--password`, the password browsers pair with, installs the browser
-console add-on and the official carts, and keeps the module push as an opt-in
-dev loop. The image carries its seed carts (the core carts, every app,
+with `--password`, the password browsers pair with, installs the official
+carts, and keeps the module push as an opt-in dev loop. The image carries its seed carts (the core carts, every app,
 five games and Pin Light) and seeds them as a console seeds its own; every other system
 cart but a test fixture is an official cart its release publishes, which the browser console
 the board serves adds and removes: its Get Carts asks the board through the
@@ -112,9 +115,7 @@ erases the moved store's first blocks and says so). A table change needs a USB
 flash, and an OTA'd Zero keeps the table it was last cabled with: OTA writes
 the app slot, never the table. Run
 `./provision.sh` afterwards to put the credentials and the password back; the
-carts the image carries seed themselves on the next boot, and the cable flash
-(or the script) installs the add-on, which a board with none also fetches
-from its release once it is on a network, unless its owner removed it. A kid's browser-made
+carts the image carries seed themselves on the next boot. A kid's browser-made
 carts are not lost by this — the browser keeps its own copy in OPFS and syncs
 them back on the next visit — but anything that existed *only* here is.
 
@@ -162,9 +163,17 @@ them back on the next visit — but anything that existed *only* here is.
   overflow (#168); the board's headroom floor (`[image] headroom_floor_kib` in
   `board.toml`) is 0 since 2026-11-03 (owner), and the board.toml says why.
   On 2026-11-17 the browser console left the image for its add-on cart and
-  the slots became **2 MiB** (`0x200000`, at `0x20000` and `0x220000`), the
-  store the **3,968 KiB** `vfs` at `0x420000`, which holds the add-on (one
-  pack, about 1.9 MB) beside the carts; provisioning installs the add-on.
+  the slots became 2 MiB. Since 2026-11-26 (owner) they are **2,496 KiB**
+  (`0x270000`, at `0x20000` and `0x290000`), for the Lua tier the apps'
+  services run on (#256), and the store is the **3 MiB** `vfs` at
+  `0x500000`, the carts': the console is online, so neither the
+  website's install nor the cable flash puts an add-on in it, only its
+  owner's Works offline
+  (`tools/store_image.py --check` gives the room the carts take). A board flashed with an
+  older table takes the new one only by cable (OTA writes an app slot,
+  never the table, and the new image does not fit the old slot): the cable
+  flash erases the moved store, the image seeds its carts on the first
+  boot, and the browser's sync brings back the carts it holds.
   The image's roster is the core carts (`moy_seed.CORE`), every app, the
   five games (board.toml's `[roster] image`; owner, 2026-11-17) and Pin Light
   (2026-11-18), seeded as a
@@ -178,15 +187,7 @@ them back on the next visit — but anything that existed *only* here is.
   entry of a cart the page deleted goes with it. The other system carts, but the test fixtures,
   are official carts the release publishes in `carts-xiao_zero.json`, which the page this board
   serves installs (`/official`, beside moybyte-org/carts'); after an update the board brings the ones
-  it holds to the new release (`runtime/carts/web_addon.py`). The website's
-  install writes the store with the add-on in it (`tools/store_image.py`);
-  a board with none (a wiped store) installs the one its image fits from its
-  release once the image confirms itself (`zero_host.make_addon`), and one
-  that holds add-ons of other builds beside the one that fits takes them off
-  then (`AddonStep.tidy`). A removal
-  of it is recorded (`system/removed`'s console line) and holds; the root
-  then says so and links `/?console=install`, which brings it back
-  (`zero_host.way_back`). The image's headroom is in
+  it holds to the new release (`runtime/carts/web_addon.py`). The image's headroom is in
   `docs/perf/image.md`.
 - **The seed roster is in the image, COMPRESSED** (2026-08-30). This board
   carried no carts at all until then, and both forms were **built** to find out
@@ -217,9 +218,7 @@ them back on the next visit — but anything that existed *only* here is.
 ./provision.sh [--modules] [--no-carts] [--no-console] [--clean] [--password] [/dev/ttyACM0] [wifi.json]
 ```
 
-Default: make the directories, install the browser console add-on that fits
-the image this checkout built (`dist/zero`; `--no-console` skips it) and the
-official carts (`--no-carts` skips them), optionally write the credentials and
+Default: make the directories, install the official carts (`--no-carts` skips them), optionally write the credentials and
 (`--password`) the board's password, reboot, and print where to pair. Every
 write is checked on the board: one it refuses (a full store) stops the script,
 non-zero, with what the board said. The official carts are
@@ -248,7 +247,7 @@ keeps it.
 
 `--modules` pushes the image's own module set as plain files: a **dev loop**,
 a push is a second, a reflash is minutes. The browser console is not among
-them — it is the add-on cart that fits the image.
+them — the loader boots it from a mirror.
 
 The hazard is that MicroPython searches `/` before `.frozen`, so a pushed `.py`
 outranks the image's own copy **on every boot after it**, silently and forever,
@@ -324,9 +323,9 @@ glass.
   `rolled_back` (the bootloader gave up on it). That is the headless replacement
   for the console's notice banner, and it is why the pending marker is cleared
   at the CONFIRM rather than at the read.
-- **the page itself** — the board serves only the add-on that fits its image
-  and installs that one after the confirm (`zero_host.make_addon`), so a board
-  that updated is serving a different console the next time it is opened.
+- **the page itself** — the loader boots the pack the running image names, so
+  a board that updated is serving a different console the next time it is
+  opened.
 
 **The rollback confirm is the one piece of OTA that could not be reused.**
 `confirm_when_healthy` waits for frames on the glass, and this board paints
@@ -469,10 +468,18 @@ paired with the board's password, `native/moy_tty/README.md`); SSH is the
 other:
 
 ```bash
-ssh moybyte-zero.local            # any user name; the board's password
-sftp moybyte-zero.local           # the files tree, the store at /moy
-scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
+ssh moybyte-zero-e55d.local            # any user name; the board's password
+sftp moybyte-zero-e55d.local           # the files tree, the store at /moy
+scp file moybyte-zero-e55d.local:/moy/ # scp -s before OpenSSH 9.0
 ```
+
+The name is the board's (`zero_host.board_name`): the one its owner gave it
+(the setup form, Improv, Settings' Name), else its own, `moybyte-zero-` and
+the last four hex digits of its access point's MAC, as its setup network is
+named, so two Zeros on one network never share one and it never changes
+across boots. The mDNS responder probes for the name before it claims it.
+The boot prints it (`ZERO ssh: serving as NAME.local`), and Improv's
+answer is its URL.
 
 - **The password is the board's one** (`/moy/system/password`): the one a
   browser pairs with, set by the setup form or `provision.sh --password`, and
@@ -486,7 +493,7 @@ scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
   and `/dev`'s rows, the other role commands, `python`) says "needs the
   console", as a console's shell does with its VM stopped; `settings` and
   `pkg list` are the store's C.
-- **No WiFi lease**: the station and the `moybyte-zero.local` name are up
+- **No WiFi lease**: the station and the board's `.local` name are up
   while the board serves, so the server rides them
   (`runtime/system/ssh_service.py`).
 - **No frame**: what a session must do on the VM's task (the store's files,
@@ -533,8 +540,13 @@ webhost in its poll, so an open page is one connection to this board.
 ## Pins (`native/moy_net/moy_gpio.c`, #9)
 
 The other half of "the browser is the console, this board is what a browser is
-not". A cart running in the browser calls `pin_write` / `pin_read`; the page
-batches them and POSTs to whoever served it.
+not". A cart running in the browser calls `pin_write` / `pin_read`; while
+the page's live socket is open they ride its device channel as the kind
+`pins` (`native/moy_net/moy_live.c`, THE PINS): each frame's writes leave
+right after it, and this board pushes a watched pin's level when it
+changes. With the socket shut, the page batches them and POSTs to whoever
+served it. Both are one op (`moy_gpio_op`), so the allowlist and the leases
+below are the same either way.
 
 ```
 GET  /gpio   → {"v": 1, "pins": [...]}             the allowlist
@@ -912,7 +924,7 @@ new image's host did not come up.
   interrupt `main.py`, which kills `zero_host.serve()` — the board then answers
   nothing on the network and looks dead while being perfectly healthy. Follow
   any `mpremote` with `mpremote connect <port> reset`. This is how a
-  "moybyte-zero.local refused to connect" was self-inflicted twice.
+  "the board's `.local` refused to connect" was self-inflicted twice.
 - **Getting OUT of the ROM loader is esptool's `hard_reset`** (2026-11-17),
   an RTS pulse through the USB-Serial/JTAG that boots the app with the USB
   device kept. `--after watchdog_reset`, this board's exit since its CDC days

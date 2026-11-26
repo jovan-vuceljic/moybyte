@@ -20,22 +20,163 @@
 // device answers BUSY (a transmission running) waits here, in order, until it
 // goes or WAIT_MS passed, and its answer is sent then: the page holds one
 // write in flight a handle, so a cart sees BUSY until the board has written.
+//
+// THE PINS (moy_dev_kinds.h's MOY_DEV_PINS; moy_live.c's header is the wire):
+// a board that serves its pins to its page (/gpio, moy_gpio.c) relays them
+// here too, as the kind "pins", one row a page, which the page's pin verbs
+// hold (firmware/web_runner/gpio_link.py) while its socket is open. A write
+// is driven as it arrives and a refusal answered; the pins the page watches
+// are read after each of its messages and each pass, and pushed when one
+// changed. The ops are moy_gpio_op's, so the allowlist, the process that
+// holds the pins ("web") and their leases are /gpio's, and the socket's end
+// leaves them driven, as a page gone from /gpio does.
 
 #include "moy_link.h"            // the board's MOY_NET_LIVE and MOY_NET_LINK
 #include "moy_live.h"
-#include "moy_dev_kinds.h"       // MOY_DEV_RELAYS
+#include "moy_dev_kinds.h"       // MOY_DEV_RELAYS, MOY_DEV_PINS
 
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK \
-    && defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS
+    && ((defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS) || (defined(MOY_DEV_PINS) && MOY_DEV_PINS))
 
 #include <string.h>
 
 #include "moy_dev.h"
-#include "moy_dev_kinds.h"
+#include "moy_net.h"
+
+#if defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS
+#define RELAYS 1
+#else
+#define RELAYS 0
+#endif
+#if defined(MOY_DEV_PINS) && MOY_DEV_PINS
+#define PINS 1
+#pragma weak moy_gpio_pins
+#else
+#define PINS 0
+#endif
+
+static struct {
+    uint32_t calls, writes, pushes;     // every session's
+} N;
+
+static void put32(uint8_t *p, int32_t v) {
+    uint32_t u = (uint32_t)v;
+    p[0] = (uint8_t)u;
+    p[1] = (uint8_t)(u >> 8);
+    p[2] = (uint8_t)(u >> 16);
+    p[3] = (uint8_t)(u >> 24);
+}
+
+// An 'A': the answer to row `id`'s `verb`.
+static int say_answer(uint8_t id, char verb, int32_t rc) {
+    size_t cap;
+    uint8_t *o = moy_live_out(&cap);
+    o[0] = 'd';
+    o[1] = 'A';
+    o[2] = id;
+    o[3] = (uint8_t)verb;
+    put32(o + 4, rc);
+    return moy_live_say(8);
+}
+
+#if PINS
+
+#define WATCH_MAX 16            // the pins a page watches at once
+
+static struct {
+    uint8_t open, id;           // the page's pins row
+    uint8_t n;                  // pins watched
+    uint8_t w[WATCH_MAX];
+    int32_t last[WATCH_MAX];    // ...and the levels last pushed
+    uint8_t stale;              // push them whatever they read
+} P;
+
+static int32_t pins_code(int rc) {
+    return rc == MOY_GPIO_EPIN ? MOY_DEV_EBAD : rc == MOY_GPIO_EBUSY ? MOY_DEV_EBUSY
+           : rc < 0 ? MOY_DEV_EIO : rc;
+}
+
+// The watched pins read, and pushed ('G') where one changed: 0, -1 when the
+// socket failed.
+static int pins_push(void) {
+    if (!P.open || P.n == 0) {
+        return 0;
+    }
+    size_t cap;
+    uint8_t *o = moy_live_out(&cap);
+    int changed = P.stale;
+    for (int i = 0; i < P.n; i++) {
+        int32_t v = pins_code(moy_gpio_op(P.w[i], 0, 0));
+        changed |= v != P.last[i];
+        P.last[i] = v;
+        put32(o + 3 + 4 * i, v);
+    }
+    if (!changed) {
+        return 0;
+    }
+    P.stale = 0;
+    o[0] = 'd';
+    o[1] = 'G';
+    o[2] = P.id;
+    N.pushes++;
+    return moy_live_say(3 + 4 * (size_t)P.n);
+}
+
+// A message of the pins row (`p` its plaintext, n bytes).
+static int pins_message(const uint8_t *p, size_t n) {
+    switch (p[1]) {
+        case 'C':
+            P.open = 0;
+            return 0;
+        case 'W':
+            for (size_t i = 3; i + 1 < n; i += 2) {
+                int rc = moy_gpio_op(p[i], 1, p[i + 1]);
+                N.writes += rc >= 0;
+                if (rc < 0) {
+                    size_t cap;
+                    uint8_t *o = moy_live_out(&cap);
+                    o[0] = 'd';
+                    o[1] = 'A';
+                    o[2] = P.id;
+                    o[3] = 'W';
+                    put32(o + 4, pins_code(rc));
+                    o[8] = p[i];
+                    if (moy_live_say(9) < 0) {
+                        return -1;
+                    }
+                }
+            }
+            return pins_push();
+        case 'S':
+            P.n = 0;
+            for (size_t i = 3; i < n && P.n < WATCH_MAX; i++) {
+                P.w[P.n++] = p[i];
+            }
+            P.stale = 1;
+            return P.n > 0 ? pins_push() : 0;
+        default:
+            return 0;
+    }
+}
+
+static int pins_open(uint8_t id) {
+    const uint8_t *pins = NULL;
+    if (moy_gpio_pins == NULL || moy_gpio_pins(&pins) <= 0) {
+        return say_answer(id, 'O', MOY_DEV_EABSENT);
+    }
+    P.open = 1;
+    P.id = id;
+    P.n = 0;
+    return say_answer(id, 'O', 0);
+}
+
+#endif
+
+#if RELAYS
+
 #include "moy_evq.h"
 #include "moy_lease.h"
 #include "moy_log.h"
-#include "moy_net.h"
 
 #define DEVS 4                  // handles a page holds on its board at once
 #define WAIT_MAX 256            // a write the device was busy for, kept to try again
@@ -68,16 +209,7 @@ typedef struct {
 static struct {
     uint32_t pid;               // the session's process, 0 before its first open
     devs_t *t;
-    uint32_t calls, writes, pushes;     // every session's
 } D;
-
-static void put32(uint8_t *p, int32_t v) {
-    uint32_t u = (uint32_t)v;
-    p[0] = (uint8_t)u;
-    p[1] = (uint8_t)(u >> 8);
-    p[2] = (uint8_t)(u >> 16);
-    p[3] = (uint8_t)(u >> 24);
-}
 
 // The gets of list `l` (comma-separated, up to its ':' or end) of handle `d`,
 // each 4 bytes into `out`: how many bytes.
@@ -101,20 +233,17 @@ static const char *state_list(const relay_row_t *d) {
 }
 
 static int answer(const relay_row_t *d, uint8_t id, char verb, int32_t rc) {
-    size_t cap;
-    uint8_t *o = moy_live_out(&cap);
-    o[0] = 'd';
-    o[1] = 'A';
-    o[2] = id;
-    o[3] = (uint8_t)verb;
-    put32(o + 4, rc);
-    if (moy_live_say(8) < 0) {
+    if (say_answer(id, verb, rc) < 0) {
         return -1;
     }
     if (d == NULL || d->h <= 0) {
         return 0;
     }
+    size_t cap;
+    uint8_t *o = moy_live_out(&cap);
+    o[0] = 'd';
     o[1] = 'G';
+    o[2] = id;
     return moy_live_say(3 + read_gets(d, state_list(d), o + 3));
 }
 
@@ -199,7 +328,7 @@ static int write_dev(relay_row_t *d, const uint8_t *p, size_t n) {
         return answer(d, d->id, 'W', MOY_DEV_EBUSY);
     }
     int32_t r = moy_dev_write(D.pid, d->h, p, n);
-    D.writes += r >= 0;
+    N.writes += r >= 0;
     if (r == MOY_DEV_EBUSY && n > 0 && n <= WAIT_MAX) {
         memcpy(d->w, p, n);
         d->wn = (uint16_t)n;
@@ -209,11 +338,7 @@ static int write_dev(relay_row_t *d, const uint8_t *p, size_t n) {
     return answer(d, d->id, 'W', r);
 }
 
-int moy_live_dev_message(const uint8_t *p, size_t n) {
-    if (n < 3) {
-        return 0;
-    }
-    D.calls++;
+static int kinds_message(const uint8_t *p, size_t n) {
     uint8_t id = p[2];
     if (p[1] == 'O') {
         return open_dev(id, p + 3, n - 3);
@@ -256,12 +381,12 @@ static int reads(relay_row_t *d) {
         if (moy_live_say(at + (size_t)r) < 0) {
             return -1;
         }
-        D.pushes++;
+        N.pushes++;
     }
     return 0;
 }
 
-int moy_live_dev_pump(void) {
+static int kinds_pump(void) {
     if (D.t == NULL) {
         return 0;
     }
@@ -272,7 +397,7 @@ int moy_live_dev_pump(void) {
             continue;
         }
         int32_t r = moy_dev_write(D.pid, d->h, d->w, d->wn);
-        D.writes += r >= 0;
+        N.writes += r >= 0;
         if (r != MOY_DEV_EBUSY || moy_net_ms() - d->since > WAIT_MS) {
             d->wn = 0;
             if (answer(d, d->id, 'W', r) < 0) {
@@ -323,12 +448,12 @@ int moy_live_dev_pump(void) {
         if (moy_live_say(3 + nn + an) < 0) {
             return -1;
         }
-        D.pushes++;
+        N.pushes++;
     }
     return open;
 }
 
-void moy_live_dev_end(void) {
+static void kinds_end(void) {
     if (D.pid == 0) {
         return;
     }
@@ -340,18 +465,94 @@ void moy_live_dev_end(void) {
     D.pid = 0;
 }
 
+static uint32_t kinds_open(void) {
+    uint32_t k = 0;
+    for (int i = 0; D.t != NULL && i < DEVS; i++) {
+        k += D.t->d[i].h > 0;
+    }
+    return k;
+}
+#endif
+
+int moy_live_dev_message(const uint8_t *p, size_t n) {
+    if (n < 3) {
+        return 0;
+    }
+    N.calls++;
+#if PINS
+    if (p[1] == 'O' && n >= 8 && p[3] == 4 && memcmp(p + 4, "pins", 4) == 0) {
+        return pins_open(p[2]);
+    }
+    if (P.open && p[2] == P.id && p[1] != 'O') {
+        return pins_message(p, n);
+    }
+#endif
+#if RELAYS
+    return kinds_message(p, n);
+#else
+    return p[1] == 'C' ? 0 : say_answer(p[2], (char)p[1], MOY_DEV_EABSENT);
+#endif
+}
+
+int moy_live_dev_pump(void) {
+    int open = 0;
+#if PINS
+    if (pins_push() < 0) {
+        return -1;
+    }
+    open += P.open;
+#endif
+#if RELAYS
+    int k = kinds_pump();
+    if (k < 0) {
+        return -1;
+    }
+    open += k;
+#endif
+    return open;
+}
+
+void moy_live_dev_end(void) {
+#if PINS
+    P.open = 0;
+#endif
+#if RELAYS
+    kinds_end();
+#endif
+}
+
 void moy_live_dev_stats(moy_live_stats_t *out) {
     out->devs = 0;
-    for (int i = 0; D.t != NULL && i < DEVS; i++) {
-        out->devs += D.t->d[i].h > 0;
-    }
-    out->dev_calls = D.calls;
-    out->dev_writes = D.writes;
-    out->dev_pushes = D.pushes;
+#if PINS
+    out->devs += P.open;
+#endif
+#if RELAYS
+    out->devs += kinds_open();
+#endif
+    out->dev_calls = N.calls;
+    out->dev_writes = N.writes;
+    out->dev_pushes = N.pushes;
 }
 
 size_t moy_web_live_kinds(char *out, size_t cap) {
-    return moy_dev_relayed(out, cap);
+    size_t n = 0;
+#if RELAYS
+    n = moy_dev_relayed(out, cap);
+#endif
+#if PINS
+    const uint8_t *pins = NULL;
+    if (moy_gpio_pins != NULL && moy_gpio_pins(&pins) > 0 && n + 6 < cap) {
+        if (n > 0) {
+            out[n++] = ';';
+        }
+        memcpy(out + n, "pins", 5);
+        n += 4;
+    }
+#endif
+    if (cap > 0) {
+        out[n] = 0;
+    }
+    return n;
 }
 
 #endif

@@ -306,7 +306,8 @@ def test_a_relayed_kind_is_the_consoles_for_handles_and_not_for_faces(monkeypatc
 def test_a_board_builds_the_channel_for_exactly_the_kinds_with_a_relay_list():
     """moy_dev_kinds.h's MOY_DEV_RELAYS names the MOY_API_ define of each kind
     whose KINDS row has a relay list, and only those: a board whose class
-    rows name none of them (the C3 Zero) links no device channel."""
+    rows name none of them (the C3 Zero) links none of the kinds (its pins are
+    the channel's other half, MOY_DEV_PINS)."""
     import re
     kinds = open(os.path.join(KERNEL, "moy_dev_kinds.c")).read()
     listed = set(re.findall(r'\{\s*"(\w+)",[^{}]*,\s*"[^"]*"\s*\}', kinds))

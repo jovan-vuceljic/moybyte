@@ -119,6 +119,11 @@ void moy_wasm_services_end(void);
 uint32_t moy_os_services_end(void);
 #endif
 #pragma weak moy_os_services_end
+// The Lua tier's services (native/moycore/moycore_svc.h), where the image
+// has them: a soft reset ends them, a stop keeps them.
+#include <stdbool.h>
+void moycore_svc_vm_stop(bool keep);
+#pragma weak moycore_svc_vm_stop
 // The input table's readers, which the ending VM's processes held
 // (native/moy_input), where the image has it.
 #if __has_include("moy_input.h")

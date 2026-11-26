@@ -208,6 +208,7 @@ absent (`runtime/carts/moy_store_base.py`, `VENDOR_KEY`):
 | `handles` | the MIME types it opens (`"text/markdown"`, `"image/*"`) | §5 |
 | `receives` | the message names another app may send it | §8 |
 | `entries` | the cart's entry points beside `main`: `{"service": file}`, its own service's program | §7 |
+| `service_kib` | the RAM its own service needs to run, in KB: where a board runs the service (a Zero), the start checks it against the board's budget | §7 |
 | `achievements` | the badges a game declares | §9 |
 | `native` | the chips a C cart carries a module for (`["esp32s3", "esp32p4"]`) | §10 |
 | `wasi` | `true`: an app that is a WASI command the Player runs, drawing its screen whole (`moy_present`) | `runtime/run/wasi_run.py` |
@@ -1417,6 +1418,27 @@ a service of its own, with its own id. `tools/wasm_cart.py` builds a `.wasm`
 entry from `src/<stem>.wat`, `.c` or `.rs`, and `tools/elf_cart.py` an `.elf`
 one from `src/<stem>/*.c`, each with its per-chip modules signed as a main's
 are; a native entry asks for `full_access`, as a native cart does.
+
+**On the board that serves the page** (a Zero, `device/zero_svc.py`,
+#256): an installed Lua app's service runs on the board while its window
+runs in the browser, and the two exchange their messages over the live
+socket's channel `m` (`native/moy_net/moy_live_svc.c`); the page starts
+no service of an app whose service runs on its board
+(`scheduler.on_board`), so a device the service holds (Moy Mesh's `lora`)
+is held once. The board starts one at boot where its app asks for
+`autostart`, and only where it fits the RAM the board gives its services
+(board.toml's `[services] ram_kib`, every service's state summed): what
+the app needs is its manifest's `service_kib`, else a service's start
+(40 KB). One that does not fit is refused with the reason and runs in the
+page while a window has it open, as on a board that runs none; the page
+says so where it is the budget (`scheduler.board_reason`, at Get Carts'
+install and at the service's start). The app's prefs rows cross between the
+board's rows and the page's both ways (`native/moy_net/moy_svc_prefs.c`),
+each row ahead of the messages sent after it, so a window reads what its
+service wrote; at a session's start the board's rows win. A service that
+ends unasked restarts by the console's restart policy (`device/zero_svc.py`,
+RESTARTS; the board's shell `service policy` sets it), and the board runs
+its services in the setup access point too.
 
 From any process of the app, on every tier (the call table, §10):
 

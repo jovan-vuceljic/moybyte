@@ -480,6 +480,10 @@ class Scheduler:
         running = self.find(name)
         if running is not None:
             return running.pid
+        if ON_BOARD and app_perms.app_id(cart) in ON_BOARD:
+            _log(INFO, None, "%s: its service runs on the board" % name)
+            return None
+        _tell_board_reason(cart)
         granted, absent, refusal = app_perms.check(cart, rec, have)
         pid = _L.spawn(name) if _L is not None else self._next_pid()
         p = self.procs[pid] = Proc(pid, SERVICE, name, cart)
@@ -1213,6 +1217,95 @@ def as_service(cart):
 
 
 SCHED = Scheduler()
+
+# The apps whose services run on this console's board, not here: the browser
+# console a Zero serves, whose live socket names them (native/moy_net/
+# moy_svc_web.c, the board's 'H'; firmware/web_runner/web_boot.py's
+# live_pump). Their windows reach those services over the socket, and a
+# service of theirs never starts here, so the radio a service holds is held
+# once (#256).
+ON_BOARD = ()
+# The RAM that board gives its apps' services, (KiB, KiB free), as its 'H'
+# said: None where it names none (a console, or a board that runs none).
+BOARD_BUDGET = None
+SAID = set()                    # apps told their service runs here (`board_reason`)
+
+
+def on_board(apps, sched=None, budget=None):
+    """The board now runs the services of `apps` (app ids), and gives its
+    services `budget` ((KiB, KiB free) or None): each of them running here
+    is stopped, and none of them starts here while it runs there
+    (`Scheduler.start`)."""
+    global ON_BOARD, BOARD_BUDGET
+    sched = sched or SCHED
+    ON_BOARD = tuple(apps)
+    BOARD_BUDGET = tuple(budget) if budget else None
+    if not ON_BOARD:
+        return
+    import app_perms
+    for p in list(sched.procs.values()):
+        if (p.kind == SERVICE and p.state not in (EXITED, STOPPING) and p.cart is not None
+                and app_perms.app_id(p.cart) in ON_BOARD):
+            _log(INFO, p.pid, "its service runs on the board")
+            sched.stop(p.pid)
+
+
+def service_need(m):
+    """The KiB manifest `m`'s own service needs to run: its `service_kib`
+    (docs/app_api_v1.md section 7), else a Lua service's start (sched_lua's
+    LUA_SVC_NEED); None where it declares no service."""
+    ven = m.get("moybyte") if isinstance(m, dict) else None
+    ent = ven.get("entries") if isinstance(ven, dict) else None
+    if not isinstance(ent, dict) or not ent.get("service"):
+        return None
+    kib = ven.get("service_kib")
+    if isinstance(kib, int) and not isinstance(kib, bool) and kib > 0:
+        return kib
+    from sched_lua import LUA_SVC_NEED
+    return LUA_SVC_NEED >> 10
+
+
+def board_reason(m, budget=None):
+    """Why the service of manifest `m` runs in the page and not on the
+    board that serves it, whose budget is `budget` (BOARD_BUDGET's shape;
+    default BOARD_BUDGET), or None where it fits or there is no such board."""
+    budget = BOARD_BUDGET if budget is None else budget
+    need = service_need(m)
+    if budget is None or need is None:
+        return None
+    kib, free = budget
+    if need <= free:
+        return None
+    why = ("Its service runs in the page on this board: it needs %d KB and this board "
+           "gives its services %d KB" % (need, kib))
+    return why + ("." if need > kib else ", %d KB of it free." % free)
+
+
+def _tell_board_reason(cart):
+    """A service about to start here although a board serves this page: the
+    reason told once (a notification and the log) where it is the budget."""
+    path = cart.get("path") if cart else None
+    if BOARD_BUDGET is None or not path:
+        return
+    import app_perms
+    app = app_perms.app_id(cart)
+    if app in SAID:
+        return
+    try:
+        import json
+        with open(path + "/manifest.json") as f:
+            why = board_reason(json.load(f))
+    except (OSError, ValueError):
+        return
+    if why is None:
+        return
+    SAID.add(app)
+    _log(INFO, None, "%s: %s" % (app, why))
+    try:
+        from notifications import NOTES
+        NOTES.post(SHELL, cart.get("title") or app, why)
+    except Exception as exc:     # noqa: BLE001 -- the log has said it
+        _log(ERR, None, "the notice: %s" % exc)
 
 
 def tick(slack_us=0):

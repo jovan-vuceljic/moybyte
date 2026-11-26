@@ -85,7 +85,7 @@ targets.
 
 The `moy_wasm` native module (issue #158, `native/moy_wasm/README.md`)
 embeds the AOT half of the WebAssembly Micro Runtime, compiled into every
-console board's image (the headless Zero denies it).
+console board's image (the headless Zeros deny it).
 
 - **Upstream:** WAMR 2.4.5 — <https://github.com/bytecodealliance/wasm-micro-runtime>,
   taken from Moybyte's fork <https://github.com/moybyte-org/wasm-micro-runtime>,
