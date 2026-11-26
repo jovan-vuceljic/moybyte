@@ -2242,3 +2242,46 @@ def test_a_backend_that_stepped_hints_the_live_socket(tmp_path, monkeypatch):
     assert said[6:] == ["o"], "...and the official request stopped"
     h.poll()
     assert said[7:] == [], "one that does nothing says nothing"
+
+
+@pytest.mark.parametrize("asked_live", [True, False])
+def test_an_install_the_socket_s_page_asked_for_is_its_own_change(tmp_path, monkeypatch,
+                                                                    asked_live):
+    """An official install (or removal) asked on the live socket changes the
+    store as that page's own sync does: its steps run between live_mine(1)
+    and live_mine(0), so the socket says no 's' for it (native/moy_net/
+    moy_live.c, THE HINTS); one another page asked for runs unmarked, and
+    its changes are hinted 's' to the socket's page."""
+    marks = []
+    monkeypatch.setattr(wh, "_HINT", lambda t: None)
+    monkeypatch.setattr(wh, "_ASKED", lambda: asked_live)
+    monkeypatch.setattr(wh, "_MINE", marks.append)
+
+    class Official:
+        def __init__(self):
+            self.steps = 0
+
+        def request(self, action, folder, doc):
+            self.steps = 2
+            return True, ""
+
+        def answer(self, ok=True, msg=""):
+            return "{}"
+
+        def busy(self):
+            return self.steps > 0
+
+        def step(self, *_budget):
+            marks.append("step")
+            self.steps -= 1
+            return True
+
+    h = wh.WebHost(str(_store(tmp_path)))
+    h.official = Official()
+    h._official(b'{"action": "install", "folder": "a.moy"}')
+    h.poll()
+    h.poll()
+    if asked_live:
+        assert marks == [1, "step", 0, 1, "step", 0]
+    else:
+        assert marks == ["step", "step"]

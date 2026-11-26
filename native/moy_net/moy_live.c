@@ -569,9 +569,11 @@ static int beat(int ws) {
 //        device/moy_webhost.py)
 //
 // Hints a pass gathered go in one message at its end; a page asks at most
-// once a topic for several. The page's own sync is no news to it: while the
-// webhost applies a batch the socket's session sent, the store's changes
-// are counted as seen (moy_live_store_mine).
+// once a topic for several. The page's own changes are no news to it: while
+// the webhost applies a batch the socket's session sent, or the VM steps an
+// official install or removal that page asked for (device/moy_webhost.py),
+// the store's changes are counted as seen (moy_live_store_mine). Another
+// page's install is hinted 's' as its sync is.
 uint32_t moy_vol_changes(void);
 #pragma weak moy_vol_changes
 

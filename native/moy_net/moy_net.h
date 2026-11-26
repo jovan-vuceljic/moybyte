@@ -409,6 +409,9 @@ int moy_web_signout(void);
 // The parked request: 1 and its spans (good until moy_web_answer), or 0.
 int moy_web_take(const char **method, size_t *method_n, const char **target,
                  size_t *target_n, const char **body, size_t *body_n);
+// 1 while the parked request taken is the live socket's page's (moy_live.c,
+// THE REQUESTS), 0 for one off a connection or with none.
+int moy_web_live_asked(void);
 // Answer the parked request with a complete response and close it.
 void moy_web_answer(const void *resp, size_t n);
 // Close the connection a poll was serving when the VM's store raised under it.
