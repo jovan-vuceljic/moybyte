@@ -732,26 +732,25 @@ static mp_obj_t kvfs_stat(mp_obj_t self_in, mp_obj_t path_in) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_2(kvfs_stat_obj, kvfs_stat);
 
-static int count_block(void *data, lfs2_block_t bl) {
-    (void)bl;
-    *(uint32_t *)data += 1;
-    return 0;
-}
-
+// The blocks in use are littlefs's own size of the volume (lfs2_fs_size).
+// Its public traverse, which MicroPython's own statvfs counts with, visits
+// every folder's pair twice (once as the pair, once as its parent's entry,
+// so an orphan stays marked): two blocks too many a folder, which on a
+// store of carts was a tenth of the volume reported used that was free, and
+// on a full one a count past the volume's size.
 static mp_obj_t kvfs_statvfs(mp_obj_t self_in, mp_obj_t path_in) {
     (void)path_in;
     kvfs_t *self = MP_OBJ_TO_PTR(self_in);
-    uint32_t used = 0;
-    int ret = KL(lfs2_fs_traverse(self->lfs, count_block, &used));
+    int ret = KL(lfs2_fs_size(self->lfs));
     if (ret < 0) {
         raise_lfs(ret);
     }
+    uint32_t used = (uint32_t)ret;
     mp_obj_tuple_t *t = MP_OBJ_TO_PTR(mp_obj_new_tuple(10, NULL));
     t->items[0] = MP_OBJ_NEW_SMALL_INT(self->lfs->cfg->block_size);
     t->items[1] = t->items[0];
     t->items[2] = MP_OBJ_NEW_SMALL_INT(self->lfs->cfg->block_count);
-    // littlefs counts a block every structure that names it does, so a full
-    // volume's count can pass its size: none free, never fewer.
+    // a block two files share is counted for each: none free, never fewer
     uint32_t count = self->lfs->cfg->block_count;
     t->items[3] = MP_OBJ_NEW_SMALL_INT(used < count ? count - used : 0);
     t->items[4] = t->items[3];

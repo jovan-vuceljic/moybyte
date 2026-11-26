@@ -404,9 +404,13 @@ def tree(d=ROOT):
 
 f = open("/kv/fill.bin", "wb")
 b = bytes(4096)
-for _ in range(free() - @SLACK@):
+for _ in range(free() - @SLACK@ - 16):
     f.write(b)
 f.close()
+while free() > @SLACK@:                 # a long file's own blocks: the last few one by one
+    f = open("/kv/fill.bin", "ab")
+    f.write(b)
+    f.close()
 print("FREE", free())
 before = tree()
 ops = [{"p": "new.moy/manifest.json", "t": json.dumps({"title": "New"})},
@@ -439,13 +443,15 @@ def test_a_full_volume_refuses_a_batch_whole_and_keeps_no_piece_of_a_write(tmp_p
     exe = require_unix_mp("moy_store", "moy_net", board_model=True,
                           why="a full store's refusal on the kernel's littlefs")
     script = tmp_path / "full.py"
-    script.write_text(FULL.replace("@SLACK@", "4"))
+    # 8 blocks left: the batch's three small files would land in them, and
+    # the batch is refused for the room it asks to be left with.
+    script.write_text(FULL.replace("@SLACK@", "8"))
     out = subprocess.run([exe, "-X", "heapsize=4m", str(script)],
                          capture_output=True, text=True, timeout=300)
     assert out.returncode == 0, out.stdout + out.stderr
     said = [ln.split(" ", 1) for ln in out.stdout.splitlines()]
     got = dict((k, v) for k, v in said if k not in ("LEFT",))
-    assert int(got["FREE"]) >= 0, got
+    assert int(got["FREE"]) == 8, got                  # what was left is what it counts
     refusal = "'OSError: [Errno 28]'"
     assert got["BATCH"] == "(0, [(0, %s), (1, %s), (2, %s)], False, 3)" % ((refusal,) * 3), got
     assert [v for k, v in said if k == "LEFT"] == ["True", "True"], out.stdout

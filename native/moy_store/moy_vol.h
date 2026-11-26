@@ -236,8 +236,8 @@ int moy_vol_rename(const moy_vol_t *v, const char *src, const char *dst);
 int moy_vol_replace(const moy_vol_t *v, const char *src, const char *dst);
 // The bytes the volume of the folder `dir` has free for new blocks, where
 // its medium counts them from its own records: 0 and *bytes on littlefs (a
-// walk of its metadata; a block two structures name is counted twice, so a
-// full volume answers none, never fewer) and on a host's POSIX, MOY_ENODEV
+// walk of its metadata, lfs2_fs_size, the count its statvfs answers with;
+// never fewer than none) and on a host's POSIX, MOY_ENODEV
 // on FAT, whose count is a scan of the card's whole table, and on a board's
 // POSIX, whose libc has no statvfs.
 int moy_vol_room(const moy_vol_t *v, const char *dir, uint64_t *bytes);
