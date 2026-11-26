@@ -36,6 +36,7 @@
       {"api": "part_at", "out": {"out": 2}, "ret": "if", "doc": "Where the pointer is inside the part answered last (moy_ui_api_part_at): 1 with x, y at out, else 0."},
       {"api": "split", "hand": true, "doc": "The panes (moy_ui_api_split): the focused pane at *cur, the panes' rects and the drag's words at out, a divider let go after a drag writing `sizes`."},
       {"api": "split_at", "ret": "bool"},
+      {"api": "cursor", "doc": "The pointer's shape over (x, y) of the last pass: 0 the arrow, 1 the hand, 2 the text beam (moy_ui_api_cursor)."},
       {"api": "split_frame", "hand": true},
       {"api": "split_toward", "buf": {"out": 4}, "ret": "bool"},
       {"api": "grid"},

@@ -598,7 +598,6 @@ def test_theme_editor_320x240_is_byte_identical(tmp_path):
     bufs = []
     for ws in (a_ws, b_ws):
         assert ws.text.edit_theme()
-        ws.editor_app.theme_tab("theme_sprites")
         _quiesce(ws)
         ws.frame(1 / 30)
         bufs.append(bytes(ws.sys_canvas._buf))

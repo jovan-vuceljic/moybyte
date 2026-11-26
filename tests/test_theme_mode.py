@@ -3,13 +3,12 @@ runtime/editors/theme_editor.py).
 
 * The door: Appearance's last row, Edit theme…, makes `custom` from a seed
   and opens it in the Editor on Config; Done (the bar's ‹, Esc, B) comes back.
-* Config is custom's theme.json, its saves the look's (no journal).
-* Sprites: a smooth slot painted turns to a pixel tile in one undo step, the
-  state line says so, undo brings the smooth one back; a save writes the
-  package's sheet and names the slot in `icons.pixel_slots`, which the C
-  loader reads and the flattening keeps; the live look draws it.
+* Config is custom's theme.json, its saves the look's (no journal), and
+  the mode's one tab: the console edits no icon.
+* A package's own tiles (`icons.pixel_slots`) still load: the C loader
+  reads the slots and the flattening keeps them.
 * EDIT ICONS and the user's icon-sheet override are gone.
-* The desk shows Config beside Sprites as panes, the tab following focus.
+* The desk shows Config as the theme workspace's one pane.
 """
 
 import json
@@ -20,7 +19,6 @@ import moy_ui
 from runtime import iconsets, theme_editor, ui_draw
 from ws_helpers import build_desktop_ws, build_ws
 
-HOME = iconsets.SLOT["home"]
 
 
 def _open(ws):
@@ -36,12 +34,6 @@ def _frames(ws, n=2):
     for _ in range(n):
         ws.input.begin_frame()
         ws.frame(1 / 30)
-
-
-def _paint(ws, doc, x=6, y=3):
-    layer = ws.theme_sprites_layer
-    layer._press(doc, x, y)
-    layer._release(doc)
 
 
 def _package(ws):
@@ -94,7 +86,6 @@ def test_esc_and_the_bars_back_are_done(tmp_path):
     drv.frame(1 / 30)
     assert ws.editor_app.theme is None and ws.wm.top_kind() == "appearance"
     _open(ws)
-    ws.editor_app.theme_tab("theme_sprites")
     drv.frame(1 / 30)
     bl = ws.bar_layer
     bar, zone = bl.cell("menu", "zone")
@@ -103,61 +94,6 @@ def test_esc_and_the_bars_back_are_done(tmp_path):
     drv.frame(1 / 30)
     drv.frame(1 / 30)
     assert ws.editor_app.theme is None
-
-
-def test_a_painted_smooth_slot_turns_to_pixels_and_undo_brings_it_back(tmp_path):
-    ws = build_ws(tmp_path)
-    doc = _open(ws)
-    ws.editor_app.theme_tab("theme_sprites")
-    assert doc.slot == HOME and not doc.is_pixels(HOME)
-    assert doc.state() == "Home · smooth"
-    assert not ws.history.can_undo()
-    _paint(ws, doc)
-    assert doc.is_pixels(HOME)
-    assert doc.state() == "Home · pixels · Undo brings it back"
-    assert ws.look.pixel_image("home") is not None, "the live look draws it"
-    assert ws.history.can_undo()
-    assert ws.history.undo()
-    assert not doc.is_pixels(HOME) and doc.state() == "Home · smooth"
-    assert ws.look.pixel_image("home") is None
-    assert ws.history.redo() and doc.is_pixels(HOME)
-
-
-def test_a_save_writes_the_tiles_and_names_the_slot(tmp_path):
-    ws = build_ws(tmp_path)
-    doc = _open(ws)
-    ws.editor_app.theme_tab("theme_sprites")
-    _paint(ws, doc)
-    ws.editor_app.close_theme()                 # Done hard-commits
-    _frames(ws)
-    d = json.loads((_package(ws) / "theme.json").read_text())
-    assert d["icons"] == "icons.moygfx"
-    assert d["look"]["icons"]["pixel_slots"] == ["home"]
-    assert not (_package(ws) / "journal").exists()
-    sheet = iconsets.pixel_sheet_of((_package(ws) / "icons.moygfx").read_bytes())
-    assert sheet is not None and sheet.clear == 16
-    ox, oy = sheet.tile_origin(HOME)
-    assert sheet.pget(ox + 6, oy + 3) == theme_editor.RED
-    # installed as written: the look draws the slot from the tiles
-    assert ws.look.pixel_slots is not None and ws.look.pixel_slots[HOME]
-    assert ws.look.pixel_image("home") is not None
-    # a change in Appearance re-derives from the file as saved and keeps it
-    assert ws.look.change("tint", "plum") == 0
-    ws.look.tick(0.0)
-    assert ws.look.commit()
-    d = json.loads((_package(ws) / "theme.json").read_text())
-    assert d["look"]["icons"]["pixel_slots"] == ["home"] and d["icons"] == "icons.moygfx"
-
-
-def test_a_save_from_sprites_reloads_a_clean_config(tmp_path):
-    ws = build_ws(tmp_path)
-    doc = _open(ws)
-    ws.editor_app.theme_tab("theme_sprites")
-    _paint(ws, doc)
-    assert doc.save_sprites()
-    _frames(ws)
-    doc.follow()
-    assert json.loads(doc.ed.text())["look"]["icons"]["pixel_slots"] == ["home"]
 
 
 def test_config_saves_through_the_look_and_refuses_softly(tmp_path):
@@ -215,15 +151,14 @@ def test_settings_has_no_edit_icons_and_the_store_no_override(tmp_path):
 def test_the_tdeck_hints_name_its_own_keys(tmp_path):
     ui_draw.input_kind("tdeck")
     try:
-        assert theme_editor._BAND_TDECK == ("flip", "Flip", "rotate", "Rotate")
         # Config's caret takes the ball and its letters type: Mic's menu,
-        # opening on Home, is the way out, and the tabs are a touch's
-        assert theme_editor._hints_for("theme_config") == ("menu", "Home")
+        # opening on Home, is the way out
+        assert theme_editor._hints_for() == ("menu", "Home")
     finally:
         ui_draw.input_kind("keys")
 
 
-def test_the_desk_shows_config_beside_sprites(tmp_path):
+def test_the_desk_shows_config_alone(tmp_path):
     ws = build_desktop_ws(tmp_path, panel_diagonal_in=7.0, font_scale=1)
     ws.home.open_desk()
     ws.spine.open_app(ws.app("appearance"))
@@ -233,92 +168,15 @@ def test_the_desk_shows_config_beside_sprites(tmp_path):
     desk = ws.editor_desk
     assert desk.active() and desk.key == "theme"
     tabs = [desk.tab_of(p) for p, _r, _path in desk.panes()]
-    assert tabs == ["theme_config", "theme_sprites"]
-    desk.focus_pane(1)
-    assert ws.menu_view == "theme_sprites"
+    assert tabs == ["theme_config"]
+    assert ws.menu_view == "theme_config"
     assert not desk.switch("code"), "a theme has no cart workspace"
-    # the window's X commits what Sprites holds
-    _paint(ws, ws.editor_app.theme)
+    # the window's X commits what Config holds
+    doc = ws.editor_app.theme
+    d = json.loads(doc.ed.text())
+    d["colors"]["dark"]["panel"] = 0
+    doc.ed.set_text(json.dumps(d, indent=2))
+    doc.ed.dirty = True
     ws.wm.close_window_kind("menu")
     d = json.loads((_package(ws) / "theme.json").read_text())
-    assert d["look"]["icons"]["pixel_slots"] == ["home"]
-
-
-def _sprites(tmp_path):
-    from runtime import host_app
-    ws = build_ws(tmp_path)
-    ws.spine.open_app(ws.app("appearance"))
-    _frames(ws)
-    doc = _open(ws)
-    ws.editor_app.theme_tab("theme_sprites")
-    drv = host_app.ConsoleDriver(ws)
-    for _ in range(3):
-        drv.frame(1 / 30)
-    return ws, drv, doc, ws.theme_sprites_layer
-
-
-def _key(drv, k, n=1):
-    for _ in range(n):
-        drv.press(k)
-        for _ in range(2):
-            drv.frame(1 / 30)
-
-
-def test_sprites_by_keys_alone(tmp_path):
-    """The arrows move the cursor and A paints; one past the slot's edge
-    moves on to the sheet, whose arrows open the slots, and down to the
-    tools, whose A takes the keys back to the slot."""
-    ws, drv, doc, layer = _sprites(tmp_path)
-    pg = layer.page
-    assert pg._focus_key() == "grid"
-    _key(drv, "right", 3)
-    assert doc.cur[0] == 3
-    _key(drv, "a")
-    assert doc.is_pixels(doc.slot)
-    _key(drv, "right", 16)
-    assert pg._focus_key() == "sheet"
-    slot = doc.slot
-    _key(drv, "right")
-    assert doc.slot == slot + 1
-    for _ in range(30):
-        if pg._focus_key() != "sheet":
-            break
-        _key(drv, "left")
-    assert pg._focus_key() == "grid"
-    for _ in range(20):
-        if pg._focus_key() != "grid":
-            break
-        _key(drv, "down")
-    assert pg._focus_key() in ("pencil", "bucket", "line", "rect", "select")
-    for _ in range(5):
-        if pg._focus_key() == "bucket":
-            break
-        _key(drv, "left" if pg._focus_key() in ("line", "rect", "select") else "right")
-    assert pg._focus_key() == "bucket"
-    _key(drv, "a")
-    assert doc.pe.tool == theme_editor.PaintEditor.FILL and pg._focus_key() == "grid"
-
-
-def test_sprites_by_touch_alone(tmp_path):
-    """A tap on a slot of the sheet opens it, on a tool takes it, and on
-    the open slot paints."""
-    ws, drv, doc, layer = _sprites(tmp_path)
-    x, y, w, h = layer.rect_of("sheet")
-    lay = layer.layout
-    drv.click(x + lay.pitch + 4, y + lay.my + 4)
-    drv.frame(1 / 30)
-    assert doc.slot == 1
-    x, y, w, h = layer.rect_of("rect")
-    drv.click(x + w // 2, y + h // 2)
-    for _ in range(3):
-        drv.frame(1 / 30)
-    assert doc.pe.tool == theme_editor.PaintEditor.RECT
-    x, y, w, h = layer.rect_of("pencil")
-    drv.click(x + w // 2, y + h // 2)
-    for _ in range(3):
-        drv.frame(1 / 30)
-    x, y, w, h = layer.rect_of("grid")
-    drv.click(x + lay.mx + 2, y + lay.my + 2)
-    for _ in range(2):
-        drv.frame(1 / 30)
-    assert doc.is_pixels(doc.slot)
+    assert d["colors"]["dark"]["panel"] == 0

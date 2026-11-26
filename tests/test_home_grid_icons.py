@@ -406,3 +406,15 @@ def test_the_home_style_row_takes_the_arrow_keys(tmp_path):
                              ("left", "carousel", Carousel), ("left", None, Carousel)):
         _press(drv, name)
         assert ws.system.get("home_style") == style and type(ws.launcher) is cls
+
+
+def test_the_desk_offers_no_home_style(tmp_path):
+    """Home style arranges the full-screen home; the desk has none, so its
+    Settings leave the row out (issue 270), and console mode brings it back."""
+    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(1024, 600),
+                                    windowed=True, panel_diagonal_in=7.0)
+    sl = ws.settings_layer
+    assert ws.wm.mode == "desktop"
+    assert "home_style" not in [r[0] for r in sl._settings_rows()]
+    ws.wm.mode = "console"
+    assert "home_style" in [r[0] for r in sl._settings_rows()]

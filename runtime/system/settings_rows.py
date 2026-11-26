@@ -47,6 +47,7 @@ s = ui.state(
     zooms=ui.model(key="v", v="", word=""),
     zoom=ui.row_of("zooms"),
     has_zoom=False,
+    has_home_style=True,
     kept_carts="",
     has_kept_carts=False,
     layouts=ui.model(key="v", v="", word=""),
@@ -179,6 +180,9 @@ def rows_poll():
         s.layout_theme = "" if pick is None else pick
     pick = look.home_style()
     s.home_style = "theme" if pick is None else pick
+    # Home style arranges the full-screen home: the desk's has none (its
+    # Projects window draws the console home's design whatever the style)
+    s.has_home_style = getattr(ws.wm, "mode", None) != "desktop"
     gen = ws.system.gen()
     if kept.get("gen", -1) != gen or kept.get("system") is not ws.system:
         kept["gen"], kept["system"] = gen, ws.system      # the settings rows moved: read again
@@ -353,7 +357,8 @@ def rows_page():
                    shown="has_sizes")
             ui.seg("Layout", "layout_theme", text="{.word}", look="cycle", on="layout_set",
                    shown="has_layout_theme")
-            ui.seg("Home style", "home_style", labels="homes", look="cycle", on="home_set")
+            ui.seg("Home style", "home_style", labels="homes", look="cycle", on="home_set",
+                   shown="has_home_style")
             ui.slider("Volume", "volume", LEVELS["volume"][0], LEVELS["volume"][1], look="steps",
                       icon="{volume?:mute}", on="volume_set")
             ui.slider("Brightness", "brightness", LEVELS["brightness"][0], LEVELS["brightness"][1],

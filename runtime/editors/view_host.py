@@ -15,7 +15,7 @@ under them it has room for, a foot tool's pitch; in a desk pane the view
 alone, over a status line where the tab has one.
 
 `PageHost` hosts a placed page an Editor tab draws on the content rect
-(the theme mode's Sprites tab, `theme_editor.SpritesLayer`, is one): made
+(a desk pane's part, `editor_parts.PartHost`, is one): made
 at its first use, the tab's state handed to its `sync` hook where it moved
 (`push`), its frame and its pointer. `ViewHost` is one round a view, with
 its keys. The view's canvas hands the host a press, its drag

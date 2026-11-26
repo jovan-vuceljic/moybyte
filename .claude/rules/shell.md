@@ -116,8 +116,8 @@ to whoever called it.
   lent from `runtime/editors/editor_ui.py`'s rows (`head`, `desk_head`). Icons are the theme's icon set where its look names
   one and the image carries it (`runtime/toolkit/iconsets.py`: a smooth set's masks or the pixel
   set, a tile a slot of its `SLOTS`), else 16×16 sprites from the shell's baked `IconSheet`; the slots a
-  theme's `icons.pixel_slots` names draw from its own tiles, painted in the Editor's theme mode
-  (`runtime/editors/theme_editor.py`). **The bar hides entirely while a GAME plays** (the cart
+  theme's `icons.pixel_slots` names draw from the tiles its package ships, on what the
+  Python shell draws alone (`runtime/toolkit/iconsets.py`). **The bar hides entirely while a GAME plays** (the cart
   owns all 320×240) and shows again over its pause card on a handheld;
   tools/apps run WITH the bar (Moy, back, title, status) so
   they're always exitable.

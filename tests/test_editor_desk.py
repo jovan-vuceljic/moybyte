@@ -14,7 +14,7 @@ sys.path.insert(0, ROOT)
 from runtime import editor_panes as P      # noqa: E402
 from runtime import host_app                # noqa: E402
 from runtime import ui_draw                 # noqa: E402
-from ws_helpers import install_shape, quiesce, settle_badges  # noqa: E402
+from ws_helpers import install_shape, no_unlock_banner, quiesce, settle_badges  # noqa: E402
 
 FULL_1024 = (6, 46, 1012, 548)              # full screen: the row is the top 40 px
 STRIP_1024 = (6, 90, 1012, 504)             # the pictures' title-strip frame
@@ -442,7 +442,10 @@ def test_a_sheet_pick_sets_the_sprite_and_the_brush_and_a_slide_previews(desk):
 
 
 def _card_bodies_hidden(ws, drv, keys, monkeypatch, label):
+    """A badge a workspace finds would raise its banner, whose shine moves
+    between the two shots: every badge is found first."""
     from runtime import editor_desk
+    no_unlock_banner(ws)
     quiesce(ws)
     d = ws.editor_desk
 

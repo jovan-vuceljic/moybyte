@@ -292,10 +292,6 @@ moy-light_handheld_theme-door.png — The door to the Editor's theme mode: Appea
 moy-light_handheld_theme-door@3x.png — same, enlarged 3x (nearest)
 moy-light_handheld_theme-config.png — The Editor in theme mode, Config: custom's theme.json in the json mode, opened from Moy, the status line saying whose copy it is; ‹, the open tab labelled, the theme's name, no Play; long lines fade at the edge; Moy Day; 320x240
 moy-light_handheld_theme-config@3x.png — same, enlarged 3x (nearest)
-moy-light_handheld_theme-sprites.png — The Editor in theme mode, Sprites: Home, a smooth slot, its mask in solid ink on a plain ground at 9x, its 1x preview, the sheet with the pixel-art dot's legend, the tools, the palette; Moy Day; 320x240
-moy-light_handheld_theme-sprites@3x.png — same, enlarged 3x (nearest)
-moy-light_handheld_theme-sprites-edited.png — Sprites after a stroke in the red the palette holds: Home is pixel art now, dotted in the sheet; Home · pixels · Undo brings it back; Moy Day; 320x240
-moy-light_handheld_theme-sprites-edited@3x.png — same, enlarged 3x (nearest)
 moy-light_handheld_perf-hud.png — The perf HUD over Star Catcher: the fps chip, a flat pill in the surface's polarity; Moy Day; 320x240
 moy-light_handheld_perf-hud@3x.png — same, enlarged 3x (nearest)
 moy-light_handheld_perf-hud-detail.png — The perf HUD's breakdown: the frame against its 33 ms budget, each part its own hue; Moy Day; 320x240
@@ -314,7 +310,6 @@ moy-light_handheld_home-grid-s3.png — The grid arrangement on the Guition S3: 
 moy-light_handheld_tool-bar-s3.png — A tool cart on the Guition S3's separate 320x240 canvas: the compact bar over its 18 rows and as much of the letterbox, so ‹ and the title are a 36 px tap; Moy Day; 480x320
 moy-light_handheld_home-icons-s3.png — The icons arrangement on the Guition S3: 52 px tiles, the caption band at the foot over the top of a fourth row; Moy Day; 480x320
 moy-light_handheld_theme-config-s3.png — The theme mode's Config on the Guition S3: ‹ (Done) and 28 px tabs; Moy Day; 480x320
-moy-light_handheld_theme-sprites-s3.png — The theme mode's Sprites on the Guition S3: 28 px slots, swatches and tools, the sheet's page mark; Moy Day; 480x320
 moy-light_desktop_splash.png — The splash on the 1024x600 desk: Moy at 10x, the wordmark at 40 px; Moy Day; 1024x600
 moy-light_desktop_loading.png — The loading pill on the desk, in its own lane: the middle of the bar; Moy Day; 1024x600
 moy-light_desktop_calendar.png — The calendar hung from the desk bar's clock, its keys in its foot; Moy Day; 1024x600
@@ -332,7 +327,6 @@ moy-light_desktop_text-console.png — A script's text console as a window on th
 moy-light_desktop_home-grid.png — The console mode's home in the grid arrangement: 128 px cards in three rows, the shelf bleeding off the right edge, the focused card ringed with its title bold; Moy Day; 1024x600
 moy-light_desktop_tool-bar.png — A tool cart in console mode at 2x: the compact bar drawn at the glass's resolution over its 18 rows, the bar's Moy tile; Moy Day; 1024x600
 moy-light_desktop_home-icons.png — The console mode's home in the icons arrangement: ten columns of 64 px tiles, each named in full under it, the focused one ringed with its name bold; Moy Day; 1024x600
-moy-light_desktop_theme-editor.png — The Editor in theme mode on the desk: Config's theme.json beside Sprites, the focused pane and its tab, every slot named under its tile, Home ringed and painted to pixels at 16x beside its 1x and 2x; Moy Day; 1024x600
 moy-light_desktop_perf-hud.png — The perf HUD in console mode, inside the letterbox's corner; Moy Day; 1024x600
 moy-light_desktop_kernel-web.png — The kernel's web console screen on the desk; Moy Day; 1024x600
 moy-dark_handheld_splash.png — The boot splash: Moy at 4x over the wordmark, on the stored theme's ground; Moy Night; 320x240
@@ -387,10 +381,6 @@ moy-dark_handheld_theme-door.png — The door to the Editor's theme mode: Appear
 moy-dark_handheld_theme-door@3x.png — same, enlarged 3x (nearest)
 moy-dark_handheld_theme-config.png — The Editor in theme mode, Config: custom's theme.json in the json mode, opened from Moy, the status line saying whose copy it is; ‹, the open tab labelled, the theme's name, no Play; long lines fade at the edge; Moy Night; 320x240
 moy-dark_handheld_theme-config@3x.png — same, enlarged 3x (nearest)
-moy-dark_handheld_theme-sprites.png — The Editor in theme mode, Sprites: Home, a smooth slot, its mask in solid ink on a plain ground at 9x, its 1x preview, the sheet with the pixel-art dot's legend, the tools, the palette; Moy Night; 320x240
-moy-dark_handheld_theme-sprites@3x.png — same, enlarged 3x (nearest)
-moy-dark_handheld_theme-sprites-edited.png — Sprites after a stroke in the red the palette holds: Home is pixel art now, dotted in the sheet; Home · pixels · Undo brings it back; Moy Night; 320x240
-moy-dark_handheld_theme-sprites-edited@3x.png — same, enlarged 3x (nearest)
 moy-dark_handheld_perf-hud.png — The perf HUD over Star Catcher: the fps chip, a flat pill in the surface's polarity; Moy Night; 320x240
 moy-dark_handheld_perf-hud@3x.png — same, enlarged 3x (nearest)
 moy-dark_handheld_perf-hud-detail.png — The perf HUD's breakdown: the frame against its 33 ms budget, each part its own hue; Moy Night; 320x240
@@ -409,7 +399,6 @@ moy-dark_handheld_home-grid-s3.png — The grid arrangement on the Guition S3: t
 moy-dark_handheld_tool-bar-s3.png — A tool cart on the Guition S3's separate 320x240 canvas: the compact bar over its 18 rows and as much of the letterbox, so ‹ and the title are a 36 px tap; Moy Night; 480x320
 moy-dark_handheld_home-icons-s3.png — The icons arrangement on the Guition S3: 52 px tiles, the caption band at the foot over the top of a fourth row; Moy Night; 480x320
 moy-dark_handheld_theme-config-s3.png — The theme mode's Config on the Guition S3: ‹ (Done) and 28 px tabs; Moy Night; 480x320
-moy-dark_handheld_theme-sprites-s3.png — The theme mode's Sprites on the Guition S3: 28 px slots, swatches and tools, the sheet's page mark; Moy Night; 480x320
 moy-dark_desktop_splash.png — The splash on the 1024x600 desk: Moy at 10x, the wordmark at 40 px; Moy Night; 1024x600
 moy-dark_desktop_loading.png — The loading pill on the desk, in its own lane: the middle of the bar; Moy Night; 1024x600
 moy-dark_desktop_calendar.png — The calendar hung from the desk bar's clock, its keys in its foot; Moy Night; 1024x600
@@ -427,7 +416,6 @@ moy-dark_desktop_text-console.png — A script's text console as a window on the
 moy-dark_desktop_home-grid.png — The console mode's home in the grid arrangement: 128 px cards in three rows, the shelf bleeding off the right edge, the focused card ringed with its title bold; Moy Night; 1024x600
 moy-dark_desktop_tool-bar.png — A tool cart in console mode at 2x: the compact bar drawn at the glass's resolution over its 18 rows, the bar's Moy tile; Moy Night; 1024x600
 moy-dark_desktop_home-icons.png — The console mode's home in the icons arrangement: ten columns of 64 px tiles, each named in full under it, the focused one ringed with its name bold; Moy Night; 1024x600
-moy-dark_desktop_theme-editor.png — The Editor in theme mode on the desk: Config's theme.json beside Sprites, the focused pane and its tab, every slot named under its tile, Home ringed and painted to pixels at 16x beside its 1x and 2x; Moy Night; 1024x600
 moy-dark_desktop_perf-hud.png — The perf HUD in console mode, inside the letterbox's corner; Moy Night; 1024x600
 moy-dark_desktop_kernel-web.png — The kernel's web console screen on the desk; Moy Night; 1024x600
 contrast-dark_handheld_splash-boot.png — A first boot's splash: the track under the wordmark and what it is doing in dim; Contrast (dark); 320x240

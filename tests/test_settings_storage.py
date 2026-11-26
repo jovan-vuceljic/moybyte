@@ -26,6 +26,18 @@ def test_a_board_served_page_shows_the_boards_free_space_or_none(tmp_path):
     assert sl._free() is None
 
 
+def test_the_storage_row_says_whose_space_it_is(tmp_path):
+    """The browser's own storage reads as the browser's, a served board's
+    as the board's (issue 270), a console's as its storage."""
+    ws = build_ws(tmp_path)
+    sl = ws.settings_layer
+    assert sl._storage_word() == "Storage"
+    ws.cart_keep = object()
+    assert sl._storage_word() == "Browser storage"
+    ws.cart_home = "board"
+    assert sl._storage_word() == "Board storage"
+
+
 def test_board_carts_keeps_the_free_space_its_check_said():
     import sys
     from pathlib import Path

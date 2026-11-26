@@ -46,7 +46,6 @@ PORTED = (
     "editor_sprite",
     "editor_map",
     "editor_scene",
-    "editor_theme",
     "editor_part",
     "editor_head",
     "uitree_placed_table",

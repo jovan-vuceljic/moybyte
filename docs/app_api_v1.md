@@ -426,7 +426,7 @@ Python's alone.
 | `rule()` | a divider | |
 | `note(lines)` | a card in the page's flow | `icon=` (`"warn"` in the danger tone) |
 | `empty(title)` | what a page with nothing on it says; controls built in it stand under it; its lines wrap at word breaks to the column it stands in (a page, a cell); where its disc would push them past its room (its view, a placed page's stack), its words stand without it | `icon=`, `lines=` |
-| `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"`, `key=` the name a host's `rect_of` asks by |
+| `toast(text)` | a pill over the page's foot, or a banner | `icon=`, `sub=`, `burst=`, `look="flat"` `"badge"` `"secret"`, `key=` the name a host's `rect_of` asks by |
 | `bubble(text)` | a chat message, a stop | `side="in"`/`"out"`, `head=`, `status=`, `signal=`, `tone="failed"`, `lines=`, `on=`, `cut=` |
 | `text_view(name)` | read-only lines of a text state or a model | `wrap=`, `follow=`, `syntax=`, `face=`, `look="well"`, `gutter=` |
 | `picture(image)` | one picture | `side=`, `icon=`, `tone=`, `look="tile"`, `on=` makes it a stop |
@@ -442,8 +442,8 @@ Python's alone.
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
-| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `edit="open"` its edit open as focus comes onto it (§4), `keys="number"` the on-screen keyboard's layout (#239; draws nothing), `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
-| `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `edit="open"` its edit open as focus comes onto it (§4), `keys="number"` the on-screen keyboard's layout (#239; draws nothing), `keys="name"` a name's characters alone (a-z 0-9 _ -, a capital typed as its small letter, a space as -, _ and - never first; any other key refused as typed), `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
+| `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `icons=` (over a `row_of`, each row's icon before its word), `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
 | `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
 | `cells(name)` | a palette's colour cells over an int state | `count=`, `first=`, `cols=`, `side=`, `gap=`, `clear=`, `edge=`, `pick=` |
@@ -506,8 +506,11 @@ widths at the page's end, a status label before them, under what scrolls;
 `look="share"` shares its width among them. `ui.toast(text, icon=)` is a
 pill over the page above its foot (`look="flat"` in flat fills, filling the
 page's room), and with `sub=` a banner: a card at the top centre of the
-page, `text` over the `sub` line, `burst=` (0..255) its confetti; a dialog
-lies over the page.
+page, `text` over the `sub` line, `burst=` (0..255) its confetti;
+`look="badge"` is an achievement's banner instead, at the foot of the
+page's room, ringed in the accent, `burst=` its shine crossing it, and
+`look="secret"` the badge's with the confetti too. A dialog lies over the
+page.
 `ui.page(title, status=)` leads the hints band with its words (a page laid
 out in a split, its own or one in a switch's shown case, has the band cut
 from its room). A split among a page's other rows, or in a group or a
@@ -1012,7 +1015,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `note` | 1 | none | `icon` tpl, `lines` list of tpl |
 | `empty` | 1 | tpl | `icon` tpl, `lines` list of tpl |
 | `bubble` | 1 | tpl | `side` tpl, `head` tpl, `status` tpl, `signal` int, `tone` tpl, `max` int, `lines` int, `on` action, `cut` action |
-| `toast` | 2 | tpl | `icon` tpl, `sub` tpl, `burst` int, `look` `"flat"`, `key` key |
+| `toast` | 2 | tpl | `icon` tpl, `sub` tpl, `burst` int, `look` `"flat"` `"badge"` `"secret"`, `key` key |
 | `stepper` | 2 | tpl | `value` tpl, `prev` action, `next` action, `tone` `"ink"` `"dim"`, `focus` cond |
 | `picture` | 2 | state | `side` int, `on` action, `look` `"tile"`, `icon` tpl, `tone` tpl |
 | `progress` | 2 | state | `max` int, `label` tpl, `look` `"count"` |
@@ -1022,8 +1025,8 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `link` | 1 | action | `label` tpl, `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl, `swatch` tpl, `sub` tpl, `count` tpl, `mark` tpl, `focus` cond |
 | `toggle` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `hint` tpl |
 | `slider` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `lo` int, `hi` int, `look` `"bar"` `"steps"` `"blocks"`, `icon` tpl |
-| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `edit` `"open"` `"stop"`, `keys` `"text"` `"number"`, `changed` hook |
-| `seg` | 2 | state | `label` tpl, `labels` table, `on` action or hook, `focus` cond, `look` `"seg"` `"cycle"` `"swatches"` `"pictures"`, `text` tpl |
+| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `edit` `"open"` `"stop"`, `keys` `"text"` `"number"` `"name"`, `changed` hook |
+| `seg` | 2 | state | `label` tpl, `labels` table, `on` action or hook, `focus` cond, `look` `"seg"` `"cycle"` `"swatches"` `"pictures"`, `text` tpl, `icons` tpl |
 | `tabs` | 2 | state | `labels` table, `icons` table, `text` tpl, `on` action or hook, `focus` cond, `offered` conds, `hint` tpl |
 | `cells` | 2 | state | `clear` int, `count` int, `first` int, `cols` int, `side` int, `gap` int, `edge` bool, `on` action or hook, `pick` action or hook, `focus` cond |
 | `rows` | 1 | model | `cur` name, `current` name, `check` bool, `empty` tpl, `by` name, `filter` name, `changed` hook, `group` tpl, `dir` `"row"` `"col"` |

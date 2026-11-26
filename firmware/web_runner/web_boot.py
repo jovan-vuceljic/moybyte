@@ -1158,7 +1158,10 @@ def _step(dt, played):
     _ZOOM[0] = zoom
     page = ws.page
     asks = page.drain() if page is not None else None
-    if clip is None and asks is None and not moved and not painted:
+    shape = _pointer_shape(ws)
+    turned = shape != _SHAPE[0]
+    _SHAPE[0] = shape
+    if clip is None and asks is None and not moved and not painted and not turned:
         return ""
     cv = _S.get("canvas") or ws.sys_canvas
     out = {"paint": 1 if painted else 0, "cart": _cart_title(),
@@ -1169,7 +1172,22 @@ def _step(dt, played):
         out["ask"] = asks
     if zoom is not None:
         out["zoom"] = zoom
+    if turned:
+        out["cursor"] = shape or "arrow"
     return json.dumps(out)
+
+
+# The pointer's shape the page shows (`cursor` in a frame's JSON where it
+# turned): the browser's mouse is the page's own cursor, not one the console
+# draws, so the console's shape (`Workstation.pointer_shape`) is the CSS one.
+_SHAPE = [None]
+
+
+def _pointer_shape(ws):
+    p = ws.pointer
+    if p is None or not getattr(p, "hovers", False):
+        return None
+    return ws.pointer_shape()
 
 
 # The UI size of the last frame (`zoom` in every frame's JSON on a zoomed

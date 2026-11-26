@@ -5,7 +5,7 @@
 #   EditorApp.bar_zone   the head row lent to the bar: tabs or workspaces, UNDO/REDO, PLAY
 #   EditorApp._activate_zone_tab  what a cell of the head row asks
 #   EditorApp.save_tab   route one tab's commit to its owner
-#   EditorApp.open_theme  the theme mode: a theme package's Config and Sprites
+#   EditorApp.open_theme  the theme mode: a theme package's Config
 """The EDITOR app (Stage 3 of docs/history/shell_ux_technical_plan_v1.md).
 
 `EditorApp` is the console's authoring app: ONE app, opened on a `Project`, whose
@@ -73,8 +73,8 @@ _ZONE_RESTART = "\x00restart"    # sentinel: Restart, beside it
 _OPENS = ("cards", "blocks", "code", "paint", "map", "scene", "music")   # the tabs
 
 # The tabs save_tab() can route a commit to -- and the only ones commit_later
-# will owe. The theme mode's two tabs commit through their ThemeDoc
-# (runtime/editors/theme_editor.py), so they are not tabs here.
+# will owe. The theme mode's tab commits through its ThemeDoc
+# (runtime/editors/theme_editor.py), so it is not a tab here.
 COMMIT_TABS = _OPENS
 # Every item the head row lends the bar on a handheld (editor_ui.py), as
 # (`_activate_zone_tab`'s name, its icon): the tabs, undo, redo and Play.
@@ -95,7 +95,6 @@ _TAB_LAYOUT_UI = {
     "scene": "scene_ui",
     "music": "music_ui",
     "theme_config": "theme_config_layer",
-    "theme_sprites": "theme_sprites_layer",
 }
 # The tabs whose file a tier's run is never handed, by tier (`_tier`): an
 # edit there is one Play ignores, so the Editor offers none of them
@@ -115,8 +114,8 @@ def _tier(cart):
     return cart.get("runtime") or "python"
 
 
-# The theme mode's tabs (runtime/editors/theme_editor.py's TAB_CONFIG, TAB_SPRITES).
-THEME_TABS = ("theme_config", "theme_sprites")
+# The theme mode's tab (runtime/editors/theme_editor.py's TAB_CONFIG).
+THEME_TABS = ("theme_config",)
 
 
 def _te():
@@ -180,7 +179,7 @@ class EditorApp:
         self.zone_opened = False
         self.tab = "cards"            # active view -- ws.menu_view projects onto this:
                                       # "cards" | "code" | "paint" | "map" | "blocks"
-                                      # | "music" | "theme_config" | "theme_sprites"
+                                      # | "music" | "theme_config"
 
     # -- the active tab (a self-defending property, Stage 4 review fix) -----------
     #
@@ -277,7 +276,7 @@ class EditorApp:
 
     def open_theme(self, doc, back):
         """Open the Editor on a theme package (`doc`, a ThemeDoc) in place of
-        a cart: its Config tab, then Sprites, nothing a cart has. A cart's tab
+        a cart: its Config tab, nothing a cart has. A cart's tab
         the Editor held is written first. Done returns to `back`, the
         back-stack kind Edit theme… was opened from."""
         ws = self.ws
@@ -299,15 +298,12 @@ class EditorApp:
         self.theme_tab("theme_config")
 
     def theme_tab(self, tab):
-        """The theme mode's tab `tab` shown: the one left saves softly (a
-        switch is no exit), the keyboard in text mode for Config."""
+        """The theme mode's tab `tab` shown, the keyboard in text mode."""
         ws = self.ws
         doc = self.theme
         if doc is None:
             return
         ws.mark_dirty()
-        if tab != self.tab and self.tab in THEME_TABS:
-            doc.save_tab(self.tab, soft=True)
         self.tab = tab
         self.build_tab(tab)
         desk = self._desk()
@@ -318,7 +314,7 @@ class EditorApp:
         ws.bar_layer.invalidate()
 
     def close_theme(self):
-        """Done (the bar's ‹, K, Esc, B): the theme's tabs written, the Editor
+        """Done (the bar's ‹, K, Esc, B): the theme written, the Editor
         back to where Edit theme… was opened from."""
         if self.theme is None:
             return
@@ -332,7 +328,7 @@ class EditorApp:
             ws.wm.goto(ws.wm.root_kind())
 
     def _drop_theme(self):
-        """Leave the theme mode where it is open: its tabs hard-committed, the
+        """Leave the theme mode where it is open: its text hard-committed, the
         Editor's buffer and tab its own again."""
         doc = self.theme
         if doc is None:
@@ -423,7 +419,7 @@ class EditorApp:
         every pane it shows)."""
         ws = self.ws
         if view in THEME_TABS:
-            if self.theme is not None and view == "theme_config":
+            if self.theme is not None:
                 ws.editor = self.theme.ed
             return
         if view == "code":
@@ -753,8 +749,6 @@ class EditorApp:
         if hs.theme != theme:
             hs.theme = theme
         if theme:
-            if self.tab in editor_ui.THEME_TABS and hs.theme_tab != self.tab:
-                hs.theme_tab = self.tab
             name = self.theme.name
             if hs.theme_name != name:
                 hs.theme_name = name
@@ -847,7 +841,7 @@ class EditorApp:
         (moy_carts.save_code keeps cart["src"] in step) -- an O(n) compare of a
         few KB, nothing next to the flash write it guards (#154)."""
         if tab in THEME_TABS:
-            return self.theme is None or self.theme.clean(tab)
+            return self.theme is None or self.theme.clean()
         ws = self.ws
 
         def _quiet(hist):
@@ -934,9 +928,9 @@ class EditorApp:
 
     def close(self):
         """Leaving the Editor, by any route (`Workstation.leave_surface`): the
-        theme mode's icons, else the open tab, written."""
+        theme mode's text, else the open tab, written."""
         if self.theme is not None:
-            self.ws.look.save_icons()
+            self.ws.look.save_theme()
         else:
             self.save_current()
 
@@ -954,7 +948,7 @@ class EditorApp:
         FORCED here: half-typed Python is written rather than lost (#154). Config
         persists via commit_config (no re-run -- PLAY
         runs, handled separately in leave() so a crash can't overwrite good config).
-        In the theme mode it is the ThemeDoc's commit, both tabs'."""
+        In the theme mode it is the ThemeDoc's commit."""
         self.flush_pending()
         if self.theme is not None:
             self.theme.commit()
@@ -969,7 +963,7 @@ class EditorApp:
         it committed."""
         ws = self.ws
         if tab in THEME_TABS:
-            return self.theme is not None and self.theme.save_tab(tab)
+            return self.theme is not None and self.theme.save()
         if self._tab_is_clean(tab):
             return False             # nothing changed -> nothing to persist
         if tab == "code":

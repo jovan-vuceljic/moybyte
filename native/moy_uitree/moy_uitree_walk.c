@@ -667,6 +667,20 @@ static uint32_t seg_items(uit_t *e, const uit_node_t *N, uint32_t *len, int *cou
     return start;
 }
 
+// The icons of a seg over a row_of at the scratch's end, NUL-separated as seg_items' words: each
+// row's icons= template; their length into *len.
+static uint32_t seg_icons(uit_t *e, const uit_node_t *N, uint32_t *len)
+{
+    int m = e->slots[N->slot].model;
+    uint32_t start = e->scratch.n;
+    for (int r = 0; r < e->slots[m].nrows; r++) {
+        uint32_t n;
+        uit_tmpl_render(e, N->t_aux, m, r, &n);
+    }
+    *len = e->scratch.n > start ? e->scratch.n - start - 1 : 0;
+    return start;
+}
+
 // A swatches seg's `count` words (NUL-separated at scratch offset `at`) as colours: four bytes a
 // word, little-endian, appended to the scratch; their offset, their length in *len.
 static uint32_t swatch_words(uit_t *e, uint32_t at, int count, uint32_t *len)
@@ -1221,6 +1235,8 @@ static void draw_field(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         moy_ui_over_put(&o, MOY_UI_OV_SECRET, &one);
     if (N->lit & NL_OPEN)
         moy_ui_over_put(&o, MOY_UI_OV_TYPING, &one);    // edit="open"
+    if (N->lit & NL_NAME)
+        moy_ui_over_put(&o, MOY_UI_OV_NAME, &one);      // keys="name"
     if (N->t_aux >= 0)
         moy_ui_over_text(&o, MOY_UI_OV_HINT, sspan(e, ha, hn));
     int32_t r = moy_ui_api_field(c, s, sspan(e, la, ln), (uint8_t *)D->buf, max, len, &o);
@@ -4464,6 +4480,11 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             items = swatch_words(e, items, count, &len);
         }
         over_for(e, k, model, row, c, &o, id);
+        if (N->t_aux >= 0 && look == MOY_UI_V_SEG) {
+            // icons=: each row's icon before its word, NUL-separated as the words are
+            uint32_t ilen, icons = seg_icons(e, N, &ilen);
+            moy_ui_over_text(&o, MOY_UI_OV_ICONS, sspan(e, icons, ilen));
+        }
         int got = moy_ui_api_choice(c, s, look, sspan(e, a1, n1),
                                     (const uint8_t *)e->scratch.p + items, len, at, &o);
         if (got >= 0 && got < count && got != at) {
@@ -4709,7 +4730,9 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
         // flat fills, filling the page's room); its icon, else check. With sub=, the banner:
         // its card centred at the top of the page's room, the icon's tile, the text in `value`
         // over the sub line, a burst= of confetti from its edges (1..255 of the way out, 0
-        // none). Its rect is the pill's or the card's.
+        // none); look="badge" an achievement's, at the foot of the room, ringed in the accent,
+        // burst= its shine crossing it, and "secret" the badge's with the confetti too. Its
+        // rect is the pill's or the card's.
         int desk = (e->flags & UIT_F_DESK) != 0, flat = (N->lit & TS_FLAT) != 0;
         uint32_t ni = 0, ai = N->t_icon >= 0 ? uit_tmpl_render(e, N->t_icon, model, row, &ni) : 0;
         int32_t out[4], lift = flat ? 0 : desk ? 12 : 6 * e->fs;
@@ -4724,9 +4747,16 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             moy_ui_box_t b = {0, 0, 0, 0};
             c->fl.dirty = 1;            // over the page, whole (as the pill)
             c->fl.top = 1;
-            moy_ui_unlock(s, e->rect[0] + e->rect[2] / 2, e->rect[1], sspan(e, a1, n1), sspan(e, a2, n2),
-                          moy_ui_icon_slot(ic.p, ic.n), moy_ui_icon_glyph(ic.p, ic.n),
-                          burst < 0 ? 0 : burst > 255 ? 255 : burst, e->fs, desk, &b);
+            burst = burst < 0 ? 0 : burst > 255 ? 255 : burst;
+            int slot = moy_ui_icon_slot(ic.p, ic.n), glyph = moy_ui_icon_glyph(ic.p, ic.n);
+            if (N->lit & (TS_BADGE | TS_SECRET)) {
+                moy_ui_badge(s, e->rect[0] + e->rect[2] / 2, e->rect[1] + e->rect[3], sspan(e, a1, n1),
+                             sspan(e, a2, n2), slot, glyph, burst, (N->lit & TS_SECRET) ? burst : 0, e->fs,
+                             desk, &b);
+            } else {
+                moy_ui_unlock(s, e->rect[0] + e->rect[2] / 2, e->rect[1], sspan(e, a1, n1), sspan(e, a2, n2),
+                              slot, glyph, burst, e->fs, desk, &b);
+            }
             out[0] = b.x, out[1] = b.y, out[2] = b.w, out[3] = b.h;
         } else {
             moy_ui_api_at(c, e->rect[0], e->rect[1], e->rect[2], e->rect[3] - lift);
@@ -6229,8 +6259,8 @@ static int pn_pane_keyed(uit_t *e, int k, const char *key, size_t n)
     return -1;
 }
 
-// The pane shown over the whole panes area, else -1: the grown one, else the focused one
-// where the area is under the outermost panes' least size.
+// The pane shown over the whole panes area, else -1: the grown one, the one pane of panes that
+// hold no other, else the focused one where the area is under the outermost panes' least size.
 static int pn_alone(uit_t *e, int k, const int32_t r[4])
 {
     const uit_node_t *N = NODE(k);
@@ -6240,6 +6270,11 @@ static int pn_alone(uit_t *e, int k, const int32_t r[4])
         if (p >= 0)
             return p;
     }
+    int only = -1, n = 0;
+    KIDS(k, g)
+    only = g, n++;
+    if (n == 1 && NODE(only)->kind == UIT_PANE)
+        return only;
     if (r[2] < pn_min(e, k, 0) || r[3] < pn_min(e, k, 1)) {
         int p = e->pane_cur >= 0 ? pn_pane_in(e, k, e->pane_cur) : -1;
         return p >= 0 ? p : pn_pane_in(e, k, -1);
@@ -7728,8 +7763,9 @@ int uit_lent_place(int32_t *cells, int n, int32_t x0, int32_t w, int32_t h, int 
             if (c[0] == UIT_LC_TAB && c[2] && c[2] > widest)
                 widest = c[2];
         }
-        // the buttons keep their words only where every tab named in the current one's place holds them
-        int32_t more = density == 1 && words && cur >= 0 && widest >= 0 && widest > cur ? widest - cur : 0;
+        // the current tab is named, and the buttons keep their words, only where every tab
+        // named in the current one's place fits: which tab is current never changes the strip's look
+        int32_t more = density == 1 && cur >= 0 && widest >= 0 && widest > cur ? widest - cur : 0;
         if (least + more <= w || density == 0)
             break;
     }

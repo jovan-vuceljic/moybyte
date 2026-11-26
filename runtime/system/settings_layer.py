@@ -333,6 +333,7 @@ class SettingsLayer(Layer):
         self._rows_usb = False
         self._rows_wifi = True
         self._rows_light = True
+        self._rows_desk = False
         self._rows_idle = None
         self._rows_lgen = -1
         self._rows_sizes = None
@@ -663,7 +664,7 @@ class SettingsLayer(Layer):
         if self._wifi.station() is None:
             self.wifi_nets = []
             self.wifi_known = []
-            self.wifi_msg = "No Wi-Fi service."
+            self.wifi_msg = ""          # the page says No Wi-Fi device (wifi_ui.py)
             return
         self.wifi_scanning = True
         self.wifi_msg = WIFI_LOOKING
@@ -1009,6 +1010,7 @@ class SettingsLayer(Layer):
         tog = self._toggle_rows()
         radio = self._wifi.station() is not None
         light = bool(ws.panel_light)
+        desk = getattr(ws.wm, "mode", None) == "desktop"
         lgen = ws.look.layout_gen
         sizes = ws.look.font_scales()
         if (self._rows_cache is not None and lgen == self._rows_lgen
@@ -1018,6 +1020,7 @@ class SettingsLayer(Layer):
                 and web == self._rows_web and c6u == self._rows_c6 and off == self._rows_off
                 and usb == self._rows_usb 
                 and radio == self._rows_wifi and light == self._rows_light
+                and desk == self._rows_desk
                 and tog is self._rows_tog and idle is self._rows_idle):
             return self._rows_cache
         # The registry block sits directly after NAME, which is where the
@@ -1033,6 +1036,10 @@ class SettingsLayer(Layer):
             # only where a package's layout differs from the theme's.
             i = rows.index(("font_scale", "FONT SIZE", "font")) + 1
             rows = rows[:i] + (("layout_theme", "LAYOUT", "layout"),) + rows[i:]
+        if desk:
+            # HOME STYLE arranges the full-screen home, which the desk has not
+            # got (its Projects window draws the console home's design)
+            rows = tuple(r for r in rows if r[0] != "home_style")
         if len(sizes) < 2:
             # TEXT SIZE only where the glass offers more than one
             # (`Appearance.font_scales`)
@@ -1090,6 +1097,7 @@ class SettingsLayer(Layer):
         self._rows_usb = usb
         self._rows_wifi = radio
         self._rows_light = light
+        self._rows_desk = desk
         self._rows_idle = idle
         self._rows_lgen = lgen
         self._rows_sizes = sizes
@@ -1262,8 +1270,17 @@ class SettingsLayer(Layer):
         if u is not None:
             free = self._free()
             if free is not None:
-                out.append(("Storage", free))
+                out.append((self._storage_word(), free))
         return tuple(out)
+
+    def _storage_word(self):
+        """The Storage row's label, whose space it is: the board's on a page
+        a board serves, the browser's on one whose carts the browser keeps,
+        the console's own else."""
+        ws = self.ws
+        if getattr(ws, "cart_home", None) == "board":
+            return "Board storage"
+        return "Browser storage" if getattr(ws, "cart_keep", None) is not None else "Storage"
 
     def _free(self):
         """The store's free space as About shows it, or None: the store of

@@ -136,7 +136,7 @@ typedef struct {
 // Node flags (`lit` of a two-way control).
 enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_BLOCKS = 2, NL_FIELD = 4,
        NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16,         // NL_EDGE: a cells' edge=True
-       NL_OPEN = 16, NL_NUMBER = 32 };                  // a field's edit="open", keys="number"
+       NL_OPEN = 16, NL_NUMBER = 32, NL_NAME = 64 };    // a field's edit="open", keys="number", keys="name"
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),
@@ -144,8 +144,9 @@ enum { DL_DANGER = 1, DL_KEYS = 2 };
 enum { CD_CAROUSEL = 1, CD_SHELF = 2, CD_ICONS = 4, CD_FLOW = 8, CD_COLUMN = 16 };
 // A picture's lit bits: look="tile" (a carousel's tile of its own, its shadow round it).
 enum { PC_TILE = 1 };
-// A toast's lit bits: look="flat" (its pill in flat fills, filling the page's room).
-enum { TS_FLAT = 1 };
+// A toast's lit bits: look="flat" (its pill in flat fills, filling the page's room),
+// "badge" and "secret" (a banner as an achievement's, at the room's foot).
+enum { TS_FLAT = 1, TS_BADGE = 2, TS_SECRET = 4 };
 // A label's text options (`nbtn`): wrap= in bits 0-1 (LT_WORD, LT_CHAR), its face's
 // role + 1 in bits 2-4, the toolkit's `centre` for align= in bits 5-7, lines= given.
 // A split's pad= and gap= (`btn`, `nbtn`): an index of GAP_NAMES; its align= (`lit`) of ALIGNS.

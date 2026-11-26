@@ -2046,7 +2046,8 @@ SCHEMA = {
     "field": dict(_C, label="text", max="lit", on="action0", secret="lit", focus="cond",
                   changed="action0", hint="text", commit="lit", when="cond", off="lit", grow="lit",
                   edit="lit", keys="lit"),
-    "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
+    "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text",
+                icons="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
@@ -2500,7 +2501,9 @@ def field(label, name, max=32, commit=False, edit="stop", keys="text", **p):
     caret, and Enter (commit) or Esc (give back) ends it. `edit="open"`: its
     page exists for typing, so focus coming onto it begins its edit and Enter
     commits with the edit going on. `keys="number"`: the on-screen keyboard's layout
-    for it (#239); it draws nothing.
+    for it (#239); it draws nothing. `keys="name"`: it takes a name's characters
+    alone, a-z 0-9 _ -, a capital typed as its small letter and a space as -, _
+    and - never first; any other key is refused as it is typed.
     `commit=True` holds the edit as a draft: the state is written when Enter
     is pressed in it or focus leaves it (`changed=` runs then), and its hints
     are Done and Cancel; without it every edit writes the state."""
@@ -2517,7 +2520,7 @@ def field(label, name, max=32, commit=False, edit="stop", keys="text", **p):
     return n
 
 
-def seg(label, name, labels=None, text=None, look="seg", **p):
+def seg(label, name, labels=None, text=None, look="seg", icons=None, **p):
     """One of several values, left and right its own while focused: over an
     enum, each value's word from label table `labels=` (every value named);
     over a `row_of`, its model's rows in order, each word the row template
@@ -2527,11 +2530,17 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     number in any base); `look="pictures"` shows every value as a picture
     in a tile at the row's right, each word an image's text (`own:KEY`,
     `store:KIND/NAME`), the current one's tile the selection's, left and
-    right wrapping and activation taking the next. Bound to `.FIELD`, an int field of its list's row,
+    right wrapping and activation taking the next. Over a `row_of`,
+    `icons=` (a template over its rows like `text=`) names each row's icon,
+    drawn before its word in the seg look. Bound to `.FIELD`, an int field of its list's row,
     the field is the index of its item and `text=`, a template over the
     row, renders its items one a line; `on=` is handed the row."""
     where = _caller()
     _checked("seg", "look", look, where)
+    if icons is not None and (look != "seg" or isinstance(name, str) and name.startswith(".")
+                              or not isinstance(_st()._t.get(name), RowOf)):
+        raise UIError("N01", "ui.seg(%r) icons= names a row_of's rows' icons in the seg look" % (name,),
+                      where=where, fix='a row_of seg with text="{.FIELD}", icons="{.ICON}"')
     if isinstance(name, str) and name.startswith("."):
         f = _row_field("seg", name, INT, where)
         if labels is not None or text is None:
@@ -2577,6 +2586,12 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     else:
         n.l["text"] = tmpl(text, Ctx(_st()._t[t.model]), where, "text").g
     n.src["text"] = text
+    if icons is not None:
+        if _NOW.app.direct:
+            _direct_src("seg", "icons", icons, "text", where)
+        else:
+            n.l["icons"] = tmpl(icons, Ctx(_st()._t[t.model]), where, "icons").g
+        n.src["icons"] = icons
     return n
 
 
@@ -2744,9 +2759,11 @@ def toast(text, **p):
     look="flat" draws the pill in flat fills, filling the page's room. With
     `sub` it is a banner: a card centred at the top of the page's room, the
     icon on its tile, `text` over the `sub` line, and `burst` (an int,
-    1..255 of the way out, 0 none) confetti from its edges. `key` names it
-    (its kind and place where it has none), the name a host's `rect_of`
-    asks its rect by."""
+    1..255 of the way out, 0 none) confetti from its edges. look="badge"
+    makes the banner an achievement's: its card at the foot of the page's
+    room, ringed in the accent, `burst` the shine crossing it; look="secret"
+    the badge's with the confetti too. `key` names it (its kind and place
+    where it has none), the name a host's `rect_of` asks its rect by."""
     where = _caller()
     key = p.pop("key", None)
     if key is not None and (not isinstance(key, str) or not key):

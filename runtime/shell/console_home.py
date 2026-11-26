@@ -322,7 +322,7 @@ class Home:
         # The parked Editor's workspace (console mode): its window comes back
         # to it, so neither it nor the run state it holds is torn down.
         keep = ws.wm.is_parked("menu") and (
-            ws.text.editing_icons or (_editor_app is not None
+            ws.text.editing_theme or (_editor_app is not None
                                     and _editor_app.project is ws.run.project))
         if not keep:
             ws.editor = None

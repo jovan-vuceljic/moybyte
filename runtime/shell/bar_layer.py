@@ -215,8 +215,7 @@ def mini_btn(label, rect, fill, cv, label_rect=None):
 # The strip each content surface takes, keyed by its layer's id: the frame
 # draws it after the surface's page (`BarLayer.draw_surface`).
 STRIP_OF = {"settings": "settings", "cards": "menu", "tasks": "tasks", "webconsole": "webconsole",
-            "map": "menu", "scene": "menu", "music": "menu", "paint": "menu",
-            "theme_sprites": "menu"}
+            "map": "menu", "scene": "menu", "music": "menu", "paint": "menu"}
 # The surfaces that draw their strip themselves, and why the frame cannot.
 STRIP_SELF = {
     "block_editor_ui.py": "an entry prompt draws over the bar",

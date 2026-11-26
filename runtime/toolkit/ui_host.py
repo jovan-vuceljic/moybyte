@@ -60,6 +60,9 @@ _HB_FENCE = 64
 # (moy_ui_api.h's MOY_UI_SPLIT_WHOLE).
 _SPLIT_GEN_WHOLE = -0x80000000
 
+# moy_ui_api_cursor's shapes by number (MOY_UI_CURSOR_*): the arrow, the hand, the text beam.
+_CURSORS = (None, "hand", "text")
+
 
 class AppHost:
     """The host side of one shipped app's verbs (`ctx.ui`, for an app class
@@ -184,6 +187,7 @@ class AppHost:
         if self.over:
             self._gx = p.x              # where the console's pointer was as the page saw it
             self._gy = p.y
+            UNDER[0] = self
         if click:
             self.inp[2] = int(x)
             self.inp[3] = int(y)
@@ -199,6 +203,15 @@ class AppHost:
             if self.tap != 1:
                 self.tap = 2            # (a press no frame took yet: it, then the release)
         return True
+
+    def cursor(self, gx, gy):
+        """The pointer's shape where the console's pointer stands at (gx, gy)
+        over this page, as the pass drawn last placed its stops: "hand" over
+        a stop a press marks, "text" over a text field, None (the arrow)
+        elsewhere or where the page saw the pointer last somewhere else."""
+        if (gx, gy) != (self._gx, self._gy):
+            return None
+        return _CURSORS[_C.api_cursor(self.ctx, self.px, self.py)]
 
     def focused(self):
         """The id of the stop that holds focus in the frame drawn last, None
@@ -1037,7 +1050,7 @@ from ui_draw import (
     UI_IN_LEN, UI_TARGET, _AGAIN, _APP_SHIFT, _CHANGE, _DESK, _EDGE, _ELSEWHERE,
     _HOST_BUTTONS, _IN_KEYREP, _IN_REP, _KEYS_HOST, _KEY_EDGE, _MOVING, _ON_BAR,
     _PAINT, _PANEL, _PB_MIDDLE, _PF, _PF_WIN, _P_MIDDLE, _ROWS, _SHIFT, _TAP, _TAP_FLOOR,
-    _WHOLE, _WINDOW, KEY_PASTE, POINTER,
+    _WHOLE, _WINDOW, KEY_PASTE, POINTER, UNDER,
     _app_row, _drew_last, _fs, _look, _rep_dirs, paste_text, rows_drawn, ui_context,
     window_frame, within)
 from ui_scroll import PaintRing

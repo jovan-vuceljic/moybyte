@@ -90,7 +90,7 @@ from ticks import _ticks_ms, _ticks_diff
 # The Editor tabs a kid DRAWS on rather than types on: they take the long quiet
 # window in `idle_tick`. Code/blocks/config are typed or tapped a field at a time,
 # so a short gap there really is the end of an edit.
-DRAW_TABS = ("paint", "map", "scene", "music", "theme_sprites")
+DRAW_TABS = ("paint", "map", "scene", "music")
 
 
 class HistoryRouter:
@@ -148,7 +148,7 @@ class HistoryRouter:
 
     def _theme(self):
         """The theme open in the Editor's theme mode (runtime/editors/theme_editor.py),
-        or None: its tabs keep their own undo, and no journal."""
+        or None: its typing keeps its own undo, and no journal."""
         app = getattr(self.ws, "editor_app", None)
         return getattr(app, "theme", None) if app is not None else None
 
@@ -169,7 +169,7 @@ class HistoryRouter:
         ws = self.ws
         doc = self._theme()
         if doc is not None:
-            return doc.history(ws.menu_view, self)
+            return self.code_op_history()
         return ws.run.project.history_for(ws.menu_view)
 
     # -- code editor op-history + typing burst (#111 phase 4) ----------------
@@ -310,7 +310,7 @@ class HistoryRouter:
         option was deferred)."""
         doc = self._theme()
         if doc is not None:
-            return doc.step(self, self.ws.menu_view, False)
+            return doc.step(self, False)
         self._seal_active_local()         # a live burst/edit is undo's first target
         hist = self.active_history()
         if hist is not None and hist.can_undo() and hist.undo() is not None:
@@ -323,7 +323,7 @@ class HistoryRouter:
         then the durable journal redo. Returns True iff a step was taken."""
         doc = self._theme()
         if doc is not None:
-            return doc.step(self, self.ws.menu_view, True)
+            return doc.step(self, True)
         self._seal_active_local()         # close a stray open edit before walking redo
         hist = self.active_history()
         if hist is not None and hist.can_redo() and hist.redo() is not None:
@@ -339,7 +339,7 @@ class HistoryRouter:
         when about to REPAINT, never on a per-frame hot path)."""
         doc = self._theme()
         if doc is not None:
-            return doc.can(self, self.ws.menu_view, False)
+            return doc.can(self, False)
         hist = self.active_history()
         if hist is not None and (hist.can_undo() or self._active_local_pending()):
             return True
@@ -349,7 +349,7 @@ class HistoryRouter:
         """Read-only counterpart to can_undo() for redo()."""
         doc = self._theme()
         if doc is not None:
-            return doc.can(self, self.ws.menu_view, True)
+            return doc.can(self, True)
         hist = self.active_history()
         if hist is not None and hist.can_redo():
             return True
@@ -360,8 +360,7 @@ class HistoryRouter:
         a repaint of the bar's two icons asks."""
         doc = self._theme()
         if doc is not None:
-            v = self.ws.menu_view
-            return (doc.can(self, v, False), doc.can(self, v, True))
+            return (doc.can(self, False), doc.can(self, True))
         hist = self.active_history()
         u = hist is not None and (hist.can_undo() or self._active_local_pending())
         r = hist is not None and hist.can_redo()
@@ -596,7 +595,7 @@ class HistoryRouter:
             return                        # the Editor is no longer the surface
         doc = self._theme()
         if doc is not None:
-            doc.save_tab(view, soft=True)  # a theme's: the look's gate refuses
+            doc.save(soft=True)  # a theme's: the look's gate refuses
         elif view == "code":
             self._autosave_code()         # the compile gate is code's alone
         else:

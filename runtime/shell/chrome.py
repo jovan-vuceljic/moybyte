@@ -68,6 +68,21 @@ CURSOR = _from_ascii([
 ], {"O": 0, "F": 7}, ".")
 
 
+# The pointer over what a press acts on (AppHost.cursor's "hand"), hotspot at
+# the fingertip (HAND_AT).
+HAND = _from_ascii([
+    "....OO.......", "...OFFO......", "...OFFO......", "...OFFO......", "...OFFOOO....",
+    "...OFFOFFOOO.", ".OOOFFOFFOFFO", "OFFOFFFFFFFFO", "OFFOFFFFFFFFO", ".OFFFFFFFFFFO",
+    "..OFFFFFFFFFO", "..OFFFFFFFFO.", "...OFFFFFFFO.", "....OFFFFFO..", "....OOOOOOO..",
+], {"O": 0, "F": 7}, ".")
+HAND_AT = (4, 0)
+
+# The pointer over a text field (AppHost.cursor's "text"), hotspot at its centre.
+BEAM = _from_ascii([
+    "OOO.OOO", "OFFOFFO", "OOOFOOO", "..OFO..", "..OFO..", "..OFO..", "..OFO..",
+    "..OFO..", "..OFO..", "..OFO..", "OOOFOOO", "OFFOFFO", "OOO.OOO",
+], {"O": 0, "F": 7}, ".")
+
 
 def _arrow_sprite(cells, w, h):
     """A double-headed arrow from its fill cells: white, outlined black on

@@ -121,21 +121,3 @@ def test_up_from_the_maps_brushes_reaches_the_bar(editor):
     _press(drv, "down")
     _press(drv, "b")
     assert ws.wm.top_kind() == "launcher"
-
-
-def test_up_past_the_theme_modes_sprites_reaches_the_bar(tmp_path):
-    from test_theme_mode import _open
-    was = ui_draw.input_kind()
-    ws = host_app.build_workstation(str(tmp_path / "carts"))
-    drv = host_app.ConsoleDriver(ws)
-    ws.use_inputs((("local", "tdeck"),))
-    ws.spine.open_app(ws.app("appearance"))
-    _frames(drv)
-    _open(ws)
-    ws.editor_app.theme_tab("theme_sprites")
-    _frames(drv)
-    try:
-        _press(drv, "up", 12)
-        assert _bar_cell(ws) is not None
-    finally:
-        ui_draw.input_kind(was)

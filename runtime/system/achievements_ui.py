@@ -41,7 +41,7 @@ COUNT_LINE = ("{none?None found yet:}{every?All {total} found!:}"
 SECRET = "Secret"
 SECRET_HOW = "Keep exploring"
 NOT_FOUND = "Not found yet"
-BURST_MS = 420                 # the confetti's burst, from the banner's edges out
+BURST_MS = 420                 # the badge banner's entrance: its shine across, a secret's confetti out
 _MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
            "September", "October", "November", "December")
 
