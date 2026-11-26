@@ -663,7 +663,7 @@ class SettingsLayer(Layer):
         if self._wifi.station() is None:
             self.wifi_nets = []
             self.wifi_known = []
-            self.wifi_msg = "No Wi-Fi service."
+            self.wifi_msg = ""          # the page says No Wi-Fi device (wifi_ui.py)
             return
         self.wifi_scanning = True
         self.wifi_msg = WIFI_LOOKING

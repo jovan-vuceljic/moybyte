@@ -555,6 +555,33 @@ def test_a_console_with_no_wifi_service_takes_no_lease(tmp_path):
     ws.spine.wifi_release("web")                  # and never raises
 
 
+def test_the_panel_with_no_radio_says_no_wi_fi_device_alone(tmp_path):
+    """An app's way to the panel (`open_wifi_panel`, Get Carts' Wi-Fi) on a
+    console with no radio: No Wi-Fi device, and no networks or Scan again."""
+    from ws_helpers import build_ws
+    import wifi_ui
+
+    ws = build_ws(tmp_path)
+    ws.wifi = None
+    ws.open_wifi_panel()
+    sl = ws.settings_layer
+    for _ in range(3):
+        ws.input.begin_frame()
+        ws.frame(1 / 30)
+    assert sl.showing("wifi")
+    assert wifi_ui.s.radio is False and sl.wifi_msg == "" and sl.wifi_nets == []
+    host = sl.wifi.engine._ui
+    assert host.box("rescan") is None and host.box("net0/join") is None
+    # with a radio the same page offers it
+    ws2 = build_ws(tmp_path / "radio")
+    ws2.open_wifi_panel()
+    for _ in range(3):
+        ws2.input.begin_frame()
+        ws2.frame(1 / 30)
+    assert wifi_ui.s.radio is True
+    assert ws2.settings_layer.wifi.engine._ui.box("rescan") is not None
+
+
 def _network_cart(carts_dir):
     """A cart that declares the "network" permission."""
     import json

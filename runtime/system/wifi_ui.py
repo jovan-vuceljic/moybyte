@@ -7,6 +7,9 @@
 - The bar's Wi-Fi popover: the connection on its head, then the networks
   as a menu (the joined one checked) and Scan again.
 
+On a console with no radio (the browser's page) both say No Wi-Fi device
+and nothing else: no networks, no Scan again.
+
 Choosing a network joins it, or asks for its password in a dialog over
 the page (its field focused: typing goes in, Enter connects). Where
 nothing in use can type, the dialog says so and offers Cancel alone.
@@ -23,6 +26,7 @@ WIFI_PW_MAX = 64              # a Wi-Fi password's bytes (WPA2 takes 63)
 NETS = 24                     # the networks the panel lists
 
 s = ui.state(
+    radio=True,
     connected=False,
     ssid="",
     ip="",
@@ -45,6 +49,7 @@ def poll(page):
     so an idle frame makes nothing."""
     sl = page.sl
     w = sl._wifi.station()
+    s.radio = w is not None
     c, ssid, ip = False, None, None
     if w is not None:
         try:
@@ -153,15 +158,17 @@ def _password():
 
 def wifi_page():
     with ui.page(""):
-        with ui.group("Wi-Fi"):
+        with ui.group("Wi-Fi", shown="!radio"):
+            ui.info("No Wi-Fi device", "", icon="wifi_off")
+        with ui.group("Wi-Fi", shown="radio"):
             ui.info("{connected?Connected:Not connected}", "{ssid}", icon="{connected?wifi:wifi_off}")
             ui.info("Address", "{ip}", shown="ip")
             ui.label("{msg}", shown="msg")
-        with ui.group("Networks"):
+        with ui.group("Networks", shown="radio"):
             ui.label("No networks found.", shown="!nets")
             with ui.rows("nets", cur="sel", changed="picked"):
                 ui.link("join", "{.saved}", label="{.name}", icon="{.icon}")
-        with ui.group("Options"):
+        with ui.group("Options", shown="radio"):
             ui.link("rescan")
             ui.link("forget", "{forget_name}", shown="forget_name")
         _password()
@@ -176,10 +183,11 @@ def _networks(**p):
 
 def popover_page():
     with ui.page(""):
-        ui.info("Wi-Fi", "{connected?{ssid}:Not connected}")
-        with ui.scroll("nets", shown="scroll"):     # a card shorter than its rows: the networks scroll
+        ui.info("Wi-Fi", "{connected?{ssid}:Not connected}", shown="radio")
+        ui.info("Wi-Fi", "No Wi-Fi device", shown="!radio")
+        with ui.scroll("nets", shown="radio && scroll"):     # a card shorter than its rows: the networks scroll
             _networks()
-        _networks(shown="!scroll")
+        _networks(shown="radio && !scroll")
         _password()
 
 
