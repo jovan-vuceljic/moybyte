@@ -33,6 +33,19 @@ another agent's measurement. Every verb refuses it and names the pid; a second
 reader splits the replies and both sides fail ("multiple access on port" on one,
 "no STATE reply" on the other). `--force` is for your own stale process only.
 
+**A board belongs to one worker for a whole phase.** The machine lock
+(`flock ~/.cache/moybyte-<board>.lock`) is taken per command, so a second
+worker waiting on it flashes its own image between the first's runs, and the
+first's next suite meets a store and an image it did not leave (2026-11-26: a
+trace image's heap lines broke another worker's suite, and a bench password
+it set gated two tests). Give each worker its own board, or queue the second
+until the first has reported.
+
+**A new partition table formats the store**, Wi-Fi included. Provision the
+bench network from `MOYBYTE_BENCH_WIFI` (a `wifi.json`, kept outside the tree;
+the Zero suite's Improv test joins with it), never by reading a password out
+of this machine's network manager or printing one.
+
 ## The loop
 
 ```bash

@@ -27,3 +27,14 @@ hand-edit it.
 - `Closes #N` in a commit message closes the issue once the commit is pushed
   to the default branch;
   a summary of what landed goes in `gh issue comment`, not in the close.
+- **A large issue carries a progress checklist** (owner, 2026-11-26): a
+  tracker or a multi-part feature (#256) keeps a GitHub task list (`- [x]` /
+  `- [ ]`) of its parts near the top of its body, ticked as each part lands,
+  with the PR that carries it.
+- **Work in flight is said on its issue.** When a PR or a worker takes on an
+  issue's item, comment which PR, so a contributor does not pick it up twice;
+  when it lands, say so there and tick it. An item that cannot be reproduced
+  asks its reporter for a screenshot rather than being closed.
+- **A contributor's PR** is reviewed before it lands. A fix found in review
+  goes on top as its own commit rather than back to the author, and the PR
+  gets a comment saying where it landed and what changed in it, and why.

@@ -238,3 +238,21 @@ def test_prune_keeps_a_worktree_with_untracked_files(repo, capsys):
     assert prune(repo) == 0
     assert "kept notes: 1 untracked file(s)" in capsys.readouterr().out
     assert os.path.isdir(wt_path(repo, "notes"))
+
+
+def test_new_starts_at_the_remote_dev_and_tracks_nothing(repo, tmp_path):
+    """A worker starts at what has landed, not at a main checkout's dev that
+    trails it, and its branch never pushes to dev by default."""
+    remote = tmp_path / "remote.git"
+    git(repo, "clone", "-q", "--bare", str(repo), str(remote))
+    git(repo, "remote", "add", "origin", str(remote))
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", str(remote), str(other))
+    landed = commit(other, "LANDED", "x\n", "landed elsewhere")
+    git(other, "push", "-q", "origin", "dev")
+    assert new(repo) == 0
+    wt = wt_path(repo)
+    assert git(wt, "rev-parse", "HEAD") == landed
+    r = subprocess.run(["git", "rev-parse", "--abbrev-ref", "@{upstream}"],
+                       cwd=wt, capture_output=True, text=True)
+    assert r.returncode != 0
