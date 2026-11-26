@@ -611,7 +611,7 @@ class _Config:
         return self.doc.save_config()
 
     def dirty(self):
-        return not self.doc.clean("theme_config")
+        return not self.doc.clean()
 
     def draw(self, *_a):
         self.doc.follow()
