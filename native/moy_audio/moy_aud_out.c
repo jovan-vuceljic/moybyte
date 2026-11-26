@@ -36,6 +36,11 @@
 //                                       mix's (moy_aud_render_st); mono otherwise
 //   MOY_AUDIO_DAC_MONO                  the codec reads one slot: both carry the mean
 //   MOY_AUDIO_CORE                      the feeder's core, 1 (the VM's) unless named
+//   MOY_AUDIO_MCLK_WHOLE                the master clock a whole division of its source:
+//                                       the rate moves to the nearest that divides
+//                                       (moy_aud_out_rate says which), for an
+//                                       amplifier whose PLL loses lock on a fractional
+//                                       divider's jitter (the CoreS3's AW88298)
 
 #include "moy_tasks.h"
 
@@ -54,6 +59,10 @@
 
 #include "driver/gpio.h"
 #include "driver/i2s_std.h"
+#if MOY_AUDIO_MCLK_WHOLE
+#include "esp_clk_tree.h"
+#include "hal/i2s_ll.h"
+#endif
 #include "esp_attr.h"
 #include "esp_task.h"
 #include "esp_timer.h"
@@ -148,8 +157,12 @@ int moy_aud_out_plays(void) {
     return s_task != NULL;
 }
 
+// The rate the channel runs at: MOY_AUDIO_RATE, or under MOY_AUDIO_MCLK_WHOLE
+// the one its whole divider gives (chan_whole).
+static int s_rate = MOY_AUDIO_RATE;
+
 int moy_aud_out_rate(void) {
-    return MOY_AUDIO_RATE;
+    return s_rate;
 }
 
 int moy_aud_out_channels(void) {
@@ -168,6 +181,27 @@ static bool IRAM_ATTR on_ovf(i2s_chan_handle_t h, i2s_event_data_t *e, void *ctx
     s_ovf++;
     return false;
 }
+
+#if MOY_AUDIO_MCLK_WHOLE
+// The master clock as a whole division of the channel's source, its fraction
+// (and the jitter the fraction's dither puts on BCK) gone: both halves' dividers,
+// the channel already set up at MOY_AUDIO_RATE (256 fs). s_rate takes the rate
+// that division gives.
+static void chan_whole(void) {
+    uint32_t hz = 0;
+    if (esp_clk_tree_src_get_freq_hz((soc_module_clk_t)I2S_CLK_SRC_DEFAULT,
+                                     ESP_CLK_TREE_SRC_FREQ_PRECISION_CACHED, &hz) != ESP_OK
+        || hz == 0) {
+        return;
+    }
+    uint32_t mclk = (uint32_t)MOY_AUDIO_RATE * 256u;
+    uint32_t n = (hz + mclk / 2) / mclk;
+    i2s_dev_t *hw = I2S_LL_GET_HW(MOY_AUDIO_I2S_NUM);
+    i2s_ll_tx_set_raw_clk_div(hw, n, 0, 0, 0, 0);       // as the driver sets it: no update,
+    i2s_ll_rx_set_raw_clk_div(hw, n, 0, 0, 0, 0);       // which would wait on a stopped clock
+    s_rate = (int)((hz + 128u * n) / (256u * n));
+}
+#endif
 
 // The channel on the board's pins with a ring of `desc` x `frames`, enabled:
 // 0, or -1 with nothing left open.
@@ -214,7 +248,13 @@ static int chan_open(int desc, int frames) {
     sc.clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
 #endif
     i2s_event_callbacks_t cbs = {.on_send_q_ovf = on_ovf};
-    if (i2s_channel_init_std_mode(s_tx, &sc) != ESP_OK
+    int ok = i2s_channel_init_std_mode(s_tx, &sc) == ESP_OK;
+#if MOY_AUDIO_MCLK_WHOLE
+    if (ok) {
+        chan_whole();
+    }
+#endif
+    if (!ok
         || i2s_channel_register_event_callback(s_tx, &cbs, NULL) != ESP_OK
         || i2s_channel_enable(s_tx) != ESP_OK) {
         i2s_del_channel(s_tx);
@@ -236,8 +276,13 @@ static int chan_open(int desc, int frames) {
     if (i2s_channel_init_std_mode(s_rx, &rc) != ESP_OK) {
         i2s_del_channel(s_rx);
         s_rx = NULL;
-    } else if (s_rx_on) {
-        i2s_channel_enable(s_rx);
+    } else {
+#if MOY_AUDIO_MCLK_WHOLE
+        chan_whole();           // the receive half's set-up wrote the shared divider again
+#endif
+        if (s_rx_on) {
+            i2s_channel_enable(s_rx);
+        }
     }
 #endif
     return 0;
@@ -388,6 +433,9 @@ int moy_aud_out_start(void) {
         s_why = "the I2S channel would not open";
         return s_state;
     }
+#if MOY_AUDIO_MCLK_WHOLE
+    moy_aud_set_rate(s_rate / OUT_UP);  // the rate the whole divider gives
+#endif
 #if MOY_AUDIO_CODEC_ES8311
     // The codec takes its clocks from the channel's MCLK, so it is set up
     // with the channel running (silence) and the amplifier still off.

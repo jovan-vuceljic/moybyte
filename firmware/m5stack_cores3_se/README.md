@@ -44,7 +44,12 @@ pin a GPIO (0x12/0x13 0xFF); then the panel's reset pulse and 120 ms. Each
 value is M5Unified's `Power_Class::begin` for the CoreS3 and M5GFX's
 `pmic_ops`. The AW88298's (`native/moy_audio/moy_codec_aw88298.c`) is
 M5Unified's: 0x61 0x0673, 0x04 0x4040, 0x05 0x0008, 0x06 0x14C0 with the
-rate's code, 0x0C 0x0064.
+rate's code, 0x0C 0x0064. Its PLL locks on BCK, and the I2S driver's fractional
+MCLK divider jitters BCK enough that the lock never holds (SYSST 0x01 shows
+PLLS clear, no sound), so the board takes `MOY_AUDIO_MCLK_WHOLE`
+(`native/moy_audio/moy_aud_out.c`): a whole divider, 160 MHz / 14, and the
+output and the mix at the rates it gives (2026-11-27). `moy_cores3.reg(0x36,
+0x01, 2)` reads SYSST; 0x0311 is locked.
 
 ## Input
 

@@ -80,7 +80,13 @@
 // pins (board.toml's speaker row: BCK 34, WS 33, DOUT 13, and MCLK 0, which the
 // ES7210 microphone codec clocks from), set up over the bus; its rail is the
 // AXP2101's ALDO1 and its enable the AW9523's P0.2 (native/moy_cores3).
+// The AW88298's PLL locks on BCK and loses the lock on a fractional MCLK
+// divider's jitter (SYSST's PLLS flickering, no sound), so the divider is
+// whole: 160 MHz / 14 at 256 fs, 44,643 Hz stereo out of a 22,321 Hz mix.
 #define MOY_AUDIO_CODEC_AW88298             (1)
+#define MOY_AUDIO_RATE                      (44100)
+#define MOY_AUDIO_STEREO                    (1)
+#define MOY_AUDIO_MCLK_WHOLE                (1)
 
 #define MOY_GLASS_POOL_BYTES                (160 * 1024)
 #define MOY_SHARES_BOARD                    "cores3"
