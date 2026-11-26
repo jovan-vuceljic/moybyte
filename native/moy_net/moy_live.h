@@ -4,9 +4,10 @@
 // channels are the radio link (a Zero relays its ESP-NOW radio to the
 // browser console it serves, which plays a match on it as a console does,
 // docs/netplay_v1.md section 5), the device channel (the board's device
-// APIs a page's cart holds by handle, moy_live_dev.c), the web terminal and
-// the requests (the webhost's routes, asked and answered on the socket as
-// over HTTP). moy_live.c's header is the wire.
+// APIs a page's cart holds by handle, moy_live_dev.c, and its pins), the
+// web terminal, the requests (the webhost's routes, asked and answered on
+// the socket as over HTTP) and the apps' messages (a window on the page and
+// its service on the board, moy_live_svc.c). moy_live.c's header is the wire.
 //
 // The webhost answers GET /live's upgrade (moy_webhost.c, sealed as /term
 // is) and hands the socket here. A board builds the bridge where its
@@ -79,6 +80,19 @@ int moy_live_say(size_t n);
 // /live probe's "kinds": its length.
 size_t moy_web_live_kinds(char *out, size_t cap);
 
+// THE APPS' MESSAGES ('m', moy_live_svc.c; moy_live.c's header is the wire):
+// an app whose service runs on this board, served to a page's windows of it
+// (`on`) or no longer (the service host's, on one task); and the bridge's
+// hooks, each on its task: a session's start and end, an 'm' plaintext from
+// the page, and a pass's pushes (the stand-ins open, or -1 when the socket
+// failed). Its counts: messages up, down, and dropped (too long for a frame).
+void moy_live_svc_serve(const char *app, int on);
+void moy_live_svc_start(void);
+void moy_live_svc_end(void);
+int moy_live_svc_message(const uint8_t *p, size_t n);
+int moy_live_svc_pump(void);
+void moy_live_svc_stats(uint32_t *up, uint32_t *down, uint32_t *dropped);
+
 typedef struct {
     uint32_t sessions;                  // sockets taken
     uint32_t busy;                      // upgrades refused while one is live
@@ -92,6 +106,7 @@ typedef struct {
     uint32_t devs, dev_calls, dev_writes, dev_pushes;
     uint32_t hints;                     // hint messages sent (THE HINTS, moy_live.c)
     uint32_t reqs;                      // requests the page sent whole (THE REQUESTS)
+    uint32_t msgs_up, msgs_down;        // apps' messages each way (THE APPS' MESSAGES)
 } moy_live_stats_t;
 
 void moy_live_stats(moy_live_stats_t *out);

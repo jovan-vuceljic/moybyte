@@ -22,6 +22,8 @@
 //        has the face: this board then serves no GET /term.
 //   'r'  the requests: the webhost's routes asked on the socket (THE
 //        REQUESTS, below).
+//   'm'  the apps' messages: an app's window on the page and its service
+//        on the board (THE APPS' MESSAGES, below; moy_live_svc.c).
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
 //
@@ -116,6 +118,25 @@
 // memory is answered 'A' 503 and 'Z' at once. A request still waiting when
 // the socket ends goes with it, and the answer to one the webhost took
 // goes nowhere (moy_live_req_say: the socket of its session is gone).
+//
+// THE APPS' MESSAGES. Each end keeps a stand-in for the other end's
+// processes of each app whose service runs on the board, a process of that
+// app hearing every message sent to it (moy_evq.h's MOY_EVQ_ANY), and what
+// it takes crosses here, where the other end's stand-in sends it again
+// (moy_live_svc.c's header). Down to the page:
+//
+//   'H' apps                  the apps whose services run on the board,
+//                             ',' between: at the socket's start and at
+//                             each change
+//
+// and either way:
+//
+//   'M' an(1) app nn(1) name args   message `name` sent to app `app`, its
+//                             arguments a JSON array
+//
+// The services hear the page come and go (the OS message "page", [1] or
+// [0]); a window hears the board's socket do so on the page
+// (moy_svc_web.c: "board", [1] or [0, why]).
 //
 // Nothing waits on the radio or the page: the bridge's task (one a page's
 // socket, made with its buffers when the webhost hands the socket over and
@@ -249,6 +270,13 @@ static void unlock(void) {
 #pragma weak moy_live_term_fd
 #pragma weak moy_live_term_pump
 #pragma weak moy_live_term_end
+
+// The apps' messages (moy_live_svc.c): weak, for an image without them.
+#pragma weak moy_live_svc_start
+#pragma weak moy_live_svc_end
+#pragma weak moy_live_svc_message
+#pragma weak moy_live_svc_pump
+#pragma weak moy_live_svc_stats
 
 static live_t *const L = &S;
 
@@ -469,6 +497,9 @@ static int message(int ws, uint8_t *p, size_t n) {
     if (p[0] == 'r') {
         return request(ws, p + 1, n - 1);
     }
+    if (p[0] == 'm') {
+        return moy_live_svc_message != NULL ? moy_live_svc_message(p, n) : 0;
+    }
     if (p[0] != 'n') {
         return 0;
     }
@@ -657,6 +688,9 @@ static void pump(int ws) {
         return;
     }
     hints_start();
+    if (moy_live_svc_start != NULL) {
+        moy_live_svc_start();
+    }
     for (;;) {
         if (L->cut) {
             moy_ws_close(ws, L->cut == 2 ? 4001 : 1008, L->cut == 2 ? "taken" : "revoked");
@@ -704,6 +738,11 @@ static void pump(int ws) {
         if (DEV_HAS(moy_live_dev_pump) && (devs = moy_live_dev_pump()) < 0) {
             return;
         }
+        int apps = moy_live_svc_pump != NULL ? moy_live_svc_pump() : 0;
+        if (apps < 0) {
+            return;
+        }
+        devs += apps;
         if (hints(ws) < 0) {
             return;
         }
@@ -723,6 +762,9 @@ static void serve(int ws) {
     moy_net_free(moy_live_req_take());
     if (DEV_HAS(moy_live_dev_end)) {
         moy_live_dev_end();
+    }
+    if (moy_live_svc_end != NULL) {
+        moy_live_svc_end();
     }
     if (moy_live_term_end != NULL) {
         moy_live_term_end();
@@ -825,6 +867,10 @@ void moy_web_live_cut(int taken) {
 
 void moy_live_stats(moy_live_stats_t *out) {
     *out = L->stats;
+    if (moy_live_svc_stats != NULL) {
+        uint32_t dropped;
+        moy_live_svc_stats(&out->msgs_up, &out->msgs_down, &dropped);
+    }
     if (DEV_HAS(moy_live_dev_stats)) {
         moy_live_dev_stats(out);
     }

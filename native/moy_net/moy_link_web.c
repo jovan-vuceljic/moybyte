@@ -45,6 +45,10 @@ static struct {
 // link alone (tests/test_live_link.py's).
 #pragma weak moy_dev_web_give
 #pragma weak moy_dev_web_socket
+// ...and the apps' messages' (moy_svc_web.c), likewise.
+#pragma weak moy_svc_web_give
+#pragma weak moy_svc_web_socket
+#pragma weak moy_svc_web_pump
 
 // A plaintext of `n` bytes on the queue: where its bytes go, or NULL when
 // the queue is full (its sends counted refused by the caller).
@@ -206,6 +210,9 @@ void moy_link_stats(moy_link_stats_t *s) {
 }
 
 size_t moy_link_web_take(uint8_t *out, size_t cap) {
+    if (P.open && moy_svc_web_pump != NULL) {
+        moy_svc_web_pump();
+    }
     size_t n = P.out_n < cap ? P.out_n : 0;
     if (n) {
         memcpy(out, P.out, n);
@@ -222,6 +229,10 @@ uint8_t *moy_link_web_queue(size_t n) {
 void moy_link_web_give(const uint8_t *p, size_t n) {
     if (n >= 2 && p[0] == 'd' && moy_dev_web_give != NULL) {
         moy_dev_web_give(p, n);
+        return;
+    }
+    if (n >= 2 && p[0] == 'm' && moy_svc_web_give != NULL) {
+        moy_svc_web_give(p, n);
         return;
     }
     if (n < 2 || p[0] != 'n') {
@@ -263,6 +274,9 @@ void moy_link_web_open(int on) {
         if (moy_dev_web_socket != NULL) {
             moy_dev_web_socket(1);
         }
+        if (moy_svc_web_socket != NULL) {
+            moy_svc_web_socket(1);
+        }
     } else if (!on && P.open) {
         P.open = 0;
         P.up = 0;
@@ -270,6 +284,9 @@ void moy_link_web_open(int on) {
         P.s_at = OUT_CAP;
         if (moy_dev_web_socket != NULL) {
             moy_dev_web_socket(0);
+        }
+        if (moy_svc_web_socket != NULL) {
+            moy_svc_web_socket(0);
         }
     }
 }

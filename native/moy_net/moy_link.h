@@ -140,8 +140,9 @@ typedef struct {
 // The plaintexts queued since the last take, each behind its 2-byte
 // little-endian length, into `out`: the bytes, 0 when none (or `cap` short).
 size_t moy_link_web_take(uint8_t *out, size_t cap);
-// One plaintext the board sent: the link channel's ('n' first), or the
-// device channel's ('d', handed to moy_dev_web_give).
+// One plaintext the board sent: the link channel's ('n' first), the
+// device channel's ('d', handed to moy_dev_web_give) or the apps' messages'
+// ('m', moy_svc_web_give).
 void moy_link_web_give(const uint8_t *p, size_t n);
 // The socket opened (1) or closed (0).
 void moy_link_web_open(int on);
@@ -164,6 +165,13 @@ void moy_dev_web_kinds(const char *spec, size_t n);
 void moy_dev_web_give(const uint8_t *p, size_t n);
 void moy_dev_web_socket(int on);
 void moy_dev_web_info(moy_dev_web_info_t *out);
+// The page's half of the apps' messages (moy_svc_web.c, its header the
+// contract): one 'm' plaintext the board sent, the socket opened or closed,
+// the stand-ins' messages queued (before each take), and its counts.
+void moy_svc_web_give(const uint8_t *p, size_t n);
+void moy_svc_web_socket(int on);
+void moy_svc_web_pump(void);
+void moy_svc_web_stats(uint32_t *apps, uint32_t *up, uint32_t *down, uint32_t *dropped);
 #endif
 
 #endif

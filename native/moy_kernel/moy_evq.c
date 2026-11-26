@@ -474,7 +474,8 @@ static int fan(uint32_t from, const char *app, const char *to_app, const char *n
         bool sent = false, vm = false;
         MOY_SYNC_LOCK(&s_lock);
         q_t *q = s_q[i];
-        if (q != NULL && s_pid[i] != from && listens(q, name)
+        if (q != NULL && s_pid[i] != from
+            && (listens(q, name) || (to_app != NULL && (q->flags & MOY_EVQ_ANY)))
             && (to_app == NULL || strcmp(q->app, to_app) == 0)) {
             if (!allowed(q, sys, app, name)) {
                 refused++;
