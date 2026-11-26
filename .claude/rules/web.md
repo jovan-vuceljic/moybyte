@@ -559,8 +559,11 @@ nor those docs will warn you about:
   — never commit or ship it.
 - **The BROWSER imports p8 carts too (#194), by running those same files, and
   the imported cart RUNS.** A dropped or chosen `.p8`/`.p8.png` is converted
-  in the wasm VM, and the console's card shows the compatibility report, its
-  Open playing the cart (`page_link.py`'s `offer`): `build.sh` stages `tools/p8_import.py`, `tools/p8_lua_port.py` (both
+  in a wasm VM of its own, a second worker that ends with the cart
+  (`worker.js`, THE CONVERTER: a conversion takes an iPhone minutes), while the
+  console goes on drawing and its notice says the stage; then the console's
+  card shows the compatibility report, its Open playing the cart
+  (`page_link.py`'s `offer`): `build.sh` stages `tools/p8_import.py`, `tools/p8_lua_port.py` (both
   hash-pinned) and `tools/p8_writer.py` into the frozen set, plus `shims/zlib.py`,
   four lines over MicroPython's `deflate`. **The browser could skip the inflate
   entirely** (`createImageBitmap` + `getImageData`, then read the low bits in JS)
@@ -584,7 +587,7 @@ nor those docs will warn you about:
   injected from out here**. `tests/test_p8_micropython.py` is the lane that found
   them and `tests/test_p8_import_vendor.py` scans a re-vendored file for the six
   statically. **Memory is the other tier fact**: a real BBS cart needs several
-  times the fixture's MicroPython heap to import; the browser gives the VM 16MB,
+  times the fixture's MicroPython heap to import; the browser gives the converter's VM 16MB to start,
   and that import is the bar a device leg has to clear.
 - **Trust zepto8 for p8 semantics, not the wiki**: the pattern-length rule is the
   first non-looping channel, and all-looping means the SLOWEST channel — the

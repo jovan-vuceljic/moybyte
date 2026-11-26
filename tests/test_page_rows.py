@@ -111,6 +111,15 @@ def test_the_page_s_word_is_the_console_s(tmp_path):
     assert ws.page.kept == "In this browser"
     ws.page.heard(ws, {"say": ["Saved x.moy.zip", "", "ok"]})
     assert ws.notice_up[0] == "Saved x.moy.zip"
+    # A conversion's progress: said with its time each second, and taken
+    # down with 0 where it is the notice up, and only there.
+    ws.page.heard(ws, {"say": ["Importing c.p8", "Writing the cart (3s)", "ok", 2500]})
+    assert ws.notice_up[:2] == ("Importing c.p8", "Writing the cart (3s)")
+    assert ws.notices.notice_active()
+    ws.page.heard(ws, {"say": ["Importing other.p8", "", "ok", 0]})
+    assert ws.notices.notice_active()
+    ws.page.heard(ws, {"say": ["Importing c.p8", "", "ok", 0]})
+    assert not ws.notices.notice_active()
     ws.page.heard(ws, {"tell": ["The console stopped answering", ["Do not reload.", "danger"]]})
     assert ws.confirm.open and ws.confirm.verb == "tell"
     assert ws.confirm.line_rows() == (("Do not reload.", "danger"),)

@@ -95,7 +95,10 @@ class PageLink:
         whether its browser has full screen (an iPhone's Safari's has
         none), `app` whether it runs as a home-screen app, `ios` whether on
         an iPhone or an iPad, `host` the host it was opened at, `kept`
-        where it keeps the carts, `say` a notice ([title, sub, kind]), `tell`
+        where it keeps the carts, `say` a notice ([title, sub, kind, ms]:
+        ms how long it stays up, the notice's own time where absent; 0 takes
+        the notice titled `title` down, where it is the one up: a
+        conversion's progress, said each second, ends so), `tell`
         a card ([title, [line, tone], ...]), whose Open goes to `go` where it
         names an address (where a Zero that moved went), and `offer` one whose
         Open plays a cart ([title, folder, [line, tone], ...]): an import's
@@ -117,7 +120,13 @@ class PageLink:
             title = str(say[0])
             sub = str(say[1]) if len(say) > 1 else ""
             kind = str(say[2]) if len(say) > 2 else "ok"
-            ws.notices.notice(title, sub, kind)
+            ms = int(say[3]) if len(say) > 3 else None
+            if ms == 0:
+                ws.notices.withdraw(title)
+            elif ms:
+                ws.notices.notice(title, sub, kind, ms)
+            else:
+                ws.notices.notice(title, sub, kind)
         tell = ev.get("tell")
         go = str(ev.get("go") or "")
         if tell and go:
