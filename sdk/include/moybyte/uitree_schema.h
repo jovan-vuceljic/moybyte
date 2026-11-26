@@ -38,6 +38,7 @@ static const char *const ut_kind_names_[] = {
 #define UT_FACE_RESULT "result"
 #define UT_KEYS_TEXT "text"
 #define UT_KEYS_NUMBER "number"
+#define UT_KEYS_NAME "name"
 #define UT_KIND_NORMAL "normal"
 #define UT_KIND_PRIMARY "primary"
 #define UT_KIND_DANGER "danger"

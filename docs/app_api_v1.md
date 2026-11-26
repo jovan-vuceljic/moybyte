@@ -441,7 +441,7 @@ Python's alone.
 | `link(action)` | a row that fires its action | `label=`, `value=`, `icon=`, `tag=`, `signal=`, `swatch=`, `sub=`, `count=`, `mark=` |
 | `toggle(label, name)` | a bool | `on=`, `hint=`, `when=` with `off=` (below) |
 | `slider(label, name, lo, hi)` | an int from lo to hi | `look="steps"`/`"blocks"`, `icon=`, `on=`, `when=` with `off=` (below) |
-| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `edit="open"` its edit open as focus comes onto it (§4), `keys="number"` the on-screen keyboard's layout (#239; draws nothing), `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
+| `field(label, name, max)` | a line of text | `hint=` shown empty, `commit=True` a draft written on Enter, `edit="open"` its edit open as focus comes onto it (§4), `keys="number"` the on-screen keyboard's layout (#239; draws nothing), `keys="name"` a name's characters alone (a-z 0-9 _ -, a capital typed as its small letter, a space as -, _ and - never first; any other key refused as typed), `secret=`, `grow=`, `on=`, `changed=`, `when=` with `off=` (below) |
 | `seg(label, name)` | one of an enum's values, or of a model's rows | `labels=`, `text=`, `look=` (`seg`, `cycle`, `swatches`, `pictures`), `on=` |
 | `tabs(name, labels)` | a tab strip over an enum, or over a `row_of` a tab a row; a `switch` on the same name is its body | `icons=`, `offered=`, `hint=`, `text=` |
 | `stepper(value, prev, next)` | "‹ value ›", its chevrons two actions | `tone="dim"`, `grow=` |
@@ -1021,7 +1021,7 @@ the app's. What a tier lacks of it is `tests/uitree_contract/known.json`'s.
 | `link` | 1 | action | `label` tpl, `value` tpl, `icon` tpl, `signal` int, `tag` tpl, `tone` tpl, `swatch` tpl, `sub` tpl, `count` tpl, `mark` tpl, `focus` cond |
 | `toggle` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `hint` tpl |
 | `slider` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `lo` int, `hi` int, `look` `"bar"` `"steps"` `"blocks"`, `icon` tpl |
-| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `edit` `"open"` `"stop"`, `keys` `"text"` `"number"`, `changed` hook |
+| `field` | 1 | state | `on` action or hook, `focus` cond, `when` cond, `off` `"hide"` `"grey"`, `label` tpl, `max` int, `secret` bool, `hint` tpl, `grow` bool, `commit` bool, `edit` `"open"` `"stop"`, `keys` `"text"` `"number"` `"name"`, `changed` hook |
 | `seg` | 2 | state | `label` tpl, `labels` table, `on` action or hook, `focus` cond, `look` `"seg"` `"cycle"` `"swatches"` `"pictures"`, `text` tpl |
 | `tabs` | 2 | state | `labels` table, `icons` table, `text` tpl, `on` action or hook, `focus` cond, `offered` conds, `hint` tpl |
 | `cells` | 2 | state | `clear` int, `count` int, `first` int, `cols` int, `side` int, `gap` int, `edge` bool, `on` action or hook, `pick` action or hook, `focus` cond |

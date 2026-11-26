@@ -1221,6 +1221,8 @@ static void draw_field(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k,
         moy_ui_over_put(&o, MOY_UI_OV_SECRET, &one);
     if (N->lit & NL_OPEN)
         moy_ui_over_put(&o, MOY_UI_OV_TYPING, &one);    // edit="open"
+    if (N->lit & NL_NAME)
+        moy_ui_over_put(&o, MOY_UI_OV_NAME, &one);      // keys="name"
     if (N->t_aux >= 0)
         moy_ui_over_text(&o, MOY_UI_OV_HINT, sspan(e, ha, hn));
     int32_t r = moy_ui_api_field(c, s, sspan(e, la, ln), (uint8_t *)D->buf, max, len, &o);

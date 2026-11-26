@@ -136,7 +136,7 @@ typedef struct {
 // Node flags (`lit` of a two-way control).
 enum { NL_CYCLE = 1, NL_STEPS = 1, NL_COMMIT = 1, NL_SECRET = 2, NL_SWATCH = 2, NL_BLOCKS = 2, NL_FIELD = 4,
        NL_HIDE = 8, NL_PICS = 16, NL_EDGE = 16,         // NL_EDGE: a cells' edge=True
-       NL_OPEN = 16, NL_NUMBER = 32 };                  // a field's edit="open", keys="number"
+       NL_OPEN = 16, NL_NUMBER = 32, NL_NAME = 64 };    // a field's edit="open", keys="number", keys="name"
 // A dialog's lit bits: kind="danger"; look="keys" (no button row on the T-Deck).
 enum { DL_DANGER = 1, DL_KEYS = 2 };
 // A cards list's lit bits: look="carousel" (one row of tiles, its centre's words under it),

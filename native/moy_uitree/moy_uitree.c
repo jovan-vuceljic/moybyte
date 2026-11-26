@@ -1654,11 +1654,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     if (kind == UIT_FIELD && (!strcmp(name, "edit") || !strcmp(name, "keys"))) {
         // edit="open": focus coming onto it begins its edit; keys="number": the on-screen
-        // keyboard's layout for it (#239), which draws nothing (the contract checked the words)
+        // keyboard's layout for it (#239), which draws nothing; keys="name": it takes a
+        // name's characters alone (the contract checked the words)
         if (!strcmp(src, "open"))
             N->lit |= NL_OPEN;
         else if (!strcmp(src, "number"))
             N->lit |= NL_NUMBER;
+        else if (!strcmp(src, "name"))
+            N->lit |= NL_NAME;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if (kind == UIT_CELLS && !strcmp(name, "edge")) {

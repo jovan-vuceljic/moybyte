@@ -188,6 +188,9 @@ void moy_ui_over_put(moy_ui_over_t *o, int k, const int32_t *v) {
         case MOY_UI_OV_TYPING:
             o->flags2 = v[0] ? o->flags2 | MOY_UI_O2_TYPING : o->flags2 & ~MOY_UI_O2_TYPING;
             break;
+        case MOY_UI_OV_NAME:
+            o->flags2 = v[0] ? o->flags2 | MOY_UI_O2_NAME : o->flags2 & ~MOY_UI_O2_NAME;
+            break;
         default: break;
     }
 }

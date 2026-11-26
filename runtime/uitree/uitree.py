@@ -2500,7 +2500,9 @@ def field(label, name, max=32, commit=False, edit="stop", keys="text", **p):
     caret, and Enter (commit) or Esc (give back) ends it. `edit="open"`: its
     page exists for typing, so focus coming onto it begins its edit and Enter
     commits with the edit going on. `keys="number"`: the on-screen keyboard's layout
-    for it (#239); it draws nothing.
+    for it (#239); it draws nothing. `keys="name"`: it takes a name's characters
+    alone, a-z 0-9 _ -, a capital typed as its small letter and a space as -, _
+    and - never first; any other key is refused as it is typed.
     `commit=True` holds the edit as a draft: the state is written when Enter
     is pressed in it or focus leaves it (`changed=` runs then), and its hints
     are Done and Cancel; without it every edit writes the state."""

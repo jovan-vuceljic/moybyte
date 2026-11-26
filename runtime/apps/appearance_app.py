@@ -190,9 +190,6 @@ def name_ask():
 
 def name_typed():
     lay = _lay()
-    t = lay.name_ok(s.name)
-    if t != s.name:
-        s.name = t
     lay.armed = None
     lay.why = None
 
@@ -250,7 +247,8 @@ def build():
             ui.link("edit", "{edit_word}")
         with ui.dialog("Name your theme", ["cancel", "keep"], labels=["Cancel", "{armed?Replace:Keep}"],
                        shown="naming"):
-            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed", edit="open")
+            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed", edit="open",
+                     keys="name")
             ui.label("{name_note}")
 
 
@@ -572,21 +570,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build)
         self.fill_owed = True
         if acted:
             self.acted()
-
-    @staticmethod
-    def name_ok(text):
-        """`text` in the name grammar's characters (§3), a letter or a digit
-        first: a capital typed is its small letter and a space a -, so what
-        is typed reads as typed; anything else never lands."""
-        out = ""
-        for c in text:
-            if "A" <= c <= "Z":
-                c = chr(ord(c) + 32)
-            elif c == " ":
-                c = "-"
-            if "a" <= c <= "z" or "0" <= c <= "9" or (c in "_-" and out):
-                out += c
-        return out
 
     def name_commit(self):
         """Keep in NAME: rename `custom` to the name typed; a name an

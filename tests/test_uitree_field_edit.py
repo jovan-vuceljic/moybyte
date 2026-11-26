@@ -123,3 +123,17 @@ def test_compiled_the_trackball_moves_the_caret_in_an_edit(tmp_path, monkeypatch
 
 
 from test_input_matrix import built  # noqa: E402,F401 -- the compiled pages, built once
+
+
+LUA_NAME = LUA_OPEN.replace('keys = "number"', 'keys = "name"')
+PY_NAME = PY_OPEN.replace('keys="number"', 'keys="name"')
+
+
+@pytest.mark.parametrize("runtime", ["lua", "python"])
+def test_a_name_field_refuses_what_a_name_cannot_hold_as_it_is_typed(tmp_path, runtime):
+    """keys="name" (issue 270): a capital lands as its small letter and a
+    space as -, a - or _ first and anything outside a-z 0-9 _ - never land,
+    so nothing typed flashes in and is taken back."""
+    ws, drv = _open(tmp_path, "Open App", LUA_NAME if runtime == "lua" else PY_NAME, runtime)
+    _type(drv, "-_My Th!eme?")
+    assert _name(ws) == "my-theme"
