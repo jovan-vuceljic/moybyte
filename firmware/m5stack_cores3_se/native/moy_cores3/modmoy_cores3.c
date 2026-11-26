@@ -62,6 +62,7 @@
 //       touch INT and 3 the amplifier's INT as inputs, 7 the SY7088 boost
 #define AW_P0 0x02
 #define AW_P1 0x03
+#define AW_P0_BUS_OUT 0x02
 #define AW_P0_AMP 0x04
 #define AW_P1_LCD_RST 0x02
 #define AW_P1_BOOST 0x80
@@ -114,7 +115,9 @@ esp_err_t moy_lcd_board_up(void) {
     e |= bits(AXP_ADDR, &s_axp, 0x23, 0, 0x1F);
     // The expander: outputs written before the directions, so every pin
     // switched to an output comes up at its level.
-    e |= bits(AW_ADDR, &s_aw, AW_P0, 0x01 | AW_P0_AMP, 0);
+    // BUS_OUT_EN puts 5 V on the M-Bus: without it a base's parts (the
+    // Bottom3's LED bar) have no supply on USB power.
+    e |= bits(AW_ADDR, &s_aw, AW_P0, 0x01 | AW_P0_BUS_OUT | AW_P0_AMP, 0);
     e |= bits(AW_ADDR, &s_aw, AW_P1, 0x01 | AW_P1_LCD_RST | AW_P1_BOOST, 0);
     e |= AW(0x04, 0x18);
     e |= AW(0x05, 0x0C);

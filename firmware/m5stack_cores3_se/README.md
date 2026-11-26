@@ -38,7 +38,7 @@ operations, the light), [M5Unified](https://github.com/m5stack/M5Unified)
 The power-on sequence (`moy_lcd_board_up`, before the panel's bus): the
 AXP2101's ADC and DCDC settings (0x23, 0x27, 0x69, 0x10, 0x30, the 4.2 V
 charge voltage, the TS pin off), its ALDO rails (0x92 1.8 V, 0x93..0x95 3.3 V)
-with DLDO1 off; the AW9523's outputs (P0 0x05, P1 0x03 with the boost's bit
+with DLDO1 off; the AW9523's outputs (P0 0x07, with BUS_OUT_EN 0x02: the M-Bus's 5 V, the LED bar's supply; P1 0x03 with the boost's bit
 0x80), directions (0x04 0x18, 0x05 0x0C), P0 push-pull (0x11 0x10) and every
 pin a GPIO (0x12/0x13 0xFF); then the panel's reset pulse and 120 ms. Each
 value is M5Unified's `Power_Class::begin` for the CoreS3 and M5GFX's
