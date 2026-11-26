@@ -79,6 +79,10 @@
 #define MOY_LIVE_RING                       (2048)
 #define MOY_LIVE_IN                         (2048)
 
+// HTTPS on demand (native/moy_net/moy_net.h): an iPhone runs the page at full
+// speed only from an https address; the door's RAM is spent while it is open.
+#define MOY_NET_HTTPS                       (1)
+
 // THE /gpio ALLOWLIST (native/moy_net/moy_gpio.c): the pins a browser's cart
 // may drive or read, by GPIO number: board.toml's `gpio` lease row, which the
 // build emits as MOY_LEASE_GPIO_PINS; this board serves the route over it. A

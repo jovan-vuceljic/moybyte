@@ -465,6 +465,16 @@ def web_token():
     return out.value.decode()
 
 
+def web_via(port, ip):
+    """Name the browser at IPv4 `ip` ("a.b.c.d", or None to forget) behind
+    the loopback connection from `port`, as the secure door does
+    (moy_net.h, THE DOOR'S BROWSERS)."""
+    raw = 0
+    if ip:
+        raw = int.from_bytes(bytes(int(x) for x in ip.split(".")), "little")
+    _lib().moy_web_via(ctypes.c_uint16(port), ctypes.c_uint32(raw))
+
+
 def web_keys():
     """[(kid, created, seen, name)]: the paired browsers."""
     out = ctypes.create_string_buffer(2048)

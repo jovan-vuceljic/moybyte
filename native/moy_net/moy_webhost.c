@@ -9,6 +9,9 @@
 //                                              "pack":<whole sha256>,"local":0|1}
 //   POST /auth                                 open: the sign-in (moy_seal.h, moy_webauth.c),
 //                                              on the live socket where the board has one
+//   POST /tls                                  open, where the board takes the secure door:
+//                                              it opens (moy_net.h, HTTPS on demand),
+//                                              {"tls":1} while it starts, {"tls":2} up
 //   GET  /carts.json, /files.json, /apps.json  sealed: the store, streamed
 //   GET  /media                                sealed: the music folder's songs, the
 //                                              bytes a browser's Music plays (below)
@@ -176,6 +179,9 @@ static const moy_htab_mem_t STORE_MEM = { moy_store_alloc, moy_store_free };
 #pragma weak moy_web_live_req
 #pragma weak moy_live_req_take
 #pragma weak moy_live_req_say
+// The secure door (moy_tls_srv.c), where the board takes it.
+#pragma weak moy_tls_at
+#pragma weak moy_tls_open
 
 #define CHUNK_MIN 8192
 #define CHUNK_HEAD 8
@@ -355,6 +361,9 @@ static void config(const moy_web_cfg_t *cfg) {
     copy_list(W->kinds, sizeof(W->kinds), cfg->kinds);
     copy_list(W->defer, sizeof(W->defer), cfg->defer);
     moy_wa_config(cfg->system);
+    if (moy_tls_at != NULL) {
+        moy_tls_at(cfg->system);
+    }
     moy_page_at(W->carts);
 }
 
@@ -1285,8 +1294,9 @@ static void sync_marker(out_t *o) {
         x[j][64] = '\0';
     }
     char doc[192];
-    snprintf(doc, sizeof(doc), "{\"sync\":1,\"page\":\"%s\",\"pack\":\"%s\",\"local\":%d}",
-             x[0], x[1], moy_page_state() == MOY_PAGE_READY);
+    snprintf(doc, sizeof(doc), "{\"sync\":1,\"page\":\"%s\",\"pack\":\"%s\",\"local\":%d%s}",
+             x[0], x[1], moy_page_state() == MOY_PAGE_READY,
+             moy_tls_open != NULL ? ",\"tls\":1" : "");
     json(o, 200, doc);
 }
 
@@ -1636,6 +1646,21 @@ static int route(out_t *o, const char *m, size_t mn, const char *t, size_t tn,
             return ROUTE_LATER;
         }
         json(o, st, doc);
+        return ROUTE_DONE;
+    }
+    // THE SECURE DOOR (moy_net.h, HTTPS on demand) opens for anyone: the page
+    // asks before it has a session on the https origin, and what it costs is
+    // RAM the door gives back when idle, as an http connection costs.
+    if (post && path_is(t, pn, "/tls") && moy_tls_open != NULL) {
+        int st = moy_tls_open(W->port);
+        char doc[64];
+        if (st < 0) {
+            snprintf(doc, sizeof doc, "{\"error\":\"tls\",\"errno\":%d}", -st);
+            json(o, 503, doc);
+        } else {
+            snprintf(doc, sizeof doc, "{\"tls\":%d,\"port\":%d}", st, MOY_TLS_PORT);
+            json(o, 200, doc);
+        }
         return ROUTE_DONE;
     }
     if (gated(post, get, t, pn)) {
@@ -2442,6 +2467,50 @@ static void serve(int fd) {
     W->parked_at = moy_net_ms();
 }
 
+// -- the door's browsers (moy_net.h) ----------------------------------------------
+//
+// The door's task names a port and the webhost's takes it: a slot's address
+// is written before its port, and read after it.
+
+static struct {
+    uint32_t port, ip;
+} VIA[MOY_WEB_VIA_MAX];
+
+void moy_web_via(uint16_t port, uint32_t ip) {
+    int free_at = -1;
+    for (int i = 0; i < MOY_WEB_VIA_MAX; i++) {
+        uint32_t p = __atomic_load_n(&VIA[i].port, __ATOMIC_ACQUIRE);
+        if (p == port) {
+            if (ip == 0) {
+                __atomic_store_n(&VIA[i].port, 0u, __ATOMIC_RELEASE);
+                return;
+            }
+            __atomic_store_n(&VIA[i].ip, ip, __ATOMIC_RELEASE);
+            return;
+        }
+        free_at = p == 0 && free_at < 0 ? i : free_at;
+    }
+    if (ip != 0 && port != 0 && free_at >= 0) {
+        __atomic_store_n(&VIA[free_at].ip, ip, __ATOMIC_RELEASE);
+        __atomic_store_n(&VIA[free_at].port, (uint32_t)port, __ATOMIC_RELEASE);
+    }
+}
+
+// The browser behind a connection from 127.0.0.1, where the door named one.
+static void via_take(int fd) {
+    if (((const uint8_t *)&W->peer)[0] != 127) {
+        return;
+    }
+    uint32_t port = moy_http_peer_port(fd);
+    for (int i = 0; port != 0 && i < MOY_WEB_VIA_MAX; i++) {
+        if (__atomic_load_n(&VIA[i].port, __ATOMIC_ACQUIRE) == port) {
+            W->peer = __atomic_load_n(&VIA[i].ip, __ATOMIC_ACQUIRE);
+            __atomic_store_n(&VIA[i].port, 0u, __ATOMIC_RELEASE);
+            return;
+        }
+    }
+}
+
 // The PAKE's answer, once its worker is done, to the connection held for it.
 static void later(void) {
     char doc[DOC_MAX];
@@ -2508,6 +2577,7 @@ int moy_web_poll(void) {
             break;
         }
         did = 1;
+        via_take(fd);
         serve(fd);
     }
     return did;

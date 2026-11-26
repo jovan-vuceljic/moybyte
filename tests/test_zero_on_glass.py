@@ -113,6 +113,9 @@ BOARDS = (
 )
 RUNNER = ROOT / "firmware" / "web_runner"
 SERVING = re.compile(r"ZERO serving (\S+)\s+\(mDNS (\S+)\)")
+# The secure door's grace (native/moy_net/moy_net.h), read where it is set.
+MOY_TLS_IDLE_S = int(re.search(r"#define MOY_TLS_IDLE_MS (\d+)u", (
+    ROOT / "native" / "moy_net" / "moy_net.h").read_text()).group(1)) / 1000
 SETUP = "ZERO SETUP  join "
 STORE = "/moy"
 CARTS = STORE + "/carts"
@@ -508,11 +511,16 @@ def test_improv_over_the_cable_joins_a_board_with_no_network(zero):
 def test_sync_names_the_pack_the_image_names(zero):
     """GET /sync carries both digests of the pack this build wrote beside
     the image; `local` says whether the board serves its copy: the C3, whose
-    console is online, keeps none."""
+    console is online, keeps none; `tls` that it opens the secure door
+    (native/moy_net/moy_net.h, HTTPS on demand), where its board defines
+    MOY_NET_HTTPS."""
     page, whole = _pack(zero)
     doc = json.loads(_get(zero.url + "/sync")[0])
-    assert doc == {"sync": 1, "page": page, "pack": whole,
-                   "local": 0 if zero.online else 1}
+    want = {"sync": 1, "page": page, "pack": whole, "local": 0 if zero.online else 1}
+    if any(re.search(r"#define MOY_NET_HTTPS\s+\(1\)", h.read_text())
+           for h in zero.dir.glob("boards/*/mpconfigboard.h")):
+        want["tls"] = 1
+    assert doc == want
 
 
 def test_the_root_and_what_a_page_load_costs_the_board(zero):
@@ -909,6 +917,101 @@ def test_the_page_s_terminal_runs_the_board_s_shell(zero, mirror, tmp_path):
     zero.take("zero internal low-water terminal", heap[2] / 1024.0)
     print("%s with the page and its Terminal open: internal %d free, %d largest, "
           "%d low-water; live socket %s" % (zero.name, heap[0], heap[1], heap[2], got["live"]))
+
+
+# -- the fast console (native/moy_net/moy_net.h, HTTPS on demand) -------------------------
+
+
+def _door_open(zero):
+    """POST /tls until the door listens: False where the board has none."""
+    if "tls" not in json.loads(_get(zero.url + "/sync")[0]):
+        return False
+    for _ in range(100):
+        req = urllib.request.Request(zero.url + "/tls", data=b"", method="POST")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            if json.loads(r.read()).get("tls") == 2:
+                return True
+        time.sleep(0.2)
+    raise AssertionError("the door did not open")
+
+
+def _door_listens(zero):
+    import socket
+    try:
+        socket.create_connection((zero.url.split("//")[1], 443), timeout=3).close()
+        return True
+    except OSError:
+        return False
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
+    """On a board with the secure door, the console over https: from a reset
+    board, the door opened, the page paired on its own origin, booted,
+    reloaded, its Terminal running the board's shell over the wss live
+    socket, and the board's internal RAM read while the page holds it; then
+    the page gone, the door closes itself and its RAM comes back. The page's
+    pack comes from this machine's http mirror, which headless Chrome fetches
+    from an https page and Safari would not (the C3 README)."""
+    _needs_password(zero)
+    zero.restart()
+    before = zero.look()["idf"]
+    if not _door_open(zero):
+        pytest.skip("%s has no secure door" % zero.name)
+    base = "https://" + zero.url.split("//")[1]
+    shell = "ln => /\\$\\s*$/.test(ln)"
+    steps = sign_in(zero) + [
+        {"waitFor": BOOTED, "timeout": 120000},
+        {"js": "location.reload(), 1"},
+        {"waitFor": BOOTED, "timeout": 120000},
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.term && "
+                    "s.term.some(%s)); })" % shell, "timeout": 60000},
+    ] + [{"key": c} for c in "echo fast-$((6*7))"] + [
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.term.some("
+                    "function (ln) { return ln.indexOf('fast-42') >= 0; }); })",
+         "timeout": 30000},
+        {"wait": 5000},
+        {"js": "'FAST ' + JSON.stringify({https: location.protocol == 'https:', "
+               "boot: window.moyBoot || null})"},
+        {"js": REQS % "HELD"},
+        {"wait": 15000},
+    ]
+    path = _scenario(tmp_path / "fast", steps, "?dev=1&desktop=1&cart=Terminal")
+    flags = (os.environ.get("MOY_CHROME_FLAGS", "") + " --ignore-certificate-errors").strip()
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "fast")],
+                            cwd=str(RUNNER),
+                            env=dict(os.environ, MOY_BASE=base, MOY_CHROME_FLAGS=flags),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, held = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if held is None and 'js -> "HELD ' in line:
+                held = zero.look()["idf"]
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    fast, reqs = _tagged(out, "FAST"), _tagged(out, "HELD")
+    took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
+    assert fast and fast["https"] and reqs and held is not None, out[-3000:]
+    end = time.monotonic() + MOY_TLS_IDLE_S + 60
+    while _door_listens(zero) and time.monotonic() < end:
+        time.sleep(5)
+    assert not _door_listens(zero), "the door did not close after its grace"
+    after = zero.look()["idf"]
+    zero.take("zero page reload boot fast", took[1], took[1:2])
+    zero.take("zero internal free fast", held[0] / 1024.0)
+    zero.take("zero internal largest fast", held[1] / 1024.0)
+    zero.take("zero internal low-water fast", held[2] / 1024.0)
+    print("%s over https: reload boot %.0f ms; internal %d free, %d largest, %d low-water "
+          "with the page and its Terminal held (%d, %d before the door); %d free, %d largest "
+          "after the door closed; page %s" % (zero.name, took[1], held[0], held[1], held[2],
+                                               before[0], before[1], after[0], after[1], reqs))
+    assert after[0] >= before[0] - 1024 and after[1] >= before[1] - 4096, (before, after)
 
 
 # -- the board's Wi-Fi from its page -------------------------------------------------------

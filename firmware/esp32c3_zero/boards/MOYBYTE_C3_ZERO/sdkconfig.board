@@ -75,6 +75,16 @@ CONFIG_MBEDTLS_SSL_KEEP_PEER_CERTIFICATE=n
 # native/moy_net/moy_ota.h), and a longer write goes as more records. The
 # in-buffer stays 16 KB, the record a server may send whole.
 CONFIG_MBEDTLS_SSL_OUT_CONTENT_LEN=2048
+# The curves and the renegotiation no peer of this image uses go, which is
+# the flash the secure door's server half takes (native/moy_net/moy_tls_srv.c):
+# the CA roots are RSA and P-384 (ca_roots.pem), the door's own key P-256, and
+# a browser offers P-256 or X25519.
+CONFIG_MBEDTLS_ECP_DP_SECP192R1_ENABLED=n
+CONFIG_MBEDTLS_ECP_DP_SECP224R1_ENABLED=n
+CONFIG_MBEDTLS_ECP_DP_SECP192K1_ENABLED=n
+CONFIG_MBEDTLS_ECP_DP_SECP224K1_ENABLED=n
+CONFIG_MBEDTLS_ECP_DP_SECP256K1_ENABLED=n
+CONFIG_MBEDTLS_SSL_RENEGOTIATION=n
 
 # THE CA BUNDLE: ca_roots.pem beside this file, the roots the hosts this
 # image fetches from chain to, with a backup per CA family (the file names the
@@ -101,6 +111,13 @@ CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
 # for those two minutes they sat in the middle of the heap's free run. 5 s
 # is far past any segment's life on the networks this board serves.
 CONFIG_LWIP_TCP_MSL=5000
+
+# SOCKETS FOR THE SECURE DOOR: an https connection is three sockets (the
+# browser's, the loopback to the webhost and the webhost's end of it,
+# native/moy_net/moy_tls_srv.c), so the live socket and the terminal over
+# https with a request beside them pass ESP-IDF's ten. A socket slot is a few
+# dozen static bytes; its connection is made per use.
+CONFIG_LWIP_MAX_SOCKETS=16
 
 # SYSTEM TASK STACKS: esp_timer's, FreeRTOS's timer service's, the idle
 # task's and mDNS's, each sized to its high-water mark under #276's session

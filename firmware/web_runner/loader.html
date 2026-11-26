@@ -90,6 +90,32 @@ if (!s || !s.pack) {
 fail(s ? "This board's firmware names no browser console." : "This board did not answer.");
 return;
 }
+// HTTPS on demand (native/moy_net/moy_net.h): an iPhone runs a page from a
+// plain-http address with no JIT, so where the board offers TLS the loader
+// offers its https origin first (to any browser with ?fast). The board opens
+// the door, then this page goes there; its certificate is the board's own.
+if (s.tls && location.protocol == "http:" && (/iPhone|iPad|iPod/.test(navigator.userAgent)
+|| navigator.platform == "MacIntel" && navigator.maxTouchPoints > 1 || /fast/.test(location.search))) {
+const fast = await new Promise((ok) => {
+S.textContent = "This console runs much faster on this device over a secure link. "
++ "Safari will warn once about the console's own certificate: Show Details, then visit this website.";
+for (const [t, v] of [["Open the fast console", 1], ["Continue here", 0]]) {
+const b = document.createElement("button"); b.textContent = t; b.style.cssText = "display:block;font:inherit;margin:1em 0;padding:.6em 1em";
+b.onclick = () => ok(v); document.body.append(b);
+}
+});
+document.querySelectorAll("button").forEach((b) => b.remove());
+if (fast) {
+say("Opening the secure link...");
+for (let i = 0; i < 50; i++) {
+let r = null;
+try { r = await (await fetch("/tls", { method: "POST" })).json(); } catch (e) { }
+if (r && r.tls == 2) { location.href = "https://" + location.hostname + "/"; return; }
+await new Promise((ok) => setTimeout(ok, 300));
+}
+say("The secure link did not open; loading here.");
+}
+}
 const want = s.pack, page = s.page;
 const linked = O && new Promise((ok) => {
 setTimeout(ok, 4000);
