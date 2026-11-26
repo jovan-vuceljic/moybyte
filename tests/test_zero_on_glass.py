@@ -25,7 +25,8 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   THE LIVE SOCKET. The page's echo round trip to its board (`__moyState().
   live.rtt`, one beat a second), bounded where power save (about 100 ms a
   round trip) cannot pass, and the board's internal RAM while the page holds
-  the socket.
+  the socket. The page signs in and asks every sealed route on it, and over
+  HTTP the board refuses them 410.
 
   GET CARTS. The page's Get Carts, driven by its keys, has the board
   install an official cart it lacks, remove the flash's Calc and get it
@@ -825,28 +826,39 @@ def _page_held(zero, tmp_path, name, query):
     return took[-1], held, heap, live
 
 
+def _refused(url, method):
+    """The status a request in the clear gets over HTTP."""
+    req = urllib.request.Request(url, data=b"{}" if method == "POST" else None, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_the_page_s_requests_ride_its_live_socket(zero, mirror, tmp_path):
-    """The page's sealed requests -- its boot's pulls and probes and every
-    one after -- go on its live socket (native/moy_net/moy_live.c, THE
-    REQUESTS), so the board serves the page one connection. The other arm
-    keeps them on HTTP (`?req=0`); each from a reset board, its boot, its
-    internal RAM with the page held open and the requests the board took on
-    the socket printed and taken, side by side."""
+def test_the_page_signs_in_and_asks_on_its_live_socket_alone(zero, mirror, tmp_path):
+    """The page signs in on its live socket and asks every sealed route
+    there -- its boot's pulls and probes and every one after
+    (native/moy_net/moy_live.c, THE SIGN-IN and THE REQUESTS) -- so the board
+    serves the page one connection, and over HTTP it refuses the sign-in and
+    every sealed route 410. From a reset board: the page's boot, its
+    internal RAM with the page held open, and the requests the board took
+    on the socket."""
     _needs_password(zero)
-    arms = {}
-    for arm, query in (("http", "?dev=1&desktop=1&req=0"), ("socket", "?dev=1&desktop=1")):
-        boot, held, heap, live = _page_held(zero, tmp_path, arm, query)
-        arms[arm] = (boot, held, heap, live)
-        zero.take("zero page boot %s" % arm, boot, [boot])
-        zero.take("zero internal free held %s" % arm, heap[0] / 1024.0)
-        zero.take("zero internal largest held %s" % arm, heap[1] / 1024.0)
-        zero.take("zero internal low-water held %s" % arm, heap[2] / 1024.0)
-        print("%s over %s: boot %.0f ms; internal %d free, %d largest, %d low-water; "
-              "page %s; socket requests %s" % (zero.name, arm, boot, heap[0], heap[1], heap[2],
-                                                held, live[15] if len(live) > 15 else None))
-    assert arms["http"][1]["reqs"] == 0, arms["http"]
-    assert arms["socket"][1]["reqs"] >= 3 and arms["socket"][3][15] >= 3, arms["socket"]
+    for method, path in (("POST", "/auth"), ("GET", "/carts.json"), ("POST", "/sync"),
+                         ("GET", "/wifi")):
+        status, body = _refused(zero.url + path, method)
+        assert (status, json.loads(body)) == (410, {"error": "live"}), (path, status, body)
+    boot, held, heap, live = _page_held(zero, tmp_path, "socket", "?dev=1&desktop=1")
+    zero.take("zero page boot socket", boot, [boot])
+    zero.take("zero internal free held socket", heap[0] / 1024.0)
+    zero.take("zero internal largest held socket", heap[1] / 1024.0)
+    zero.take("zero internal low-water held socket", heap[2] / 1024.0)
+    print("%s on its socket: boot %.0f ms; internal %d free, %d largest, %d low-water; "
+          "page %s; socket requests %s" % (zero.name, boot, heap[0], heap[1], heap[2],
+                                            held, live[15] if len(live) > 15 else None))
+    assert held["reqs"] >= 3 and live[15] >= 3, (held, live)
 
 
 TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
