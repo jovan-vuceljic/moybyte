@@ -305,7 +305,7 @@ var pkId=null;
 function pkAsk(m){pkId=m.id;
 // Readable by the browser harness, the way __moyReport is.
 window.__moyPick={id:m.id,name:m.name,size:m.size};
-var a={do:"pick"};if(askLive())askDo(a);else askArm(a);}
+var a={do:"pick"};if(askLive(a))askDo(a);else askArm(a);}
 function pkDone(id){if(id!==undefined&&id!==pkId)return;
 pkId=null;window.__moyPick=null;if(ASKED&&ASKED.do==="pick"){ASKED=null;window.__moyAsked=null;}}
 // The file goes to the worker TRANSFERRED: a WAD is megabytes.
