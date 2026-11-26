@@ -641,8 +641,11 @@ class _SysMenuLayer(Layer):
 
     def handle_pointer(self, px, py, click):
         ws = self.ws
-        if click:
-            m = ws.sysmenu
+        m = ws.sysmenu
+        if not click:
+            if m.comp is None:
+                ws.menu_ui.point(px, py, False)   # a finger's drag scrolls the rows
+        else:
             comp = m.comp
             if comp is not None:
                 r = m.panel_rect()

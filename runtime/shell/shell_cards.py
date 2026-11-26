@@ -873,7 +873,7 @@ class SystemMenuUI:
 
     def __init__(self, ws):
         self.ws = ws
-        self._host = _ui_draw.AppHost()
+        self._host = _ui_draw.AppHost(None, self)   # a finger held on it drags its rows
         self._page = None           # sysmenu_ui's page, made at the first draw
         self._items = None          # the Popup's rows the page holds ...
         self._took = None           # ... at (its row, its anchor)
@@ -1485,10 +1485,24 @@ class SystemMenuUI:
         else:
             self.ws.popover_touch()
 
+    def pointer(self):
+        """The console's pointer, where the page's host reads whether it is
+        held."""
+        return self.ws.pointer
+
+    @property
+    def host(self):
+        """The page's host: where the last frame placed each row (`box`)."""
+        return self._host
+
     def point(self, px, py, click):
-        """A tap on the open menu: outside the card it closes, on it the
-        page's (a row's runs at the frame's tail)."""
-        if _in_box(px, py, self.look_card()):
+        """The pointer on the open menu: a press outside the card closes it;
+        any other sample is the page's, whose rows a drag scrolls and a tap
+        chooses (a row's runs at the frame's tail)."""
+        if not click:
+            if self._page is not None:
+                self._page.point(px, py, False)
+        elif _in_box(px, py, self.look_card()):
             self._page.point(px, py, click)
         else:
             self.ws.sysmenu.close()
