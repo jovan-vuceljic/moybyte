@@ -1564,7 +1564,12 @@ desktop OS. Every edge and corner resizes, from a zone that straddles the
 frame (`WindowChrome._rz_band`): a few of the chrome's unit inside it, and
 outside it what takes the zone to `chrome.MIN_TAP_MM` across on the panel;
 the top's lies above the frame alone, the strip being the drag's, and no zone
-reaches a bar. The pointer shows the resize a zone starts (`cursor_shape`).
+reaches a bar. The pointer shows the resize a zone starts (`cursor_shape`);
+elsewhere the page under it says its shape (`Workstation.pointer_shape`,
+`moy_ui_api_cursor`): a hand on what a press acts on, a text beam on a text
+field, else the arrow. The console draws it where it draws the pointer; the
+browser's mouse is the page's own, so the page sets its CSS cursor to the
+shape (`web_boot._pointer_shape`).
 A moving edge stops at the desk's edge and at the app's minimum
 (`_min_size`); the WM holds the press, so the content stays frozen through
 the gesture (`docs/surface_model_v1.md` §14.1) and relays out once on

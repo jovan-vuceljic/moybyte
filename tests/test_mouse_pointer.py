@@ -447,3 +447,54 @@ def test_a_window_bound_app_lays_out_in_its_window_and_scrolls_to_its_end(tmp_pa
         d.frame(DT)
     bx, by, bw, bh = ui_draw._C.api_box(ws.run.player.ui[0], "note39md/open")
     assert cy <= by and by + bh <= cy + ch, "the last note's row is not in the window"
+
+
+# -- the pointer's shape --------------------------------------------------------
+
+def test_the_pointer_is_a_hand_on_a_row_a_beam_on_a_field_and_an_arrow_elsewhere(tmp_path):
+    """The console draws the pointer's shape from the page under it
+    (`Workstation.pointer_shape`, `AppHost.cursor`): down Settings' window
+    on the desk, its rows show the hand, its Name field the text beam, and
+    the ground between the groups the arrow; a pointer the page has not
+    seen where it stands is the arrow."""
+    from runtime import host_app
+    from ws_helpers import build_desktop_ws, quiesce
+    ws = build_desktop_ws(tmp_path)
+    d = host_app.ConsoleDriver(ws)
+    d.frame(DT)
+    ws.open_settings()
+    for _ in range(4):
+        d.frame(DT)
+    quiesce(ws)
+    win = ws.wm.windows[ws.wm.focus_key]
+    x = win.x + win.w // 2
+    seen = []
+    for y in range(win.y + win.title_h, win.y + win.h, 3):
+        d.hover(x, y)
+        d.frame(DT)
+        shape = ws.pointer_shape()
+        if not seen or seen[-1] != shape:
+            seen.append(shape)
+    assert "hand" in seen and "text" in seen and None in seen, seen
+    assert seen.count("hand") > 1, "a hand on the rows, an arrow between their groups"
+    ws.pointer.x += 1                       # where the page has not seen it
+    assert ws.pointer_shape() is None
+
+
+def test_the_desks_tiles_are_a_hand_and_its_ground_the_arrow(tmp_path):
+    """The desk's column of tiles is one table: the hand on a tile, the
+    arrow on the ground beside the column, which a press opens nothing on
+    (the stop's `bare`)."""
+    from runtime import host_app
+    from ws_helpers import build_desktop_ws
+    ws = build_desktop_ws(tmp_path)
+    d = host_app.ConsoleDriver(ws)
+    d.frame(DT)
+    w, h = ws.sys_canvas.w, ws.sys_canvas.h
+    shapes = {}
+    for at in ((54, 154), (w * 2 // 3, h * 2 // 3)):
+        d.hover(*at)
+        d.frame(DT)
+        d.frame(DT)
+        shapes[at] = ws.pointer_shape()
+    assert list(shapes.values()) == ["hand", None], shapes

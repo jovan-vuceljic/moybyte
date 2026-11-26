@@ -373,7 +373,7 @@ from players import PlayerRouter
 # surface geometry constants, none of which import back), so there is no cycle.
 # Same bare-or-package fallback as the surfaces above.
 from chrome import (_ticks_ms, _ticks_us, _ticks_diff, _err_text, CURSOR,
-                    RESIZE_CURSORS, NAMES, THEME_VARIANTS,
+                    RESIZE_CURSORS, HAND, HAND_AT, BEAM, NAMES, THEME_VARIANTS,
                     _CURSOR_BASE, _CURSOR_ACCEL, Layout, CodeLayout,
                     _ICON, chrome_scale_floor,
                     chrome_scale_choices, _cursor_delta,
@@ -3916,6 +3916,18 @@ class Workstation:
 
     # -- desktop shell drawing (#28) -----------------------------------------
 
+    def pointer_shape(self):
+        """The pointer's shape where it stands: a resize's arrows over a
+        window's edge (`wm.cursor_shape`), else what the page under it says
+        (`AppHost.cursor`: "hand" over what a press acts on, "text" over a
+        text field), else None, the arrow."""
+        shape = self.wm.cursor_shape()
+        if shape is None:
+            host = _ui_draw.UNDER[0]
+            p = self.pointer
+            shape = host.cursor(p.x, p.y) if host is not None and p is not None else None
+        return shape
+
     def _draw_cursor(self):
         # The pointer lives in SYSTEM-canvas space (it ranges over the panel size),
         # so the cursor draws on the system canvas, on TOP of the composited viewport
@@ -3926,12 +3938,15 @@ class Workstation:
         p = self.pointer
         if p is not None and p.visible:
             s = self.look.font_scale
-            shape = self.wm.cursor_shape()
+            cv = self.sys_canvas
+            shape = self.pointer_shape()
             if shape is None:
-                self.sys_canvas.spr(CURSOR, p.x, p.y, s)
-            else:                         # a resize's arrows, centred on it
-                img = RESIZE_CURSORS[shape]
-                self.sys_canvas.spr(img, p.x - img.w * s // 2, p.y - img.h * s // 2, s)
+                cv.spr(CURSOR, p.x, p.y, s)
+            elif shape == "hand":         # the fingertip on it
+                cv.spr(HAND, p.x - HAND_AT[0] * s, p.y - HAND_AT[1] * s, s)
+            else:                         # a resize's arrows or the text beam, centred on it
+                img = BEAM if shape == "text" else RESIZE_CURSORS[shape]
+                cv.spr(img, p.x - img.w * s // 2, p.y - img.h * s // 2, s)
 
     def wifi_icon_kind(self):
         """The right-zone wifi STATUS glyph (Part 3): "wifi" when the injected wifi

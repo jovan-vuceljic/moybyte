@@ -1953,6 +1953,9 @@ PASTE = [None]
 # The console's pointer (`ws.pointer`, set with it), or None: a hosted page
 # hovers under it while it is a mouse's (`hovers`), as a finger never does.
 POINTER = [None]
+# The host the console's pointer hovered last (`AppHost.point`), or None: its
+# page says the pointer's shape there (`AppHost.cursor`).
+UNDER = [None]
 
 
 def paste_text():

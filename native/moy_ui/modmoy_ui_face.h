@@ -248,6 +248,12 @@ static mp_obj_t ui_api_split_at(mp_obj_t a0, mp_obj_t a1, mp_obj_t a2) {
 }
 static MP_DEFINE_CONST_FUN_OBJ_3(ui_api_split_at_obj, ui_api_split_at);
 
+static mp_obj_t ui_api_cursor(mp_obj_t a0, mp_obj_t a1, mp_obj_t a2) {
+    moy_ui_ctx_t *c = ctx_of(a0);
+    return mp_obj_new_int(moy_ui_api_cursor(c, num(a1), num(a2)));
+}
+static MP_DEFINE_CONST_FUN_OBJ_3(ui_api_cursor_obj, ui_api_cursor);
+
 static mp_obj_t ui_api_split_toward(size_t n_args, const mp_obj_t *a) {
     (void)n_args;
     moy_ui_ctx_t *c = ctx_of(a[0]);
@@ -902,6 +908,7 @@ static MP_DEFINE_CONST_FUN_OBJ_1(ui_api_lost_obj, ui_api_lost);
     { MP_ROM_QSTR(MP_QSTR_api_dock), MP_ROM_PTR(&ui_api_dock_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_part_at), MP_ROM_PTR(&ui_api_part_at_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_split_at), MP_ROM_PTR(&ui_api_split_at_obj) }, \
+    { MP_ROM_QSTR(MP_QSTR_api_cursor), MP_ROM_PTR(&ui_api_cursor_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_split_toward), MP_ROM_PTR(&ui_api_split_toward_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_grid), MP_ROM_PTR(&ui_api_grid_obj) }, \
     { MP_ROM_QSTR(MP_QSTR_api_card), MP_ROM_PTR(&ui_api_card_obj) }, \

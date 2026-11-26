@@ -575,6 +575,22 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         kp->rows = content;
         offset = car_motion(c, kp, st, focused, count, rh, ext, offset, &cur, &opened);
     }
+    if (si >= 0 && c->cur[si].id == id && (c->in[MOY_UI_IN_PTR] & MOY_UI_P_LIVE)) {
+        // the live pointer on no row or card a press would take: the table's ground
+        int px = c->in[MOY_UI_IN_X], py = c->in[MOY_UI_IN_Y], at;
+        if (car && c->car.on == MOY_UI_LOOK_DESK) {
+            at = moy_ui_api_desk_at(c->car.g, c->car.band, offset, c->car.app_n, px, py);
+        } else if (car && cl) {
+            at = moy_ui_api_cells_at(c->car.g, c->car.band, offset, c->car.app_n, px, py);
+        } else if (car) {
+            at = moy_ui_api_carousel_at(c->car.g, c->car.band, offset, count, px, py);
+        } else {
+            int t = xa ? px - view.x - lead : py - view.y;
+            int r = moy_ui_fdiv(t + offset, rh > 0 ? rh : 1);
+            at = t >= 0 && r >= 0 && r < count ? r : -1;
+        }
+        c->cur[si].bare = (uint8_t)(at < 0);
+    }
     if (kp != NULL) {
         // the rows' own scroll: a step glides it to the row, where the
         // frame has a clock (with none, it is there at once)

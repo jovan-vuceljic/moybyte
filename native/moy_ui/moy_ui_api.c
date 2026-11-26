@@ -2653,6 +2653,7 @@ int mua_stop(moy_ui_ctx_t *c, uint32_t id, moy_ui_box_t b, int flags, moy_ui_spa
     }
     s->st = 0;
     s->quiet = (flags & STOP_QUIET) != 0;
+    s->bare = 0;
     s->open = 0;
     s->gen = 0;
     // (where its keys stop, STOP_AT_TOP and STOP_AT_END, draws nothing)
@@ -4915,6 +4916,20 @@ int moy_ui_api_split_at(const moy_ui_ctx_t *c, int x, int y) {
         }
     }
     return 0;
+}
+
+int moy_ui_api_cursor(const moy_ui_ctx_t *c, int x, int y) {
+    if (moy_ui_api_split_at(c, x, y)) {
+        return MOY_UI_CURSOR_HAND;
+    }
+    int i = stop_at(c->cur, c->n_cur, x, y);
+    if (i < 0) {
+        return MOY_UI_CURSOR_ARROW;
+    }
+    if (c->cur[i].flags & STOP_FIELD) {
+        return MOY_UI_CURSOR_TEXT;
+    }
+    return c->cur[i].quiet || c->cur[i].bare ? MOY_UI_CURSOR_ARROW : MOY_UI_CURSOR_HAND;
 }
 
 int moy_ui_api_split_frame(moy_ui_ctx_t *c, int32_t gen, int known, int still, int top,
