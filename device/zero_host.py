@@ -10,7 +10,8 @@
 #   make_wifi                   /wifi: the page's Wi-Fi panel, this board's networks (zero_wifi)
 #   host_class                  the store host: the boards' WebHost
 #   ImprovBoard                 what Improv over the cable asks of this board; make_improv
-#   serve                       bring the store host up and pump it forever
+#   start                       bring the store host up, everything it keeps made in one order (THE HEAP'S SHAPE)
+#   serve                       start, and pump its turn forever; pump takes the loop up again from the REPL
 """The Zero: a pocketable cart-store the browser console pairs with (#41).
 
 This is the re-based Zero (moycore plan 3.2, owner call 2026-08-12): no panel,
@@ -1154,32 +1155,52 @@ def way_back(addon):
             _PAGE[0] = None
 
 
-# THE HEAP'S SHAPE. The modules the store host keeps for good, imported
-# before anything else allocates, so their namespaces pack at the bottom of
-# the Python heap rather than among the garbage the store's sweep and seed
-# and the radio's start leave, which would split a page session's free heap
-# into holes a request's blocks do not fit (the C3's 32 KB heap, #319).
-# tests/test_staging_closure.py holds every name to both Zeros' images.
+# THE HEAP'S SHAPE. A Zero without PSRAM (the C3) has one Python heap of
+# 64 KB, made whole at boot and never grown; this host's own modules and
+# objects hold about two thirds of it for good, and what a request works in
+# is the rest. Three rules keep that rest in one run, and
+# tests/test_zero_heap.py holds each of them on a host (#319):
+#
+#   1. WHAT LIVES FOR GOOD IS MADE FIRST. `start` makes every module, object
+#      and kernel block the host keeps, in one order, before its loop turns
+#      once. LASTING is every staged module a running host can import: a
+#      module first imported by a request is a few KB made for good in the
+#      middle of that request's work.
+#   2. THE HEAP COLLECTS EVERY GC_STEP BYTES, from start's first line. Left
+#      to collect only when it runs out, the heap fills with garbage to its
+#      top, and whatever a request keeps -- an answer held for the next
+#      poll, a new state -- is made up there, where it stays and cuts the
+#      free run in two. With the step, nothing that lasts is ever made more
+#      than GC_STEP above what is live.
+#   3. A REQUEST LEAVES WHAT IT FOUND. What a session caches is bounded and
+#      given back when the session's asks stop (zero_wifi's networks, the
+#      system receiver's parts, an install's buffers and listing).
 LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
            "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
-           "ssh_service", "zero_shell")
+           "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs")
+GC_STEP = 2048
 
 
 def lasting():
-    """LASTING imported, those this build has."""
+    """Rule 1's modules and the kernel's own late blocks, those this build
+    has: LASTING imported, and the release keys decoded (the kernel decodes
+    them at the first signature it checks, and keeps them)."""
     for name in LASTING:
         try:
             __import__(name)
         except ImportError:
             pass
+    keys = getattr(moy_net, "ota_keys", None)
+    if keys is not None:
+        keys()
 
 
-def serve():
-    """Bring the store host up and pump it forever. Ctrl-C drops to the REPL
-    (which is how provision.sh and mpremote get the board back). What lives
-    for good is made first (`lasting`), and a collect after the store's own
-    work and before the loop lets what the boot keeps fill the holes its
-    garbage left, so the loop's requests start on the heap's one free run."""
+def start():
+    """Bring the store host up: everything it keeps, made in one order
+    (THE HEAP'S SHAPE). Answers the loop's one turn, a function, or None
+    where the setup form ended with no network."""
+    if hasattr(gc, "threshold"):
+        gc.threshold(GC_STEP)
     lasting()
     _mkdir(ROOT)
     _mkdir(CARTS_DIR)
@@ -1206,10 +1227,11 @@ def serve():
         import zero_setup
         ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv)
         if ip is None:
-            return
+            return None
         me = identity()
         name = me.get("name") or HOSTNAME
     _mkdir(SYSTEM_DIR)
+    gc.collect()
     host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system())
     ota, task = make_updater(me)
     addon = make_addon(ota)
@@ -1255,11 +1277,10 @@ def serve():
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO ssh: unavailable:", exc)
         tail = None
-    gc.collect()
-    while True:
+
+    def turn():
         # The console boards poll between frames; this board HAS no frames, so
-        # a short sleep is its whole duty cycle. 10ms keeps a page load snappy
-        # while idling at ~zero.
+        # its loop is this and a short sleep.
         host.poll()
         if improv is not None:
             improv.poll()
@@ -1289,4 +1310,27 @@ def serve():
         # injected update backend, which is the one place every board's does
         # its slice. A second call here would double this board's install rate
         # for no reason and put the two boards' pumps in different files again.
+
+    return turn
+
+
+_TURN = [None]                          # the turn `start` made, for `pump`
+
+
+def pump():
+    """The loop over the turn `start` made: a turn, then 10 ms, which keeps a
+    page load snappy while the board idles at about zero. Ctrl-C drops to
+    the REPL (which is how provision.sh and mpremote get the board back),
+    and `pump()` there takes the loop up again on the heap as it stood,
+    which is how the on-glass suite reads a serving board's heap between
+    two rounds (tests/test_zero_on_glass.py's `look`)."""
+    turn = _TURN[0]
+    while turn is not None:
+        turn()
         time.sleep_ms(10)
+
+
+def serve():
+    """The store host, started and pumped forever."""
+    _TURN[0] = start()
+    pump()
