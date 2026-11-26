@@ -92,11 +92,14 @@ HAND_WRITTEN = {
                "converted",
     "moy_tty": "two rows over moy_tty.h; board only; not yet converted",
     "moy_usbdisk": "three rows over moy_usbdisk.h; board only; not yet converted",
+    "moy_lcd": "the S3 handhelds' SPI panel driver (the T-Deck's, the CoreS3's): "
+               "ESP-IDF calls over pixel buffers; board only",
     # -- a board's own driver, outside native/ --------------------------------
     "moy_axs": "the Guition S3's panel and touch driver, in its board dir with "
                "no face.json: ESP-IDF calls over pixel buffers",
-    "moy_lcd": "the T-Deck's panel driver, in its board dir with no face.json: "
-               "ESP-IDF calls over pixel buffers",
+    "moy_cores3": "the CoreS3 SE's own chips (power manager, IO expander, clock, "
+                  "LED bar), in its board dir with no face.json: I2C register "
+                  "sequences",
 }
 
 REG = re.compile(r"^\s*MP_REGISTER_MODULE\(MP_QSTR_(\w+),", re.M)
