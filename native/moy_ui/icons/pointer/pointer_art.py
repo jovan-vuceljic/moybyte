@@ -17,8 +17,8 @@ At 16 px every family is 1-bit pixel art (`ART16`): `O` cells the outline,
 whose outline is every clear cell beside one, across or down. PIXEL keeps
 its 16 px art at every size, each cell grown whole. The shapes a family does
 not draw its own share one art, recoloured per family (`art16`): LUNA's
-lavender in black, COAST's shafts and sand cyan, MOY's arrow, hand, beam and
-busy ringed in black.
+lavender in black, COAST's sand cyan, MOY's arrow, hand and busy ringed in
+black.
 
 At 32 and 48 px the smooth families are SVG on a 32-unit cell (a unit a
 pixel at 32 px), rasterised by resvg. A shape's parts are its BODY (the
@@ -35,7 +35,7 @@ Each shape's hotspot is exact at every size: an arrow's is the pixel at its
 outline's apex, a hand's the top of its index finger (a pixel or two
 into a thick keyline), each placed
 on a whole pixel (the art is shifted by the fraction of a pixel that takes),
-the fill starting within 2 px below it: an arrow's outline reaches its
+the fill starting within 2 px below it (3 at 48 px): an arrow's outline reaches its
 family's `tip` past the body's, tapering to it; a centred shape's is its
 middle.
 
@@ -56,12 +56,13 @@ TIP = 1.6                   # a tip's reach past its body, in widths: its outlin
 # How each smooth family draws its parts, in units: the outline outside the
 # band (`ow`), the band between outline and body (`rim`; the body then wears
 # the accent), the body's corner rounding (`round`), and how far an arrow's
-# apex reaches past its body's tip (`tip`), the keyline tapering to it.
+# apex reaches past its body's tip (`tip`, and at least `tip_px` pixels), the
+# keyline tapering to it.
 STYLES = {
     "moy": {"ow": 1, "rim": 2, "round": 0.25, "tip": 1},
     "coast": {"ow": 1.5, "rim": 0, "round": 0.5, "tip": 1},
-    "luna": {"ow": 1.5, "rim": 2.5, "round": 0, "tip": 1.25},
-    "blocks": {"ow": 3, "rim": 0, "round": 1.5, "tip": 1},
+    "luna": {"ow": 2, "rim": 2, "round": 0, "tip": 1.25},
+    "blocks": {"ow": 3, "rim": 0, "round": 1.5, "tip": 1, "tip_px": 2},
 }
 
 
@@ -301,8 +302,8 @@ def _beam(fam):
     if fam == "coast":
         return {"body": [("rect", 14.8, 6, 2.4, 20, 0), ("rect", 12, 5, 8, 2.2, 1.2),
                          ("rect", 12, 24.8, 8, 2.2, 1.2)]}
-    return {"body": [("rect", 15.25, 6, 1.5, 20, 0), ("rect", 12, 5, 8, 1.5, 0),       # MOY, LUNA
-                     ("rect", 12, 25.5, 8, 1.5, 0)], "rim": 1, "ow": 1}
+    return {"body": [("rect", 15, 6, 2, 20, 0), ("rect", 12, 5, 8, 2, 0),       # MOY, LUNA
+                     ("rect", 12, 25, 8, 2, 0)], "rim": 1, "ow": 1}
 
 
 # The across resize: (shaft width, head width, head depth, length).
@@ -351,19 +352,23 @@ def _busy(fam):
         return {"body": [glass], "marks": caps, "accent": [glass], "hole": sand,
                 "core": False, "round": 1.2}
     w = {"moy": 6, "coast": 6.4, "luna": 5.6}[fam]
-    glass = ("poly", [(16 - w, 7.6), (16 + w, 7.6), (16 + w, 9), (17, 16), (16 + w, 23),
-                      (16 + w, 24.4), (16 - w, 24.4), (16 - w, 23), (15, 16), (16 - w, 9)], None)
     sand = [("poly", [(16, 18.8), (16 + w - 1.4, 23.8), (16 - w + 1.4, 23.8)], None),
             ("cap", 16, 14, 16, 19, 1.2)]
-    cr = 1.4 if fam == "coast" else 0.4
-    caps = [("rect", 16 - w - 2.4, 4, 2 * w + 4.8, 3.2, cr),
-            ("rect", 16 - w - 2.4, 24.8, 2 * w + 4.8, 3.2, cr)]
     if fam == "coast":
+        glass = ("poly", [(16 - w, 7.6), (16 + w, 7.6), (16 + w, 9), (17, 16), (16 + w, 23),
+                          (16 + w, 24.4), (16 - w, 24.4), (16 - w, 23), (15, 16), (16 - w, 9)],
+                 None)
+        caps = [("rect", 16 - w - 2.4, 4, 2 * w + 4.8, 3.2, 1.4),
+                ("rect", 16 - w - 2.4, 24.8, 2 * w + 4.8, 3.2, 1.4)]
         return {"body": [glass], "marks": caps, "accent": sand, "round": 1}
-    # MOY and LUNA: the caps in the body's colour inside the band, the glass
+    # MOY and LUNA: slim caps in the body's colour inside a 1u band, the glass
     # cream in the outline alone
-    return {"body": [glass], "rimmed": caps, "accent": sand + caps, "core": False,
-            "round": 0.2}
+    glass = ("poly", [(16 - w, 6.5), (16 + w, 6.5), (16 + w, 9), (17, 16), (16 + w, 23),
+                      (16 + w, 25.5), (16 - w, 25.5), (16 - w, 23), (15, 16), (16 - w, 9)], None)
+    caps = [("rect", 16 - w - 1.2, 5, 2 * w + 2.4, 1.5, 0.4),
+            ("rect", 16 - w - 1.2, 25.5, 2 * w + 2.4, 1.5, 0.4)]
+    return {"body": [glass], "rimmed": caps, "rimmed_rim": 1, "accent": sand + caps,
+            "core": False, "round": 0.2}
 
 
 def smooth_shape(fam, shape):
@@ -637,11 +642,10 @@ ART16 = {
 
 # What each cell draws at 16 px: (line, fill, accent) cells; `S` is sand,
 # the outline's unless a family's art says otherwise. MOY's body is its
-# accent in a cream outline, ringed in black (`R`, `_ring`) but for the
-# arrows of the resizes and move, whose notches a ring would close.
+# accent in a cream outline, its arrow, hand and busy ringed in black (`R`,
+# `_ring`).
 _CELLS = {"moy": ("ROFA", "OFA", "F")}
 _PLAIN = ("OFA", "FA", "A")
-_SHAFTS = ("ew", "ns", "nwse", "nesw", "move")
 
 
 def _ring(rows):
@@ -670,13 +674,14 @@ def art16(family, shape):
     if family == "luna":            # lavender in black, the arrow's left column the rim
         rows = _recolour(rows, lambda x, c: "A" if c == "F" and (shape != "arrow" or x >= 2)
                          else c)
-    elif family == "coast":         # cyan shafts and sand in navy
+    elif family == "coast":         # cyan sand
         sand = "A"
-        if shape in _SHAFTS:
-            rows = _recolour(rows, lambda x, c: "A" if c == "F" else c)
     rows = _recolour(rows, lambda x, c: sand if c == "S" else c)
-    if family == "moy" and shape not in _SHAFTS:      # a ring would close their notches
-        rows = _ring(rows)
+    if family == "moy" and shape == "busy":     # a cream glass in black walls, black sand
+        rows = rows[:3] + tuple(r.translate(str.maketrans("OF", "FO")) for r in rows[3:12]) \
+            + rows[12:]
+    if family == "moy" and shape in ("arrow", "hand", "busy"):
+        rows = _ring(rows)          # (a ring would close the notches, fatten the beam)
         hx, hy = hx + 1, (hy if shape in ("arrow", "hand") else hy + 1)
     return (hx, hy), rows
 
@@ -746,8 +751,10 @@ def render(family, shape, size):
     n = (CELL + 2 * PAD) * size // CELL
     k = size / CELL
 
+    tip = max(st["tip"], st.get("tip_px", 0) / k)
+
     def reach(d):                   # an arrow tip's reach past its body at d
-        return st["tip"] * d / edge if edge else 0
+        return tip * d / edge if edge else 0
 
     # The hotspot: an arrow's apex on a whole pixel's corner, its vertical
     # edge on a pixel's edge; a hand's at the middle of a pixel across, as
@@ -785,14 +792,15 @@ def render(family, shape, size):
         return _alpha(_svg(svg, size, shift))
 
     rimmed = sh.get("rimmed")       # parts that keep the band where the body does not
-    line = _max(_max(ras(body, edge, sh.get("flat") or "top" in sh), ras(rimmed, brim + ow)),
+    rrim = sh.get("rimmed_rim", brim)
+    line = _max(_max(ras(body, edge, sh.get("flat") or "top" in sh), ras(rimmed, rrim + ow)),
                 ras(sh.get("marks")))
     cut = ras(sh.get("cut"))
     if core:                        # the band in the fill, the body in the accent
         fill = ras(body, rim)
         accent = _minus(ras(body), cut)
     else:
-        fill = _max(_minus(ras(body), cut), ras(rimmed, brim))
+        fill = _max(_minus(ras(body), cut), ras(rimmed, rrim))
         accent = _minus(_mul(ras(sh.get("accent"), sh.get("accent_d", 0)), fill),
                         ras(sh.get("hole")))
     if "apex" in sh and body[sh["apex"]][0] == "rect":

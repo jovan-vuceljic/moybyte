@@ -157,17 +157,17 @@
     "size": 16
    },
    "ptr-blocks-32": {
-    "bytes": 6398,
+    "bytes": 6410,
     "family": "blocks",
     "size": 32
    },
    "ptr-blocks-48": {
-    "bytes": 13776,
+    "bytes": 13767,
     "family": "blocks",
     "size": 48
    },
    "ptr-coast-16": {
-    "bytes": 920,
+    "bytes": 789,
     "family": "coast",
     "size": 16
    },
@@ -187,27 +187,27 @@
     "size": 16
    },
    "ptr-luna-32": {
-    "bytes": 8690,
+    "bytes": 8089,
     "family": "luna",
     "size": 32
    },
    "ptr-luna-48": {
-    "bytes": 18690,
+    "bytes": 17570,
     "family": "luna",
     "size": 48
    },
    "ptr-moy-16": {
-    "bytes": 1072,
+    "bytes": 1066,
     "family": "moy",
     "size": 16
    },
    "ptr-moy-32": {
-    "bytes": 7792,
+    "bytes": 7560,
     "family": "moy",
     "size": 32
    },
    "ptr-moy-48": {
-    "bytes": 16729,
+    "bytes": 16209,
     "family": "moy",
     "size": 48
    },
