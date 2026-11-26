@@ -248,16 +248,20 @@ class PaintDraw:
             cu[2] = cu[0]
         # The pointer's sprite, drawn over the page after it: where it was
         # and where it is, when it moved. One that reaches past the view is
-        # a whole frame.
+        # a whole frame. Its family, shape and size are the console's
+        # (runtime/toolkit/pointers.py): at chrome scale cs it is at most
+        # 32 px a step (Large), its shadow a pixel per 16 more, and its
+        # hotspot anywhere inside it, so the rect round the hotspot is that
+        # far each way.
         sp = self._sp
         x0, y0, x1, y1 = sp[0], sp[1], sp[2], sp[3]
         p = self._surf.pointer()
         if p is not None and p[4]:
-            u = self.layout.fs
-            sp[0] = p[0] - 1
-            sp[1] = p[1] - 1
-            sp[2] = p[0] + 8 * u + 1
-            sp[3] = p[1] + 13 * u + 1
+            u = 34 * self.layout.cs
+            sp[0] = p[0] - u
+            sp[1] = p[1] - u
+            sp[2] = p[0] + u
+            sp[3] = p[1] + u
         else:
             sp[2] = sp[0]
         if sp[0] != x0 or sp[1] != y0 or sp[2] != x1 or sp[3] != y1:
