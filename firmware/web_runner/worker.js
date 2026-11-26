@@ -1121,8 +1121,8 @@ function dropped(name, buf) {
 // with no JIT, for minutes), so it runs in a VM of its own: a second worker
 // running this file, started for the one cart and ended once it answers.
 // The console's loop goes on drawing meanwhile, and the console says which
-// stage the converter is on (web_p8's words) and for how long, in a notice
-// said again each second (page_link.py's `say`), taken down at the end. The
+// stage the converter is on (web_p8's words) and for how long, in a busy
+// notice said again each second (page_link.py's `say`), taken down at the end. The
 // converted files come back by path and land where the console's own VM
 // names (web_boot.p8_target_json), asked once they are here, so two drops
 // never take one folder. A worker that can start no worker of its own (an
@@ -1131,7 +1131,7 @@ const P8_BEAT_MS = 1000, P8_SAY_MS = 2500;
 let p8Last = null;
 
 function p8Say(title, sub, ms) {
-    inbox.push(JSON.stringify({ events: [{ type: "page", say: [title, sub, "ok", ms] }] }));
+    inbox.push(JSON.stringify({ events: [{ type: "page", say: [title, sub, "busy", ms] }] }));
 }
 
 // The converter's end: its first message, the cart.

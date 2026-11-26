@@ -202,8 +202,9 @@ def test_the_console_draws_and_says_the_stage_while_a_cart_converts(tmp_path):
     """A conversion takes seconds (an iPhone's, minutes), and it runs in a VM
     of its own (worker.js, THE CONVERTER): the console's worker answers and
     draws all through it, and its notice says the stage and the seconds so
-    far, then makes way for the report card. Before, the console's thread
-    converted and the first question asked during it waited for the end."""
+    far on a busy tile, then makes way for the report card. Before, the
+    console's thread converted and the first question asked during it
+    waited for the end."""
     import json
     import p8_fixture
     web_e2e.require("store", "p8")
@@ -229,6 +230,7 @@ def test_the_console_draws_and_says_the_stage_while_a_cart_converts(tmp_path):
                                           "cart converted", during)
     said = [s[3] for s in during]
     assert all(n.startswith("Importing heavy_dash.p8 / ") for n in said), said
+    assert {s[5] for s in during} == {"busy"}, ("its tile is not work going on", during)
     stages = {n.split(" / ", 1)[1].split(" (")[0] for n in said}
     assert stages & {"Checking what it uses", "Writing the cart"}, said
     assert any(n.endswith("s)") for n in said), ("no seconds said", said)

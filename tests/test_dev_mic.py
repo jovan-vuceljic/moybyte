@@ -142,7 +142,7 @@ def test_the_recording_indicator_stands_while_a_process_holds_the_microphone():
     th = theme_colors("moy", "dark")
     chrome_ops.chrome_inks(th, NAMES)
     now = 5000000
-    moy_play.chrome_notice("", "", True, now)
+    moy_play.chrome_notice("", "", "check", now)
     moy_play.chrome_note("", "", "", 0)
     moy_play.chrome_toast_arm("", "", "", False, 0)   # an earlier test's, on the real clock
     raw = (ctypes.c_uint16 * (w * h))()

@@ -363,8 +363,7 @@ void moy_chrome_raster(const moy_chrome_list_t *l, uint16_t *px, int w, int h,
 // -- the kernel's state ------------------------------------------------------------
 
 static struct {
-    char title[48], sub[48];
-    bool ok;
+    char title[48], sub[48], notice_icon[16];
     uint32_t until;
     bool up;
     char head[48], name[48], icon[16];
@@ -376,10 +375,10 @@ static struct {
     bool note_up;
 } K;
 
-void moy_chrome_notice(const char *title, const char *sub, bool ok, uint32_t until_ms) {
+void moy_chrome_notice(const char *title, const char *sub, const char *icon, uint32_t until_ms) {
     snprintf(K.title, sizeof(K.title), "%s", title ? title : "");
     snprintf(K.sub, sizeof(K.sub), "%s", sub ? sub : "");
-    K.ok = ok;
+    snprintf(K.notice_icon, sizeof(K.notice_icon), "%s", icon ? icon : "");
     K.until = until_ms;
     K.up = true;
 }
@@ -450,12 +449,10 @@ bool moy_chrome_overlay_draw(uint16_t *px, int w, int h, const uint16_t *pal, ui
                        (uint8_t)moy_ui_marks_shown()};
     int was = moy_ui_cart_text(0);
     if (K.up) {
-        static const char ok[] = "check", warn[] = "warn";
-        const char *ic = K.ok ? ok : warn;
-        size_t n = strlen(ic);
+        size_t n = strlen(K.notice_icon);
         moy_ui_unlock(&s, w / 2, 6, span(K.title), span(K.sub),
-                      moy_ui_icon_slot((const uint8_t *)ic, n),
-                      moy_ui_icon_glyph((const uint8_t *)ic, n), 0, 1, 0, NULL);
+                      moy_ui_icon_slot((const uint8_t *)K.notice_icon, n),
+                      moy_ui_icon_glyph((const uint8_t *)K.notice_icon, n), 0, 1, 0, NULL);
     }
     if (K.toast_up) {
         size_t n = strlen(K.icon);

@@ -262,7 +262,9 @@ function pzDownload(name,buf){var url=URL.createObjectURL(new Blob([buf],{type:"
 var a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();
 document.body.removeChild(a);setTimeout(function(){URL.revokeObjectURL(url);},4000);
 window.__moySaved=name;pzSay("Saved "+name,false);}
-function pzImport(file){if(!WORKER||!file)return;pzSay("Importing "+file.name,false);
+// An import is work going on: its notice's tile says so (a PICO-8 cart's
+// converter says its stages over it, worker.js THE CONVERTER).
+function pzImport(file){if(!WORKER||!file)return;send({type:"page",say:["Importing "+file.name,"","busy"]});
 file.arrayBuffer().then(function(buf){
 WORKER.postMessage({t:"import",name:file.name,buf:buf},[buf]);})
 .catch(function(e){pzSay("Could not read that file",true);console.error(e);});}

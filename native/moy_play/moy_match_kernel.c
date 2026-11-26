@@ -88,7 +88,7 @@ void moy_match_kernel_poll(uint32_t now) {
         g_said = m->s.desync;
         g_said_session = m->s.session;
         moy_chrome_notice(moy_str(MOY_S_NOTICE_OUT_OF_SYNC),
-                          moy_str(MOY_S_NOTICE_OUT_OF_SYNC_WHY), false, now + 8000u);
+                          moy_str(MOY_S_NOTICE_OUT_OF_SYNC_WHY), "warn", now + 8000u);
     }
 }
 

@@ -1,9 +1,9 @@
 {"query": "?dev=1", "boot_ms": 20000, "steps": [
-  {"note": "A PICO-8 cart converts in a VM of its own (worker.js, THE CONVERTER) while the console goes on drawing and says which stage it is on. $MOY_DROP is a cart big enough to take seconds; the page asks the console's state every 250ms through the conversion and records each answer: when it was asked (ms from the drop), how long the answer took, the frames drawn, the notice up and whether the import had landed."},
+  {"note": "A PICO-8 cart converts in a VM of its own (worker.js, THE CONVERTER) while the console goes on drawing and says which stage it is on. $MOY_DROP is a cart big enough to take seconds; the page asks the console's state every 250ms through the conversion and records each answer: when it was asked (ms from the drop), how long the answer took, the frames drawn, the notice up, whether the import had landed and the notice's kind."},
   {"wait": 3000},
   {"js": "window.__moyKept || 'no mode'"},
   {"file": "$MOY_DROP", "as": "__drop"},
-  {"js": "(function(){window.__S=[];var t0=window.__t0=performance.now(),busy=0;window.__iv=setInterval(function(){if(busy)return;busy=1;var a=performance.now(),done=!!window.__moyImported;window.__moyState().then(function(s){busy=0;window.__S.push([Math.round(a-t0),Math.round(performance.now()-a),s.frames,s.notice_up?s.notice_up[0]+' / '+s.notice_up[1]:'',done]);});},250);WORKER.postMessage({t:'import',name:window.__dropName,buf:window.__drop},[window.__drop]);return window.__dropName;})()"},
+  {"js": "(function(){window.__S=[];var t0=window.__t0=performance.now(),busy=0;window.__iv=setInterval(function(){if(busy)return;busy=1;var a=performance.now(),done=!!window.__moyImported;window.__moyState().then(function(s){busy=0;window.__S.push([Math.round(a-t0),Math.round(performance.now()-a),s.frames,s.notice_up?s.notice_up[0]+' / '+s.notice_up[1]:'',done,s.notice_up?s.notice_up[2]:'']);});},250);WORKER.postMessage({t:'import',name:window.__dropName,buf:window.__drop},[window.__drop]);return window.__dropName;})()"},
   {"wait": 1500},
   {"shot": "p8_converting"},
   {"waitFor": "window.__moyImported", "timeout": 60000},

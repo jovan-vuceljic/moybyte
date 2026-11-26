@@ -306,7 +306,7 @@ def test_the_kernel_draws_the_banner_over_a_run_it_drives(tmp_path):
     w, h = cv.w, cv.h
     pal = [cv._wire[cv._pal_map[i]] for i in range(64)]
     now = 2000000
-    moy_play.chrome_notice("", "", True, now)
+    moy_play.chrome_notice("", "", "check", now)
     moy_play.chrome_toast_arm("", "", "", False, now)
     moy_play.chrome_note("Mesh", "Ana", "heart", now + 5000)
     raw = (ctypes.c_uint16 * (w * h))()
