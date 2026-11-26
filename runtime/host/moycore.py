@@ -160,6 +160,14 @@ def svc_reset():
     _lb.play_lib().moycore_svc_reset()
 
 
+def svc_budget():
+    """(the board's budget for every service's state, None where it sets
+    none; the bytes they hold now): moycore_svc.h's THE BUDGET."""
+    held = _lb.ctypes.c_uint32()
+    budget = _lb.play_lib().moycore_svc_budget(_lb.ctypes.byref(held))
+    return (budget or None), held.value
+
+
 def register(name, fn):
     _run().register(name, fn)
 

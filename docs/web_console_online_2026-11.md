@@ -28,6 +28,22 @@ The S3 consoles are next, and the pack only grows.
 an add-on in its store. The C3 may sit on `dev` like that, with no browser
 console, but flows 1 and 2 (§2) land before the next release (§11).
 
+**Owner, 2026-11-26:** the XIAO Zero's console is online too ("The store
+will probably fill up again"): its app slots grew for the apps' services
+(#256), and its 3 MiB store is its carts'. **Its owner may keep the console
+on the board all the same**: "Works offline", a row of the browser
+console's Settings on a board whose console is online, off by default.
+Install fetches the add-on the image fits through the release's signed
+index, as a console's step does (`runtime/carts/web_addon.py`'s
+`AddonStep`), and the board then serves its own pack, which the loader
+prefers (`GET /sync`'s `local`); Remove takes the folder back and the
+loader is online again; a store that cannot hold it is refused with both
+sizes. The choice is a file of the store (`system/console_offline`), so an
+update brings the add-on that fits the new image. The board's half is
+`device/zero_offline.py` behind `/official`, the page's
+`firmware/web_runner/offline_link.py`; it needs the image's release index,
+so the C3, which has no updater, does not offer it.
+
 **Owner, 2026-11-23: the OS site is os.moybyte.com.** That one app holds the
 flasher, My consoles, the PWA, the packs and, later, flow 3. moybyte.com
 becomes a separate landing page for future hardware. It is a subdomain
@@ -47,16 +63,17 @@ later sync their files.
   `/p/<12 hex>/moybyte_web.pack`; `/` is a 302 there, or the sentence
   saying why there is none (`page_root`, `native/moy_net/moy_webhost.c`).
 - **The loader is built** (phase 1, §11): a board whose console is online
-  (the C3 Zero) serves it at `/`, every board at `/loader.html`, and `GET
+  (both Zeros) serves it at `/`, every board at `/loader.html`, and `GET
   /sync` names both digests and `local` (`native/moy_net/moy_page.h`, THE
-  LOADER). The C3 asks its release for no add-on (`zero_host.make_addon`).
+  LOADER). A Zero whose console is online asks its release for an add-on
+  only where its owner chose Works offline (`zero_host.make_addon`).
 - **The release publishes every add-on it makes** as
   `moybyte_web-<digest>.moy.zip` beside the payload, listed in the board's
   signed carts index (`tools/web_pack.py`): the stable release's every one,
   the beta's those of the last 30 days like the pack store (§12), within
-  the index's budget. A board whose console is online (the C3) installs no
-  add-on, so its index lists none (`web_pack.console_online`) and its
-  release carries the cart for the pack store alone. The beta deletes an add-on no index lists once it is
+  the index's budget. A board whose console is online (the Zeros) installs
+  one only where its owner chose Works offline, and its index lists them
+  as any board's does. The beta deletes an add-on no index lists once it is
   older than that (`publish_firmware_release.prune_carts`). A board installs the one that
   fits through the ordinary install, every file checked against the signed
   index (`runtime/carts/web_addon.py`'s `AddonStep`; on a Zero

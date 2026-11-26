@@ -106,7 +106,6 @@ SYSTEM_DIR = ROOT + "/system"      # the sign-in's: `password` (setup), `webkeys
 # path in that module reads off the instance instead, precisely so two boards'
 # updaters cannot look at each other's directory.
 UPDATE_DIR = ROOT + "/update"
-HOSTNAME = "moybyte-zero"          # mDNS: a headless board needs a findable name
 
 
 def _mkdir(path):
@@ -142,6 +141,37 @@ def identity():
     except (OSError, ValueError):
         return {}
     return doc if isinstance(doc, dict) else {}
+
+
+# THE NAME a board answers to on the network (`<name>.local`, the mDNS
+# responder, which probes for a conflict before it claims one): the one its
+# owner gave it (setup's form, Improv, Settings), else its own,
+# `moybyte-zero-XXXX` from its access point's MAC, as its setup access point
+# is named (zero_setup.ap_ssid), so two Zeros on one network never answer to
+# one name and a board's name never changes across boots. A saved
+# "moybyte-zero", the setup form's default before the board's own name
+# (2026-11-26), is no owner's choice and gives way to it.
+_OWN = [None]
+
+
+def own_name():
+    """`moybyte-zero-XXXX`, from this board's access point MAC."""
+    if _OWN[0] is None:
+        import zero_setup
+        try:
+            mac = moy_net.wifi_ap_mac()
+        except (OSError, AttributeError):
+            return zero_setup.ap_ssid(None)
+        _OWN[0] = zero_setup.ap_ssid(mac)
+    return _OWN[0]
+
+
+def board_name(me=None):
+    """The name this board answers to: its owner's (`identity`, or `me`),
+    else its own."""
+    import zero_setup
+    name = (identity() if me is None else me).get("name")
+    return name if name and name != zero_setup.OLD_DEFAULT else own_name()
 
 
 # -- the seed roster, carried by the image (2026-08-30) ----------------------
@@ -408,7 +438,7 @@ def connect(wait_ms=15000, hostname=None):
     moy_net.wifi_on()
     st = moy_net.wifi_status()
     if st[2] and st[4]:
-        moy_net.wifi_mdns(hostname or HOSTNAME)
+        moy_net.wifi_mdns(hostname or board_name())
         return st[4]
     nets = _networks()
     for net in nets + nets:
@@ -421,7 +451,7 @@ def connect(wait_ms=15000, hostname=None):
             st = moy_net.wifi_status()
             if st[2] and st[4]:
                 print("ZERO wifi:", net["ssid"], st[4])
-                if not moy_net.wifi_mdns(hostname or HOSTNAME):
+                if not moy_net.wifi_mdns(hostname or board_name()):
                     print("ZERO mDNS unavailable")
                 return st[4]
             time.sleep_ms(250)
@@ -876,16 +906,27 @@ def host_class():
     return WebHost
 
 
-def make_system():
+def make_system(services=None):
     """The system root a page keeps its Settings and badges in
-    (`moy_webhost.StoreSystem`), or None where the store cannot be read: the
-    page then keeps them in the tab, and the carts still sync."""
+    (`moy_webhost.StoreSystem`), over the services' rows where this board
+    runs app services, or None where the store cannot be read: the page
+    then keeps them in the tab, and the carts still sync."""
     try:
         from moy_webhost import StoreSystem
-        return StoreSystem(CARTS_DIR)
+        return StoreSystem(CARTS_DIR, services.rows if services is not None else None)
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO settings: unavailable:", exc)
         return None
+
+
+def make_services():
+    """The apps' services this board runs (zero_svc.Services), made at the
+    start (THE HEAP'S SHAPE), or None where this image runs none (the C3)."""
+    try:
+        import zero_svc
+    except ImportError:
+        return None
+    return zero_svc.make(CARTS_DIR)
 
 
 class ImprovBoard:
@@ -905,7 +946,7 @@ class ImprovBoard:
         return label, chip
 
     def name(self):
-        return identity().get("name") or HOSTNAME
+        return board_name()
 
     def rename(self, raw):
         from zero_setup import clean_name
@@ -1003,8 +1044,7 @@ def make_updater(me):
 
         ota = moy_ota.OtaUpdater(lambda fn: fn(), update_dir=UPDATE_DIR)
         ota.set_wifi(_ZeroWifi(),
-                     go_online=lambda: connect(hostname=me.get("name")
-                                               or HOSTNAME))
+                     go_online=lambda: connect(hostname=board_name(me)))
         task = ZeroUpdate(ota)
         return ota, task
     except Exception as exc:             # noqa: BLE001
@@ -1052,19 +1092,31 @@ def make_addon(ota):
     (the XIAO) the official carts the store holds that its image does not
     carry, which the page installed (`carts`; the image's own are current by
     its seed). The C3, with no OTA slot, takes a new image by cable, and the
-    flash brings its official carts (tools/board_flash.py). None where the
-    image names no release index (no updater) or its console is online
-    (console_online)."""
-    if ota is None or console_online():
+    flash brings its official carts (tools/board_flash.py). Where the
+    console is online (console_online) the add-on is its owner's choice
+    (device/zero_offline.py): none unless chosen, and every one taken off the store while
+    it is not. None where the image names no release index (no updater)."""
+    if ota is None:
         return None
     try:
         import web_addon
         from cart_net import CartNet
-        return web_addon.AddonStep(_ZeroInstall(CartNet(_ZeroWifi())), ota.own_index,
+        step = web_addon.AddonStep(_ZeroInstall(CartNet(_ZeroWifi())), ota.own_index,
                                    carts=ota.available(), absent=True)
+        if console_online():
+            step.keep = step.absent = _offline_chosen()
+        return step
     except Exception as exc:             # noqa: BLE001 -- the store serves regardless
         print("ZERO addon: unavailable:", exc)
         return None
+
+
+def _offline_chosen():
+    try:
+        import zero_offline
+    except ImportError:
+        return False
+    return zero_offline.chosen()
 
 
 def make_official(ota, addon=None):
@@ -1092,10 +1144,18 @@ def make_official(ota, addon=None):
         print("ZERO carts: unavailable:", exc)
         return None
     busy = None if addon is None else addon.busy
+    offline = None
+    if addon is not None and console_online():
+        try:
+            import zero_offline
+            offline = zero_offline.Offline(addon, CARTS_DIR)
+        except ImportError:              # an image that offers no Works offline (the C3)
+            pass
     return web_addon.OfficialCarts(_ZeroInstall(CartNet(_ZeroWifi(), ranges=True)),
                                    ota.own_index,
                                    busy=busy, reserve=SEED_RESERVE,
-                                   locked=_has_password, unlock=_is_password)
+                                   locked=_has_password, unlock=_is_password,
+                                   offline=offline)
 
 
 ADDON_SLICE_MS = 40                     # the add-on's install per loop iteration
@@ -1130,7 +1190,8 @@ def tend_addon(addon, official):
         return False
     if addon.tidy():
         return True
-    way_back(addon)
+    if not console_online():
+        way_back(addon)
     return addon.start(retry=True)
 
 
@@ -1181,13 +1242,14 @@ def way_back(addon):
 #      system receiver's parts, an install's buffers and listing).
 LASTING = ("moy_carts", "cart_index", "cart_unpack", "moy_seed", "moy_store_base",
            "web_addon", "moy_sync", "moy_webhost", "moy_ota", "ticks", "zero_wifi",
-           "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs")
+           "ssh_service", "zero_shell", "cart_net", "zero_improv", "zero_setup", "moy_docs",
+           "zero_svc", "app_keys", "zero_offline")
 # The built-in modules those import inside a function. One costs no code,
 # but its first import takes a slot of sys.modules, and that table grows by
 # a block made wherever the heap then stands.
 BUILT_IN = ("binascii", "deflate", "esp32", "gc", "hashlib", "io", "json", "machine",
             "moy_improv", "moy_kernel", "moy_net", "moy_sh", "moy_spine", "moy_ufiles",
-            "moy_web", "os", "time", "zlib")
+            "moy_web", "os", "time", "zlib", "moycore", "moy_app", "moy_evq", "moy_log")
 GC_STEP = 2048
 
 
@@ -1226,7 +1288,12 @@ def start():
     if improv is not None:
         moy_net.web_cable(1)         # the hello tells a page this board pairs by cable
     me = identity()
-    name = me.get("name") or HOSTNAME
+    name = board_name(me)
+    # The apps' services (zero_svc), made before the radio: the setup AP
+    # runs them too, since a service's devices (Moy Mesh's LoRa) are not the
+    # station's, and a base station keeps listening while nobody has set the
+    # network up.
+    services = SERVICES[0] = make_services()
     ip = connect(hostname=name)
     if ip is None:
         # NO WAY IN: host the setup AP instead of printing and giving up. A
@@ -1235,14 +1302,17 @@ def start():
         # back here, with the network it joined.
         print("ZERO no wifi -- hosting the setup AP")
         import zero_setup
-        ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv)
+        if services is not None:
+            services.boot()
+        ip = zero_setup.run(WIFI_STORE, ZERO_STORE, SYSTEM_DIR, improv=improv,
+                            turn=services.turn if services is not None else None)
         if ip is None:
             return None
         me = identity()
-        name = me.get("name") or HOSTNAME
+        name = board_name(me)
     _mkdir(SYSTEM_DIR)
     gc.collect()
-    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system())
+    host = host_class()(CARTS_DIR, auth=SYSTEM_DIR, system=make_system(services))
     ota, task = make_updater(me)
     addon = make_addon(ota)
     official = make_official(ota, addon)
@@ -1256,6 +1326,11 @@ def start():
         # after an unattended update wants to see first.
         task.boot_check()
     host.start(ip)
+    # The apps' services that start with the board (zero_svc), before the
+    # serving line a cable's reader waits for: their windows reach them over
+    # the host's live socket.
+    if services is not None:
+        services.boot()
     if improv is not None:
         improv.serving = True
         improv.finish()              # a join from the setup AP, answered now it serves
@@ -1292,6 +1367,8 @@ def start():
         # The console boards poll between frames; this board HAS no frames, so
         # its loop is this and a short sleep.
         host.poll()
+        if services is not None:
+            services.turn()
         if improv is not None:
             improv.poll()
         if tail is not None:
@@ -1325,6 +1402,7 @@ def start():
 
 
 _TURN = [None]                          # the turn `start` made, for `pump`
+SERVICES = [None]                       # the apps' services `start` made (zero_svc), for `ps`
 
 
 def pump():

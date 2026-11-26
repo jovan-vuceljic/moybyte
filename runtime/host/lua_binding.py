@@ -150,6 +150,7 @@ _SIGS = (
     ("moycore_svc_tasks", [], ctypes.c_bool),
     ("moycore_svc_step", [], _U32),
     ("moycore_svc_reset", [], None),
+    ("moycore_svc_budget", [ctypes.POINTER(_U32)], _U32),
     ("hl_kernel", [_I, _P], None),
     ("hl_img_decoder", [_P], None),
     ("hl_new", [_P, _I, _I, _I, _P, _P, _P, _I], _P),

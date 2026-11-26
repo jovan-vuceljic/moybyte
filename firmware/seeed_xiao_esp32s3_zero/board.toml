@@ -151,14 +151,23 @@ went with it -- the RPC it was kept for shipped as plain HTTP."""
 files = ["web_addon.py", "cart_index.py", "cart_unpack.py", "cart_files.py",
          "app_imports.py", "rsa_check.py"]
 why = """
-The browser console is an add-on cart (runtime/carts/web_addon.py), and on
-this board it is the whole use: provisioning installs the one that fits the
-image (provision.sh), and after an update the image installs the one that
-fits it from its release's own signed index, through the console's one
-install (cart_index, which every file of the cart is checked by before it
-lands, and the modules it imports).
+The install the browser console's Get Carts asks this board for (web_addon.
+OfficialCarts), and the step that brings its release to the store: the
+official carts after an update and, where its owner chose Works offline
+(zero_offline.Offline; the console is online, [web]), the browser console's
+add-on that fits the image, from its release's own signed index, through
+the console's one install (cart_index, which every file of the cart is
+checked by before it lands, and the modules it imports).
 rsa_check is the signature arithmetic where there is no kernel, which the
 board never runs (moy_net verifies) but cart_index and moy_ota name."""
+
+[[modules.shared.group]]
+files = ["app_keys.py"]
+why = """
+Each app's own X25519 key pairs (`moybyte.key_make`, `key_shared`), which
+an app's service on this board asks the console for (device/zero_svc.py's
+console calls): Moy Mesh's node key, kept in this store's system folder as a
+console keeps it."""
 
 [[modules.shared.group]]
 files = ["ssh_service.py"]
@@ -241,7 +250,7 @@ take them (this one and firmware/esp32c3_zero/), and nothing else does."""
 files = ["cart_net.py"]
 why = """
 The transport cart_index fetches through on a board (the kernel's client):
-the add-on's install above is its one user here."""
+the installs above are its users here."""
 
 [[modules.device.group]]
 files = ["moy_webhost.py"]
@@ -267,6 +276,33 @@ HTTP(S) client the updater and Get Carts fetch through, the signature, the
 slot); moy_ota.py is its Settings face and the identity, moy_ota_health.py the
 boot verdict and the rollback confirm the frame loop drives."""
 
+[[modules.device.group]]
+files = ["zero_offline.py"]
+why = """
+Works offline (owner, 2026-11-26): the browser console's own copy in the
+store, its owner's choice where the console is online ([web]), which the
+add-on step above fetches from the release's signed index. The C3 has no
+updater to fetch it by, and stages none."""
+
+[[modules.device.group]]
+files = ["zero_svc.py"]
+why = """
+The apps' services this board runs (#256): an installed app's Lua service
+on moycore's service tier, under its grant (moy_app), its window in the
+browser this board serves and reaching it over the live socket's channel
+'m' (`moy_net.live_serve`). zero_host starts it and turns its loop; the C3
+takes no Lua tier and so no service host."""
+
+[services]
+# The RAM this board gives the apps' services that run on it, every
+# service's Lua state summed (native/moycore/moycore_svc.h, THE BUDGET;
+# tools/board_config.py SERVICES_PARAMS). Generous: the 8 MB PSRAM holds
+# the Python heap (MOYBYTE_GC_SPLIT_RESERVE aside) and little else on a
+# board with no panel, and Moy Mesh's service holds about 140 KB idle
+# (#256). A service that would not fit is refused with the reason and runs
+# in the page instead (device/zero_svc.py).
+ram_kib = 1024
+
 # ---------------------------------------------------------------------------
 
 [roster]
@@ -287,6 +323,16 @@ image = [
   "moybyte.brick_siege", "moybyte.letter_blitz", "moybyte.tap_only_red",
   "moybyte.harpoon_pop", "moybyte.star_catcher", "moybyte.pin_light",
 ]
+
+[web]
+# This board's browser console pack comes from a mirror by digest
+# (docs/web_console_online_2026-11.md), not from its store (owner,
+# 2026-11-26: "The store will probably fill up again"), as the C3 Zero's
+# does: the app slots grew for the apps' services (#256) and the store's
+# 3 MiB are its carts'. The website's install (tools/store_image.py) and the
+# cable flash (tools/board_flash.py) put no add-on in it, the image asks its
+# release for none, and its root serves the loader.
+console = "online"
 
 [flash]
 # Read by tools/board_flash.py (#202 Phase A). S3 bootloader offset 0x0, and
@@ -314,8 +360,9 @@ offset         = "0x0"
 baud           = 460800
 otadata_offset = "0x1d000"
 otadata_size   = "0x2000"
-# The carts folder the browser console add-on that fits the flashed image is
-# installed into, over the REPL, after a cable flash (tools/board_flash.py).
+# The carts folder: after a cable flash, tools/board_flash.py installs the
+# official carts `[roster] install` names over the REPL, and no browser
+# console add-on, as the console is online (`[web]`).
 addon          = "/moy/carts"
 
 [image]
@@ -339,8 +386,9 @@ addon          = "/moy/carts"
 # 256 KiB each to 3.5 MiB (owner, 2026-11-07) for the C shell, the SSH server
 # and SFTP (the moy_sh, moy_tty and moy_ssh takes below). They are 2 MiB since
 # 2026-11-17, when the browser console left the image for its add-on cart
-# (native/moy_net/moy_page.h), and the store holds that add-on; the partition
-# CSV carries the arithmetic.
+# (native/moy_net/moy_page.h), and 2.4375 MiB since 2026-11-26 for the Lua
+# tier its apps' services run on, its console online (`[web]`); the
+# partition CSV carries the arithmetic.
 headroom_floor_kib = 0
 
 [serial]
@@ -480,13 +528,15 @@ browser it serves plays them, a match included, whose frames this board's
 radio carries unchanged through the live socket (native/moy_net/moy_live.h,
 in moy_net below; docs/netplay_v1.md section 5)."""
 
-[[native.shared.deny]]
+[[native.shared.take]]
 module = "moy_app"
 why = """
-The app ABI's kernel half (docs/history/kernel_appabi_2026-10.md) and the user-files
-layer it builds (native/moy_store/moy_ufiles.h, the module `moy_ufiles`). This
-board runs no apps: the browser it serves runs them, and its sync moves the
-files by path."""
+The app ABI's kernel half (docs/history/kernel_appabi_2026-10.md): the grant
+an app's service on this board runs under, and the rows its Lua state holds
+(native/moy_app/moy_app_lua.h) -- `prefs`, the device handles its `lora`
+reaches, the crypto rows. The app's window runs in the browser this board
+serves, and its service here (#256): Moy Mesh's base station. The user-files
+layer it builds (native/moy_store/moy_ufiles.h) comes with it."""
 
 [[native.shared.deny]]
 module = "moy_ui"
@@ -500,13 +550,13 @@ why = """
 The UI engine, which draws through the widget toolkit this board denies: it
 runs no apps."""
 
-[[native.shared.deny]]
+[[native.shared.take]]
 module = "moy_gfx"
 why = """
-The RGB565 draw kernel (fill/fill_rect/blit565/spr_batch and the #167 tri/sspr/
-tline verbs) that `device_canvas` dispatches into. There is no canvas on this
-board and no `device_canvas.py` in its device allowlist -- nothing would ever
-call a verb."""
+The RGB565 draw kernel and libmoy's raster, which moycore links whole
+(native/moycore/micropython.cmake: it compiles neither a raster nor a VM of
+its own). Nothing draws on this board: it is the price of taking moycore as
+the consoles do (owner, 2026-11-26)."""
 
 [[native.shared.deny]]
 module = "moy_alloc"
@@ -546,21 +596,21 @@ why = """
 The media service, which plays into moy_audio's mix: this board denies the
 mix (no speaker) and has no shares line, so a stream has nowhere to play."""
 
-[[native.shared.deny]]
+[[native.shared.take]]
 module = "moy_lua"
 why = """
-libmoy's Lua binding -- the #67 auto-native cart tier. Carts run in the
-BROWSER when they are paired with this board; nothing on this flash executes a
-cart in either language, so the interpreter would be dead weight in both OTA
-slots."""
+The vendored Lua 5.4 VM, which moycore's services run an app's service on
+(#256). Carts still run in the browser this board serves."""
 
-[[native.shared.deny]]
+[[native.shared.take]]
 module = "moycore"
 why = """
-The vendored moy-spec core (the cart runtime the Lua tier and the p8 semantics
-sit on). Same argument as moy_lua and the same size class: it is the single
-largest shared C module, and this board runs no carts. Denying the pair is
-most of what makes two app slots fit in 8MB of flash."""
+The vendored moy-spec core, whole, as the consoles take it: its Lua tier's
+services (moycore_svc.h) run an installed app's service on this board while
+the app's window runs in the browser it serves (device/zero_svc.py, #256:
+Moy Mesh's base station). No cart runs here; the cart runtime comes with
+the module rather than a second configuration of it (owner, 2026-11-26),
+and the app slots grew for it (the partition CSV)."""
 
 [[native.shared.deny]]
 module = "moy_prof"
@@ -600,11 +650,12 @@ section 6.5). This board has no panel, so its floor is serial only -- `retry`,
 MOY_KERNEL_IDLE_SAFE_MS (mpconfigboard.h). main.py proves the boot as soon as the
 VM reaches it, so a Ctrl-C at any point lands at the REPL, as before."""
 
-[[native.shared.deny]]
+[[native.shared.take]]
 module = "moy_glass"
 why = """
-The glass's canvas rows, buffer table and present (docs/history/kernel_survival_2026-10.md
-section 3): this board has no panel to present to."""
+The glass's buffer table and canvas rows, which moycore and moy_gfx link
+(moy_buf.h, moy_canvas.h). There is no panel here and nothing presents: it
+is the price of taking moycore as the consoles do (owner, 2026-11-26)."""
 
 [[native.shared.deny]]
 module = "moy_input"

@@ -1772,7 +1772,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         + (wifiDoc ? "web_boot.wifi_enable(" + JSON.stringify(JSON.stringify(wifiDoc)) + ")\n" : "")
         // A console that installs carts into its own store when this page
         // asks (it answers /official): BEFORE boot(), which hands Get Carts the asking.
-        + (official ? "web_boot.official_enable()\n" : "")
+        + (official ? "web_boot.official_enable(" + (official.offline ? "True" : "False") + ")\n" : "")
         // The device kinds the board relays on the live socket, BEFORE
         // boot(): an install check and the shelves ask for them.
         // `?pins=0` keeps the pin verbs on /gpio's batches (the A/B's other arm).
@@ -2132,13 +2132,15 @@ async function probeUpdate() {
 
 // Does the console that served this page install carts when the page asks
 // (it answers /official)? One GET, before the console
-// exists, so Get Carts either asks it or says the console gets its own.
+// exists, so Get Carts either asks it or says the console gets its own. Its
+// answer, or null; one naming "offline" offers the console's own copy
+// (Settings' Works offline, offline_link.py).
 async function probeOfficial() {
     try {
         const r = await sealed("GET", "/official");
-        return r.status === 200 && !!sealedJson(r);
+        return r.status === 200 ? sealedJson(r) : null;
     } catch (e) {
-        return false;
+        return null;
     }
 }
 

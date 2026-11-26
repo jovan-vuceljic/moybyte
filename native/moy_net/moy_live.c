@@ -129,14 +129,21 @@
 // it takes crosses here, where the other end's stand-in sends it again
 // (moy_live_svc.c's header). Down to the page:
 //
-//   'H' apps                  the apps whose services run on the board,
-//                             ',' between: at the socket's start and at
-//                             each change
+//   'H' budget ';' apps       the RAM the board gives its apps' services,
+//                             "<KiB>,<KiB free>" ("-" where it sets none),
+//                             and the apps whose services run on it, ','
+//                             between: at the socket's start and at each
+//                             change
 //
 // and either way:
 //
 //   'M' an(1) app nn(1) name args   message `name` sent to app `app`, its
 //                             arguments a JSON array
+//   'P' kn(1) key total(4) at(4) piece   a served app's prefs row `key`
+//                             (`<app>_...`), `total` bytes of JSON text of
+//                             which this piece starts at `at` (both little-
+//                             endian; total 0xFFFFFFFF: the row deleted),
+//                             moy_svc_prefs.c
 //
 // The services hear the page come and go (the OS message "page", [1] or
 // [0]); a window hears the board's socket do so on the page

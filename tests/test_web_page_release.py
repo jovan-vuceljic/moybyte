@@ -167,8 +167,9 @@ def test_a_release_its_manifests_its_images_and_its_carts_agree(tmp_path, channe
 
 def test_a_board_with_no_ota_gets_its_add_on_and_no_manifest(tmp_path):
     """A one-slot board (the C3 Zero) gets no manifest, which could name no
-    image for it, and its console is online, so its index names no add-on:
-    the release carries its cart for the pack store, and its index."""
+    image for it; its console is online, and its index names the add-on
+    all the same, for an owner who asks for the console's own copy
+    (zero_offline.Offline); the release carries its cart, and its index."""
     artifacts = tmp_path / "artifacts"
     board = sorted(publish.NO_OTA)[0]
     digest = _artifacts(artifacts, board, seed=3).hex()
@@ -181,8 +182,8 @@ def test_a_board_with_no_ota_gets_its_add_on_and_no_manifest(tmp_path):
     assert web_pack.console_online(board)
     assert (out / (web_pack.CART_NAME % digest)).exists()
     doc = json.loads((out / (web_pack.INDEX_NAME % board)).read_text())
-    assert doc["carts"] and not [c for c in doc["carts"]
-                                 if c["runtime"] == web_pack.CART_RUNTIME]
+    assert [c["moybyte"]["fits"] for c in doc["carts"]
+            if c["runtime"] == web_pack.CART_RUNTIME] == [digest]
 
 
 def test_a_board_whose_image_names_a_page_it_has_not_got_is_refused(
@@ -453,11 +454,11 @@ def test_an_earlier_signed_index_keeps_its_entries(tmp_path):
         "an official entry names its API level, not a page"
 
 
-def test_an_online_consoles_index_names_no_addon(tmp_path):
-    """A board whose console is online (the C3 Zero's `[web] console`)
-    installs no add-on, so its index carries the official entries alone, an
-    earlier index's add-ons dropped too; its add-on cart is published all
-    the same, for the pack store to read by its name."""
+def test_an_online_consoles_index_names_its_addon_for_an_owner_who_asks(tmp_path):
+    """A board whose console is online (the Zeros' `[web] console`)
+    installs the add-on only where its owner asks for the console's own copy
+    ("Works offline", zero_offline.Offline), so its index names it as any
+    board's does, with the earlier ones it keeps."""
     assert web_pack.console_online("c3_zero") and not web_pack.console_online("p4")
     first = tmp_path / "a"
     first.mkdir()
@@ -470,8 +471,8 @@ def test_an_online_consoles_index_names_no_addon(tmp_path):
     got = web_pack.publish_addon((str(second / web_pack.PACK_FILE), other), str(second),
                                  "c3_zero", 8, earlier=earlier)
     doc = json.loads((second / "carts-c3_zero.json").read_text())
-    assert doc["carts"] and not [c for c in doc["carts"]
-                                 if c["runtime"] == web_pack.CART_RUNTIME]
+    assert [c["moybyte"]["fits"] for c in doc["carts"]
+            if c["runtime"] == web_pack.CART_RUNTIME][0] == other
     assert got["cart"] == web_pack.CART_NAME % other and (second / got["cart"]).exists()
 
 

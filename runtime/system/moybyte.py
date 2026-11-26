@@ -75,7 +75,8 @@ one, `time.ticks_us()`.
   name()             the console's name, the one it answers to on the
                      network (`<name>.local`): the name Settings gives it,
                      else its board's own ("moybyte-" and its MAC's last
-                     four hex digits; the Zero's "moybyte-zero")
+                     four hex digits; a Zero's "moybyte-zero-" and its
+                     access point MAC's, as its setup network is named)
 
 THE APP'S KEYS (runtime/system/app_keys.py): X25519 key pairs the console
 keeps for the calling app, each under a name of its own (1 to 32 of a-z, 0-9,

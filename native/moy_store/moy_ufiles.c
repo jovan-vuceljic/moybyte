@@ -11,7 +11,10 @@
 #include "moy_img.h"
 #include "moy_journal.h"
 #include "moy_json.h"
-#include "moy_png.h"
+#if __has_include("moy_png.h")
+#include "moy_png.h"         // the cover reader, where the image has it
+#define UF_COVERS 1
+#endif
 #include "moy_ufiles.h"
 
 // What a builder here grows in: the store's call scratch.
@@ -2296,6 +2299,11 @@ int moy_uf_encode_cover(const uint8_t *pix, size_t n, moy_buf_t *out) {
 int moy_uf_decode_cover(const uint8_t *data, size_t n, moy_buf_t *pix) {
     pix->p = NULL;
     pix->n = 0;
+#ifndef UF_COVERS
+    (void)data;
+    (void)n;
+    return MOY_UF_NONE;             // an image without native/moy_png reads none
+#else
     size_t on = moy_png_out_size(1, MOY_PNG_INDEX);
     void *work = moy_store_alloc(MOY_PNG_WORK);
     char *o = moy_store_alloc(on + 1u);
@@ -2317,6 +2325,7 @@ int moy_uf_decode_cover(const uint8_t *data, size_t n, moy_buf_t *pix) {
         moy_store_free(o, on + 1u);
     }
     return rc;
+#endif
 }
 
 // -- the wallpaper's copy -------------------------------------------------------------------

@@ -328,6 +328,7 @@ class SettingsLayer(Layer):
         self._rows_upd = False
         self._rows_onl = False
         self._rows_web = False
+        self._rows_off = False
         self._rows_c6 = False
         self._rows_usb = False
         self._rows_wifi = True
@@ -1002,6 +1003,7 @@ class SettingsLayer(Layer):
         onl = ws.online_update_available()
         web = getattr(ws, "webhost", None) is not None
         c6u = getattr(ws, "c6_updater", None) is not None
+        off = getattr(ws, "console_offline", None) is not None
         usb = self._usb.drive() is not None
         idle = getattr(ws, "idle_ladder", None)
         tog = self._toggle_rows()
@@ -1013,7 +1015,7 @@ class SettingsLayer(Layer):
                 and sizes is self._rows_sizes
                 and bt == self._rows_bt
                 and upd == self._rows_upd and onl == self._rows_onl
-                and web == self._rows_web and c6u == self._rows_c6
+                and web == self._rows_web and c6u == self._rows_c6 and off == self._rows_off
                 and usb == self._rows_usb 
                 and radio == self._rows_wifi and light == self._rows_light
                 and tog is self._rows_tog and idle is self._rows_idle):
@@ -1073,6 +1075,13 @@ class SettingsLayer(Layer):
             # frame or per Settings open. Capability-gated like the others so
             # every other board's rows and pixels stay frozen.
             rows = rows + (("update_c6", "UPGRADE C6 RADIO", "action"),)
+        if off:
+            # WORKS OFFLINE: the browser console's own copy on the board that
+            # serves this page, where that board's console is online (its
+            # owner's choice, device/zero_offline.py; the page's
+            # firmware/web_runner/offline_link.py).
+            rows = rows + (("offline", "Works offline", "action"),)
+        self._rows_off = off
         self._rows_bt = bt
         self._rows_upd = upd
         self._rows_onl = onl

@@ -358,6 +358,29 @@ def test_the_ap_name_carries_the_mac_tail():
     assert zero_setup.ap_ssid(None) == "moybyte-zero-0000"
 
 
+def test_the_board_answers_to_its_own_name_until_its_owner_names_it(monkeypatch):
+    """Two Zeros on one network never answer to one name: a board's own is
+    its setup access point's (`moybyte-zero-XXXX`, the same MAC tail), the
+    same every boot; a name its owner gave wins, and a saved "moybyte-zero",
+    the form's old default, is no owner's choice. The form offers the
+    board's own name."""
+    import zero_host
+
+    class Net:
+        @staticmethod
+        def wifi_ap_mac():
+            return b"\x88\x56\xa6\x76\xe5\x5d"
+    monkeypatch.setattr(zero_host, "moy_net", Net)
+    monkeypatch.setattr(zero_host, "_OWN", [None])
+    assert zero_host.own_name() == "moybyte-zero-e55d"
+    for saved, want in (({}, "moybyte-zero-e55d"), ({"name": ""}, "moybyte-zero-e55d"),
+                        ({"name": "moybyte-zero"}, "moybyte-zero-e55d"),
+                        ({"name": "kitchen"}, "kitchen")):
+        assert zero_host.board_name(saved) == want
+    assert b'value="moybyte-zero-e55d"' in zero_setup.page("moybyte-zero-e55d").encode()
+    assert b'value="kitchen"' in zero_setup.page("moybyte-zero-e55d", name="kitchen").encode()
+
+
 def test_an_unserved_post_is_a_404_from_the_transport():
     """Only the GET half became a redirect (below). A POST to a path this
     server does not know is still nothing."""

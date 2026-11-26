@@ -182,3 +182,11 @@ CONFIG_LWIP_PPP_CHAP_SUPPORT=n
 # base's INFO ceiling compiled in were never printed.
 CONFIG_LOG_MAXIMUM_LEVEL_INFO=n
 CONFIG_LOG_MAXIMUM_EQUALS_DEFAULT=y
+
+# --- Curve25519 --------------------------------------------------------------
+# An app's moybyte.x25519 and the console's key_make/key_shared
+# (native/moy_net/moy_crypto.h, runtime/system/app_keys.py) are mbedTLS's
+# Montgomery ladder on Curve25519, which MicroPython's base config turns off;
+# without this line the row answers ABSENT. An app's service on this board
+# needs it (#256: Moy Mesh's node key), as the consoles' apps do.
+CONFIG_MBEDTLS_ECP_DP_CURVE25519_ENABLED=y

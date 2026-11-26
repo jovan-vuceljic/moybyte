@@ -210,6 +210,7 @@ class AddonStep:
         self.index = index
         self.carts = carts
         self.absent = absent
+        self.keep = True              # False: no add-on wanted, every one taken off (`drop`)
         self._queue = []
         self._addon = False
         self._stamp = False           # the official stamp, once read (False: unread)
@@ -265,6 +266,8 @@ class AddonStep:
         return self.nudge()
 
     def _addon_wanted(self):
+        if not self.keep:
+            return False
         state = page_state()
         if state == STATE_STALE:
             return True
@@ -323,9 +326,9 @@ class AddonStep:
         self._tidied = True
         want = _ci.page_want()
         self.point()
-        if not want or page_state() != STATE_READY:
+        if self.keep and (not want or page_state() != STATE_READY):
             return False
-        keep = PREFIX + want[:12] + ".moy"
+        keep = PREFIX + want[:12] + ".moy" if self.keep else None
         root = self.inst.root()
         stale = [f for f in self._addons(root) if f != keep]
         if not stale:
@@ -339,6 +342,21 @@ class AddonStep:
         if self.wake is not None:
             self.wake()
         return True
+
+    def drop(self, keep=False):
+        """The console's own copy wanted (`keep`) or not: not, every add-on
+        folder is taken off the shelf by the step's clean phase (no removal
+        recorded: the page is then the loader's, online), as a tidy takes
+        the ones that do not fit. True while that runs (`tick` it)."""
+        self.keep = keep
+        self.absent = keep
+        self._room = False
+        if keep:
+            return self.nudge()
+        if self.phase is not None and self.phase != "clean":
+            self.stop()
+        self._tidied = False
+        return self.tidy()
 
     def _addons(self, root):
         """The add-on folders under `root`: from the shelf the boot scanned
@@ -594,6 +612,8 @@ class AddonStep:
             return self._end(None)
         for f in swept:
             self.inst.rescan(f)
+        if not self.keep:
+            self.point(again=True)      # no copy left: the page is the loader's
         self.phase = None
         return False
 
@@ -679,6 +699,10 @@ class OfficialCarts:
                holds, and its folder taken off: "done"; a core cart, or one
                nothing installed, is refused
       cancel   an install stopped while it can be
+      offline  `{"on": bool}`: the browser console's own copy in the store
+               or not, where the board's console is online and `offline`
+               (zero_offline.Offline) makes it a choice; the GET's "offline"
+               says where that stands
 
     `index` names one of the indexes the board browses; none is its own
     release's. A version an index revoked is refused (cart_index.REVOKED),
@@ -695,8 +719,9 @@ class OfficialCarts:
     the indexes (cart_index.load_indexes)."""
 
     def __init__(self, inst, index, busy=None, reserve=0, sources=None, locked=None,
-                 unlock=None):
+                 unlock=None, offline=None):
         self.inst = inst
+        self.offline = offline        # the console's own copy, where it is a choice (`Offline`)
         self.locked = locked          # () -> whether this board has a password
         self.unlock = unlock          # (password) -> whether it is this board's
         self.index = index
@@ -743,6 +768,8 @@ class OfficialCarts:
             return self._cancel()
         if action == "agree":
             return self._agree(doc.get("password"))
+        if action == "offline" and self.offline is not None:
+            return self.offline.choose(bool(doc.get("on")))
         if action not in ("check", "licence", "install", "remove"):
             return False, "action must be check, licence, install, agree, remove or cancel"
         if self.busy():
@@ -865,6 +892,8 @@ class OfficialCarts:
         if ok is not None:
             doc["ok"] = ok
             doc["message"] = message
+        if self.offline is not None:
+            doc["offline"] = self.offline.state()
         text = json.dumps(doc)
         listed = self._listed
         if listed is not None and ok is None:

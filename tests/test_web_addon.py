@@ -543,3 +543,49 @@ def test_a_store_with_no_room_for_the_add_on_is_not_asked_again(tmp_path, monkey
     assert boot.error is None and boot.short() is None
     assert os.listdir(root) == [web_pack.cart_id(pages[0][1]) + ".moy"]
     assert nb.page_state() == web_addon.STATE_READY
+
+
+def test_an_online_console_s_own_copy_is_its_owner_s_choice(tmp_path, monkeypatch, board):
+    """"Works offline" (device/zero_offline.py over the step, the owner's call
+    2026-11-26): off by default, so an online console takes every add-on off
+    its store at the confirm; on, it fetches the one its image fits through
+    the release's signed index and serves its own pack; off again, the
+    folder goes and the loader is online again. A store that cannot hold it
+    is refused with the sizes, and the choice is a file of the store, so it
+    outlives an update."""
+    zh = _zero_host()
+    sys.path.insert(0, str(ROOT / "device"))
+    try:
+        import zero_offline as zo
+    finally:
+        sys.path.pop(0)
+    pages, routes, root = _shelved(tmp_path, monkeypatch, 0, b"a")
+    monkeypatch.setattr(zo, "FILE", str(tmp_path / "console_offline"))
+    monkeypatch.setattr(zh, "console_online", lambda: True)
+    inst = Console(root, MemNet(routes))
+    step = web_addon.AddonStep(inst, BASE + "carts-tdeck.json", absent=True)
+    step.keep = step.absent = zo.chosen()
+    off = zo.Offline(step, root)
+    monkeypatch.setattr(off, "_needs", lambda: 2 << 20)
+    assert not step.keep and step.tidy(), "off: the confirm takes the copy off"
+    _run(step)
+    assert os.listdir(root) == [] and nb.page_state() == web_addon.STATE_ABSENT
+    assert not moy_carts.addon_removed(root), "and records no removal"
+    monkeypatch.setattr(zh, "_free_bytes", lambda _r: zh.SEED_RESERVE + (1 << 20))
+    ok, why = off.choose(True)
+    assert not ok and why == "It needs 2.1 MB and this board has 1.0 MB free."
+    assert not zo.chosen()
+    monkeypatch.setattr(zh, "_free_bytes", lambda _r: zh.SEED_RESERVE + (8 << 20))
+    ok, _why = off.choose(True)
+    assert ok and zo.chosen() and step.busy()
+    _run(step)
+    assert step.error is None and os.listdir(root) == [_folder(pages[0])]
+    assert nb.page_state() == web_addon.STATE_READY
+    st = off.state()
+    assert st["on"] and st["installed"] and st["needs"] == 2 << 20 and not st["busy"]
+    ok, _why = off.choose(False)
+    assert ok and not zo.chosen()
+    _run(step)
+    assert os.listdir(root) == [] and nb.page_state() == web_addon.STATE_ABSENT
+    assert not off.state()["installed"]
+    assert not step.start(), "off: nothing is fetched"

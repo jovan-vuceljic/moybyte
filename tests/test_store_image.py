@@ -39,7 +39,7 @@ BOARDS = {
     "p4": ("esp32_p4_wifi6_touch_lcd_7b", 0xD50000, (32 << 20) - 0xD50000),
     "guition_p4": ("guition_jc8012p4a1c", 0xD50000, (16 << 20) - 0xD50000),
     "elecrow_p4": ("elecrow_crowpanel_p4_10_1", 0xD50000, (16 << 20) - 0xD50000),
-    "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x420000, 0x3E0000),
+    "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x500000, 0x300000),
     "c3_zero": ("esp32c3_zero", 0x1E0000, 0x220000),
 }
 SIZES = {1: 0, 2: 1, 4: 2, 8: 3, 16: 4, 32: 5}
@@ -117,10 +117,8 @@ def _wasm_pack(size):
 
 
 def test_the_check_fails_a_pack_that_outgrows_a_board_s_store():
-    """Every board with a store is checked; a pack whose add-on does not fit
-    one fails it, and a headless board's store must also hold its first
-    boot's carts with the seed's reserve free, which a console board's card
-    takes."""
+    """Every board with a store is checked, and a pack whose add-on does not
+    fit one fails it."""
     import io
     assert sorted(os.path.basename(d) for d in store_image.board_dirs()) == sorted(b[0] for b in BOARDS.values())
     out = io.StringIO()
@@ -131,23 +129,20 @@ def test_the_check_fails_a_pack_that_outgrows_a_board_s_store():
     assert store_image.check(_wasm_pack((blocks + 1) * store_image.BLOCK), out) == [
         "elecrow_crowpanel_p4_10_1", "guition_jc8012p4a1c"]
     assert "do not fit a store of %d blocks" % blocks in out.getvalue()
-    xiao = str(_board("xiao_zero"))
-    blocks = store_image.board_store(xiao)[1] // store_image.BLOCK
-    fits = _wasm_pack((blocks - 24) * store_image.BLOCK)
-    _b, alone, both = store_image.room(xiao, fits)
-    assert alone <= blocks and (both is None or blocks - both < store_image.seed_reserve() // store_image.BLOCK)
-    out = io.StringIO()
-    assert "seeed_xiao_esp32s3_zero" in store_image.check(fits, out), out.getvalue()
 
 
-def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path):
-    """The C3 Zero's console is online (`[web] console`): its install's
-    store holds no add-on, and the check holds its store to its first boot's
+ONLINE = ("c3_zero", "xiao_zero")      # the Zeros (owner, 2026-11-23 and 2026-11-26)
+
+
+@pytest.mark.parametrize("name", ONLINE)
+def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path, name):
+    """A Zero's console is online (`[web] console`): its install's store
+    holds no add-on, and the check holds its store to its first boot's
     carts and the seed's reserve alone, whatever the pack."""
     import io
-    c3 = _board("c3_zero")
+    c3 = _board(name)
     assert board_config.web_console(c3) == "online"
-    assert set(board_config.web_console(_board(n)) for n in BOARDS if n != "c3_zero") == {"addon"}
+    assert set(board_config.web_console(_board(n)) for n in BOARDS if n not in ONLINE) == {"addon"}
     toml = tmp_path / "board.toml"
     toml.write_text('[web]\nconsole = "cloud"\n')
     with pytest.raises(ValueError, match="console must be one of addon, online"):
@@ -155,13 +150,15 @@ def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path):
     offset = int(str(board_config.load(c3)["flash"]["offset"]), 0)
     merged = _merged(c3, offset)
     out = store_image.install_image(merged, offset, None)
-    at, size = BOARDS["c3_zero"][1:]
+    at, size = BOARDS[name][1:]
     assert out[:len(merged)] == merged and len(out) - (at - offset) <= 8 * store_image.BLOCK
     blocks, addon, both = store_image.room(str(c3), None)
     assert blocks - both >= store_image.seed_reserve() // store_image.BLOCK
     text = io.StringIO()
-    assert "esp32c3_zero" not in store_image.check(_wasm_pack(size + 4096), text)
-    assert "esp32c3_zero                 store  544 blocks, no add-on: its console is online" in text.getvalue()
+    folder = BOARDS[name][0]
+    assert folder not in store_image.check(_wasm_pack(size + 4096), text)
+    assert "%-28s store  %d blocks, no add-on: its console is online" % (
+        folder, size // store_image.BLOCK) in text.getvalue()
 
 
 def test_the_c3_s_install_holds_its_roster_s_carts_and_no_pin_light():
