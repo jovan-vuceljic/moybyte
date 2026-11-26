@@ -29,10 +29,24 @@ def mount_sd_live():
     import moy_store
 
     sectors = moy_sd.up()
-    bd = moy_store.card(sectors)
+    try:
+        bd = moy_store.card(sectors)
+    except OSError as exc:
+        _noticed(exc, moy_sd)
+        raise
     _mount(bd, SD_MOUNT)
     device = bd
     return bd
+
+
+def _noticed(exc, card):
+    """A card that answered but holds nothing this console reads waits for
+    the console's question (runtime/system/card_format.py)."""
+    try:
+        import card_format
+    except ImportError:
+        return
+    card_format.noticed(exc, card)
 
 
 _live_mounted = False

@@ -216,6 +216,11 @@ class DeviceBoot(BootCarts):
         self.done = True
         self.say("first frame in %dms" % _ticks_diff(_ticks_ms(), self._first_at))
         boot_ok(ws)
+        try:
+            import card_format
+            card_format.offer(ws)
+        except ImportError:
+            pass
         return True
 
 

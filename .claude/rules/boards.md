@@ -271,8 +271,10 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   unreadable filesystem, or a mounted card whose store then fails, also opens
   a desk dialog that says so (`card_store.WHY`). FAT12/16/32
   and exFAT both mount (`MICROPY_FATFS_EXFAT` in `mpconfigboard.h`, the T-Deck's
-  too). The OTA directory and the BLE bond store stay internal. Never format or
-  erase a card from the console.
+  too). The OTA directory and the BLE bond store stay internal. A card that
+  answers with nothing readable gets the console's one question once the
+  desktop is up (`runtime/system/card_format.py`), and only its Format
+  formats; never format or erase a card from a tool or a test.
 - **On the S3 boards a play frame can skip the root canvas.** The #190 fold
   (`native/moy_flush/moy_fold`, shared C: the latch, the fence and both boards'
   gathers) scales a small game canvas into the panel bands on the feeder,
@@ -377,8 +379,8 @@ ports, flash, push, reboot, screenshots — are the `on-glass` skill
   `moy_sd.up()`'s `card_init` error, named the way a failed mount is. The
   bring-up is native/moy_sd's C from each board's board.toml card row
   (`moy_sd.h`), which the kernel's recovery floor calls with no VM.
-  The OTA directory and the BLE bond store stay internal. Never format or erase
-  a card from the console.
+  The OTA directory and the BLE bond store stay internal. Only the console's
+  question's Format formats a card (`runtime/system/card_format.py`).
 - **A compiled cart's blit565 frame skips the game canvas**
   (`p4_canvas.present_frame`): the PPA scales it from the cart's memory, or
   from the GDMA snapshot every frame takes into the run's scratch where the

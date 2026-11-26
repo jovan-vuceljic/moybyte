@@ -700,10 +700,11 @@ def test_the_spine_imports_no_board_module():
     # cart step the spine takes (boot_carts.py), whose store is an argument.
     # `ui_draw` (the string table's reader), `crash_guard` is a runtime leaf, and `moy_kernel` is the kernel's binding
     # (native/moy_kernel), guarded the same way: absent, the first frame
-    # proves nothing to nobody.
+    # proves nothing to nobody. `card_format` is a runtime leaf too: the
+    # question about an unreadable card, which its board's mount found.
     allowed = {"console", "runtime", "chrome", "ticks", "moycore_glue",
                "device_util", "perf_line", "time", "gc", "boot_carts",
-               "crash_guard", "moy_kernel", "ui_draw"}
+               "crash_guard", "moy_kernel", "ui_draw", "card_format"}
     seen = set()
     for name in ("device_boot.py", "boot_carts.py"):
         src = runtime_file(name).read_text(encoding="utf-8")

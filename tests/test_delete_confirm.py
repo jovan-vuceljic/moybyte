@@ -313,7 +313,7 @@ def test_the_hint_strip_names_the_dialogs_keys(tmp_path, monkeypatch, kind):
 
 
 def test_a_verb_that_loses_something_is_the_danger_button(tmp_path):
-    """Delete, Close and Stop & play lose something: their dialogs draw the
+    """Delete, Close, Stop & play and Format lose something: their dialogs draw the
     verb in the danger look (`ui.dialog(kind="danger")`, the goldens'
     desk_close_refusal and status_vmstop pin its pixels); Receive and Open
     lose nothing and are primary, and so are a `tell`'s OK and the Move of
@@ -325,7 +325,8 @@ def test_a_verb_that_loses_something_is_the_danger_button(tmp_path):
     kinds = {ln.split("buttons=")[1].split(",")[-1]: "kind='danger'" in ln
              for ln in ws.confirm._page.dump().splitlines() if " dialog " in ln}
     assert kinds == {"delete": True, "close": True, "stop_play": True, "receive": False,
-                     "open": False, "cancel": False, "ok": False, "switch": False}, kinds
+                     "open": False, "cancel": False, "ok": False, "switch": False,
+                     "format": True}, kinds
 
 
 @pytest.mark.parametrize("sys_size", [None, (1024, 600)], ids=["tdeck", "p4"])

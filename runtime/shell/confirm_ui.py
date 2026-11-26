@@ -2,9 +2,10 @@
 hosts over the content it dims: a dialog titled with the question, its
 buttons the answers.
 
-- A verb's question (`verb` delete, close, stop_play or receive): its line
-  under the title, wrapped, the card growing to fit; Cancel (No for a
-  receive) and the verb, in the danger look where it loses something.
+- A verb's question (`verb` delete, close, stop_play, receive or format):
+  its line under the title, wrapped, the card growing to fit; Cancel (No for
+  a receive, Not now for a format) and the verb, in the danger look where it
+  loses something.
 - The first run of a cart that arrived as files (`open`): the install
   prompt's lines (`app_perms.rows`), No and Open.
 - The intents' "open with" (`choose`): a menu under the line, a row each
@@ -22,7 +23,7 @@ import uitree as ui
 import uitree_app
 
 VERBS = ("delete", "close", "stop_play", "receive", "open", "choose", "tell", "switch",
-         "switch_save")
+         "switch_save", "format")
 
 s = ui.state(
     title="",
@@ -69,12 +70,14 @@ ui.action("open", "Open", _yes)
 ui.action("ok", "OK", _yes)
 ui.action("switch", "Move", _yes)
 ui.action("save", "Save", _save)
+ui.action("format", "Format", _yes)
+ui.action("not_now", "Not now", _cancel)
 ui.action("pick", "Choose", _pick, takes="row")
 
 # A verb's question: its buttons, Cancel or No first, and whether the verb
 # loses something (the danger look).
 _ASKS = (("delete", "cancel", True), ("close", "cancel", True), ("stop_play", "cancel", True),
-         ("receive", "no", False))
+         ("receive", "no", False), ("format", "not_now", True))
 
 
 def page():

@@ -68,8 +68,10 @@ The hints draw these chords (`MOY_UI_PAD_TABS`, `MOY_UI_PAD_MORE` in
 paired BLE keyboard is a desk keyboard.
 
 The card is the store's when its volume mounts: FAT or exFAT, on an MBR
-partition table, none, or GPT, whose first FAT partition is the volume
-(`native/moy_store/moy_card.c`, GPT_FIND).
+partition table or none. A card the console cannot read (no filesystem, an
+unknown one, or a GPT partition table) leaves the console on its internal
+store, and the console asks once the desktop is up whether to format it
+(`runtime/system/card_format.py`).
 
 ## Power
 
@@ -86,7 +88,10 @@ In the other, G13, the bar's data line is the speaker's I2S data: every sound
 is a frame of garbage to the bar, which lights it up to full white and
 warm. The bar keeps the last frame it was sent, so it is written dark by
 `boot.py` (G5) and by the panel's bring-up on both pins before the speaker
-takes G13 (`moy_lcd_board_up`). The console has no status light.
+takes G13 (`moy_lcd_board_up`). The console has no status light: the bar is
+an app's, through the `leds` device API (`native/moy_leds/moy_leds.h`,
+`moybyte.leds`), shown on G5 by `moy_board_leds_show`, and dark again when
+its holder ends.
 
 ## On glass
 

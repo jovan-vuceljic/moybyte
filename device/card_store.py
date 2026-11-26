@@ -13,10 +13,13 @@ mounts, the internal flash when it does not. A card that is absent, will not
 construct, has a filesystem the build cannot read, or mounts but cannot be
 seeded all end the same way -- one line on the serial port saying which, and
 the console boots on the internal store. A card that mounts but whose store
-fails, and one whose filesystem this build cannot read, are also said on the
-desk (the boot's `card_trouble`, `Notices.card_trouble`); an empty slot is
-not. Nothing here formats, erases or writes to a card; the only writes are
-the store's own.
+fails is also said on the desk (the boot's `card_trouble`,
+`Notices.card_trouble`); an empty slot is not. A card that answered but holds
+nothing the store reads gets the console's question instead
+(runtime/system/card_format.py), which formats it only on an explicit yes;
+where no question can be asked, the desk says it as `card_trouble` "format".
+Nothing here formats, erases or writes to a card; the only writes are the
+store's own.
 """
 
 SD_MOUNT = "/sd"
@@ -38,6 +41,7 @@ def mount(make_card, mount_point=SD_MOUNT, tag="SD", say=print):
     try:
         card = make_card()
     except Exception as exc:  # noqa: BLE001 -- no slot, no card, a dead bus
+        _noticed(exc)
         STATUS = "no card interface: %r" % (exc,)
         WHY = _why(exc, "no card interface")
         say("%s: %s (%r) -- carts on internal flash" % (tag, WHY, exc))
@@ -58,6 +62,24 @@ def mount(make_card, mount_point=SD_MOUNT, tag="SD", say=print):
     STATUS = "mounted"
     say("%s: card mounted at %s" % (tag, mount_point))
     return True
+
+
+def _noticed(exc):
+    try:
+        import card_format
+        import moy_sd
+    except ImportError:
+        return
+    card_format.noticed(exc, moy_sd)
+
+
+def _asking():
+    """The format question waits for this card (card_format.OFFER)."""
+    try:
+        import card_format
+    except ImportError:
+        return False
+    return card_format.OFFER is not None
 
 
 def _why(exc, otherwise="card unreadable"):
@@ -87,16 +109,16 @@ def carts_loader(make_card, seed_carts, card_root, flash_root, ota_dir,
     """A `build_desktop(load_carts=...)` hook: the cart store on the card when
     it mounts, on `flash_root` when it does not or cannot be seeded.
 
-    A card whose filesystem this build cannot read is the boot's
-    `card_trouble` "format"; one that mounts and whose store then fails,
-    `load_carts`' "errors".
+    A card whose filesystem this build cannot read gets the format question
+    (card_format), or the boot's `card_trouble` "format" where none waits;
+    one that mounts and whose store then fails, `load_carts`' "errors".
 
     The OTA directory stays on the internal flash either way: it holds a
     copied image and a pending marker, which belong to the device, not to a
     card that can be pulled out."""
     def _load(boot, store):
         ok = mount(make_card, mount_point, tag, say=boot.say)
-        if WHY == NO_FILESYSTEM:
+        if WHY == NO_FILESYSTEM and not _asking():
             boot.card_trouble = "format"
         carts, root = boot.load_carts(
             store, seed_carts,
