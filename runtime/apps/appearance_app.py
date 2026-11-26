@@ -11,7 +11,7 @@ page the C engine lays out and paints.
 The themes are cards (`ui.cards`), each picture the theme's own ground,
 bar, surface and accent, drawn when the engine asks (`ui.pictures.put`),
 the theme in use wearing the current mark; under them the rows: MODE (a
-seg, where the theme has two modes), ACCENT (eight swatches: the theme's
+seg, where the theme has two modes: Day by the sun, Night by the moon), ACCENT (eight swatches: the theme's
 own and `OFFERED`), TINT, WALLPAPER (a link to the wallpapers' page),
 WINDOW STYLE (where windows are), FONT, CODE FONT (where the image draws
 more than one), CHROME SIZE (where the panel takes more than one), NAME on
@@ -71,6 +71,8 @@ NAME_WHY = {"grammar": "a-z 0-9 _ - only, a letter or digit first",
             "store": "Can't save here",
             "none": "Only custom is named"}
 NAME_HINT = "a-z 0-9 _ -, up to 24"
+# The line the Code font row's sample draws in the font it picked.
+CODE_SAMPLE = "for i=1,10 do print(i) end"
 NAME_MAX = 24
 EDIT_THEME = "Edit theme…"
 DOT = " · "
@@ -84,7 +86,9 @@ ROWS = {"Mode": "mode", "Accent": "accent", "Tint": "tint", "Wallpaper": "wallpa
 
 # -- the pages ------------------------------------------------------------------------
 
-_PICKS = dict(key="v", v="", word="")
+_PICKS = dict(key="v", v="", word="", icon="")
+# The Mode row's icons, light's and dark's: Day the sun, Night the moon.
+MODE_ICONS = ("sun", "moon")
 s = ui.state(
     status="",                  # the desk band's lead: the theme, its mode, where it comes from
     themes=ui.model(key="id", id="", title="", sub="", pic=ui.IMAGE),
@@ -190,9 +194,6 @@ def name_ask():
 
 def name_typed():
     lay = _lay()
-    t = lay.name_ok(s.name)
-    if t != s.name:
-        s.name = t
     lay.armed = None
     lay.why = None
 
@@ -234,7 +235,7 @@ def build():
             with ui.cards("themes", cur="card", current="theme", w="{@desk?192:66}",
                           h="{@desk?112:50}", flow=True):
                 ui.card("use", label="{.title}", sub="{.sub}", image=".pic")
-            ui.seg("Mode", "mode", text="{.word}", on="mode_set", shown="two_modes")
+            ui.seg("Mode", "mode", text="{.word}", icons="{.icon}", on="mode_set", shown="two_modes")
             ui.seg("Accent", "accent", text="{.rgb}", look="swatches", on="accent_set",
                    shown="has_accents")
             ui.seg("Tint", "tint", text="{.word}", look="cycle", on="tint_set")
@@ -244,13 +245,15 @@ def build():
             ui.seg("Font", "font", text="{.word}", look="cycle", on="font_set")
             ui.seg("Code font", "code", text="{.word}", look="cycle", on="code_set",
                    shown="has_codes")
+            ui.label(CODE_SAMPLE, face="mono", tone="dim", shown="has_codes")
             ui.seg("Chrome size", "chrome", text="{.word}", look="cycle", on="chrome_set",
                    shown="has_chromes")
             ui.link("name_ask", "Keep as a theme", shown="custom")
             ui.link("edit", "{edit_word}")
         with ui.dialog("Name your theme", ["cancel", "keep"], labels=["Cancel", "{armed?Replace:Keep}"],
                        shown="naming"):
-            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed", edit="open")
+            ui.field("Name", "name", NAME_MAX, on="keep", changed="name_typed", edit="open",
+                     keys="name")
             ui.label("{name_note}")
 
 
@@ -275,9 +278,11 @@ def _set(lay, name, value):
         setattr(s, name, value)
 
 
-def _picks(lay, name, keys, words, cur):
-    """A cycle's rows (`name` + "s") and its value, `cur` (a key of `keys`)."""
-    _set(lay, name + "s", [{"v": k, "word": w} for k, w in zip(keys, words)])
+def _picks(lay, name, keys, words, cur, icons=()):
+    """A cycle's rows (`name` + "s") and its value, `cur` (a key of `keys`);
+    `icons` each row's icon, where its seg shows one."""
+    _set(lay, name + "s", [{"v": k, "word": w, "icon": icons[i] if i < len(icons) else ""}
+                           for i, (k, w) in enumerate(zip(keys, words))])
     _set(lay, name, cur)
 
 
@@ -305,7 +310,7 @@ def fill(lay):
     modes = lay.modes_of(name if name != "custom" else (ch["from"] or name))
     _set(lay, "two_modes", len(modes) > 1)
     if len(modes) > 1:
-        _picks(lay, "mode", ("light", "dark"), modes, variant)
+        _picks(lay, "mode", ("light", "dark"), modes, variant, MODE_ICONS)
     offered = lay.accents_offered(ch)
     _set(lay, "has_accents", offered)
     if offered:
@@ -572,21 +577,6 @@ class AppearanceAppLayer(uitree_app.app_layer("appearance", "Appearance", build)
         self.fill_owed = True
         if acted:
             self.acted()
-
-    @staticmethod
-    def name_ok(text):
-        """`text` in the name grammar's characters (§3), a letter or a digit
-        first: a capital typed is its small letter and a space a -, so what
-        is typed reads as typed; anything else never lands."""
-        out = ""
-        for c in text:
-            if "A" <= c <= "Z":
-                c = chr(ord(c) + 32)
-            elif c == " ":
-                c = "-"
-            if "a" <= c <= "z" or "0" <= c <= "9" or (c in "_-" and out):
-                out += c
-        return out
 
     def name_commit(self):
         """Keep in NAME: rename `custom` to the name typed; a name an

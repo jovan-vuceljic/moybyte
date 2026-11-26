@@ -19,8 +19,12 @@ and the desk's (tools/make_font.py's `module`).
   draws from the default set.
 * A THEME'S OWN TILES: the package's `icons` sheet, in the pixel set's
   shape, and the slots its look's `icons.pixel_slots` names draw from it in
-  place of the set's (Appearance.pixel_draw), in every theme. The Editor's
-  theme mode paints them (runtime/editors/theme_editor.py).
+  place of the set's (Appearance.pixel_draw), in every theme. The package's
+  maker ships them; the console paints no icon. Only what the Python shell
+  draws through `Workstation.draw_icon` and `Workstation.icon` takes them;
+  the icons the C toolkit draws (moy_ui_parts.c's `icon_d`: the engine's
+  buttons, tabs and rows) are the built-in set's whatever the package
+  ships (#269).
 * Both: Moy is the pixel set's, in every theme; redo is undo's mirror
   (built so: make_icons mirrors the masks, the pixel set's art mirrors
   undo).
@@ -56,13 +60,13 @@ SLOTS = (
     "trans_none", "trans_fade", "trans_swipe", "brush", "resize", "pointer", "grid",
     "volume", "loop", "trophy", "lock", "heart", "spark", "smile", "key", "secret",
     "pause", "prev", "next", "stop", "retry", "minus", "plus", "playlist",
-    "equalizer", "pulse", "moymesh",
+    "equalizer", "pulse", "moymesh", "sun",
 )
 SLOT = {n: i for i, n in enumerate(SLOTS)}
 # The shell's own icon kinds (chrome._ICON's) by the slot they draw.
 # ...and the shell's apps whose id is not their slot's name (the desk's
 # tiles, a window's line icon and its chip draw an app by its id).
-ALIASES = {"edit": "pencil", "gear": "settings", "batt": "battery", "artwork": "paint",
+ALIASES = {"edit": "pencil", "gear": "settings", "batt": "battery", "moon": "sleep", "artwork": "paint",
            "appearance": "palette", "myart": "art", "jukebox": "music",
            "terminal": "code"}
 FIRST = 0x21                  # slot n's byte in a mask file is FIRST + n (tools/make_icons.py)
@@ -169,42 +173,6 @@ def pixel_slots(look):
                         out = bytearray(len(SLOTS))
                     out[n] = 1
     return out
-
-
-def mask16(set_name, slot):
-    """Smooth set `set_name`'s 16 px mask of `slot` (the default set's where
-    it has none) as 256 flags, 1 where it covers the pixel at all -- each
-    pixel the canvas inks -- or None where no 16 px mask of it is carried.
-    Read from the mask file's version 2 glyph record (native/moy_gfx/
-    moy_text.h): its box, its bearing and its rows of coverage."""
-    for name in (set_name, DEFAULT_SET):
-        src = _fontset.icon_file("%s-16.fnt" % name)
-        if src is None or len(src) < 16 + 256:
-            continue
-        bpp, count, nkern = src[5], src[9], src[10] | src[11] << 8
-        i = src[16 + FIRST + slot]
-        rec = 16 + 256 + 8 * i
-        if i >= count or len(src) < rec + 8 or not src[rec + 3]:
-            continue
-        cov = 16 + 256 + 8 * count + 3 * nkern
-        at = cov + (src[rec] | src[rec + 1] << 8 | src[rec + 2] << 16)
-        w, h, gx, gy = src[rec + 3], src[rec + 4], src[rec + 5], src[rec + 6]
-        if gx > 127:
-            gx -= 256
-        if gy > 127:
-            gy -= 256
-        gy = src[7] - gy                 # the bearing is above the baseline, at the ascent
-        top = (1 << bpp) - 1
-        out = bytearray(256)
-        for r in range(h):
-            for c in range(w):
-                bit = (r * w + c) * bpp
-                v = (src[at + (bit >> 3)] >> (8 - bpp - (bit & 7))) & top
-                x, y = gx + c, gy + r
-                if v and 0 <= x < 16 and 0 <= y < 16:
-                    out[y * 16 + x] = 1
-        return out
-    return None
 
 
 def blank_sheet():

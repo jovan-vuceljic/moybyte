@@ -89,10 +89,10 @@ class Text:
         ws.editor_app.open_paint()
 
     @property
-    def editing_icons(self):
+    def editing_theme(self):
         """Whether the Editor holds a theme (its theme mode, runtime/editors/theme_editor.py):
         the windowed WM's name for it, whose window X commits it through
-        `look.save_icons`."""
+        `look.save_theme`."""
         ws = self.ws
         app = getattr(ws, "editor_app", None)
         return app is not None and app.theme is not None

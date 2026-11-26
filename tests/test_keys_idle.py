@@ -115,17 +115,6 @@ def _idle_player(ws):
     return ws.layer_of("desktop")
 
 
-def _idle_sprites(ws):
-    assert ws.look.edit_file()
-    ws.input.begin_frame()
-    ws.frame(DT)
-    ws.editor_app.theme_tab("theme_sprites")
-    for _ in range(2):
-        ws.input.begin_frame()
-        ws.frame(DT)
-    return ws.theme_sprites_layer
-
-
 def _idle_settings(ws):
     ws.open_settings()
     for _ in range(3):
@@ -141,7 +130,6 @@ _IDLE = {
     "launcher with the keys on its tabs": _idle_tab_row,
     "update": _idle_update,
     "desktop": _idle_player,
-    "theme_sprites": _idle_sprites,
     "settings": _idle_settings,
 }
 
@@ -169,6 +157,5 @@ def test_every_keys_idle_surface_is_in_the_table(tmp_path):
     ws = build_desktop_ws(tmp_path)
     marked = {id(l): l for l in ws._content_layers.values() if l.KEYS_IDLE}
     marked[id(ws.settings_layer)] = ws.settings_layer
-    marked[id(ws.theme_sprites_layer)] = ws.theme_sprites_layer
     ids = {l.id for l in marked.values()}
-    assert ids == {"launcher", "projects", "update", "desktop", "theme_sprites", "settings"}
+    assert ids == {"launcher", "projects", "update", "desktop", "settings"}

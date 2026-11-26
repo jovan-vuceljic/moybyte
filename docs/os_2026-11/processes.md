@@ -936,8 +936,11 @@ start runs it again.
   banner's head, the console's own "You found a badge!" (a secret's "You
   found a secret!") or the game's name ("Harpoon Pop: badge found!", a
   secret's "...: secret found!"), its body the badge's title and its icon
-  the badge's. The console shows the process's banner as the unlock banner:
-  its card, a secret's burst, the beep and the kernel's toast copy; the
+  the badge's. The console shows the process's banner as the unlock banner,
+  an achievement's rather than a notice's (#270): its card at the foot of
+  the glass (over a handheld's hint strip where the input has keys) ringed
+  in the accent, a shine crossing it as it comes, a secret's burst, the
+  beep and the kernel's toast copy; it goes by itself, and the
   notification stays in the task manager's list.
 - **The task manager** lists it as a service, with its CPU and memory, and
   can stop it.

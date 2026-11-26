@@ -498,6 +498,9 @@ WIFI_PROMPT_ABOVE_BAND = ("the password prompt stood centred on the whole surfac
                           "band on the T-Deck; a dialog now centres in the room above the band "
                           "(moy_ui_api_table.c's dlg_card)")
 
+WIFI_SCAN_BUTTON = ("Scan again was a link row of an Options group; it is a button under the networks, "
+                    "as a selected action looks (Options holds Forget alone, where there is one)")
+
 DIALOG_TIGHT = ("a dialog on a glass whose wash leaves its body under three rows at the card's pads "
                 "(the T-Deck's popover) stands a third of a pad from the wash's edges, its buttons "
                 "half a pad from its body and its foot: its field shows whole "
@@ -617,7 +620,8 @@ RUNS = (
     ("settings_wifi-tdeck", "settings_wifi", "tdeck_320x240_fs1_dark",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abd", "enter", "f:2", "k:a", "back", "k:a",
       "t:abc", "enter", "f:2", "k:down", "k:a", "f:2", "k:down", "k:a", "f:2", "back"],
-     {**dict.fromkeys((5, 6, 9, 11, 12), WIFI_PROMPT_ABOVE_BAND), **dict.fromkeys(range(15, 21), WIFI_OWN_HINT)}),
+     {**dict.fromkeys((1, 10), WIFI_SCAN_BUTTON), **dict.fromkeys((5, 6, 9, 11, 12), WIFI_PROMPT_ABOVE_BAND),
+      **dict.fromkeys(range(15, 21), WIFI_OWN_HINT)}),
     ("settings_wifi-desk", "settings_wifi", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:a", "f:2", "k:down", "k:a", "t:abc", "enter", "f:2", "k:down", "k:down",
       "k:a", "f:2", "back"], dict.fromkeys((5, 6), WIFI_PROMPT_ABOVE_BAND)),
@@ -660,7 +664,8 @@ RUNS = (
     ("web_console-p4", "web_console", "p4_1024x600_cs2_fs1_windowed", ["f:2", "k:down"]),
     ("settings_rows-p4", "settings_rows", "p4_1024x600_cs2_fs1_windowed",
      ["k:down", "k:down", "k:right", "k:down", "k:down", "k:down"]),
-    ("settings_wifi-p4", "settings_wifi", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:a", "f:2", "k:down"]),
+    ("settings_wifi-p4", "settings_wifi", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:a", "f:2", "k:down"],
+     dict.fromkeys(range(5), WIFI_SCAN_BUTTON)),
     ("settings_tz-p4", "settings_tz", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:down", "k:a", "f:2"]),
     ("settings_paired-p4", "settings_paired", "p4_1024x600_cs2_fs1_windowed", ["k:down", "k:down"],
      dict.fromkeys(range(3), RING_ROOM)),

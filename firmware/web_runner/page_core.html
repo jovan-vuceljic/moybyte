@@ -63,7 +63,7 @@ canvas,#ctl,#ctl *{touch-action:none;-webkit-user-select:none;user-select:none;
    nearest-neighbour sampling. Desktop users have real keyboard/pointer input,
    so the touch controls do not consume a permanent 120px-tall band there. */
 canvas{image-rendering:pixelated;background:#000;border:0;
-width:min(96vw,112vh);height:auto;max-width:100%;touch-action:none;cursor:crosshair}
+width:min(96vw,112vh);height:auto;max-width:100%;touch-action:none;cursor:default}
 /* Control sizes scale with the viewport (min(px, vw)): full desktop-tablet size when the
    width allows, proportionally smaller on narrow phones -- adding the ⌨ button made the
    fixed-px row overflow a 375px iPhone 13 mini, and flex "resolved" it by squashing the
@@ -754,10 +754,15 @@ function pv(){return[(pH.ArrowRight?1:0)-(pH.ArrowLeft?1:0),(pH.ArrowDown?1:0)-(
 // canvas). Frames are SELF-CONTAINED now, so a dropped one costs exactly one
 // stale frame -- the whole delta/keyframe/resync apparatus the command protocol
 // needed is gone with it.
+var CURSORS={arrow:"default",hand:"pointer",text:"text",ew:"ew-resize",ns:"ns-resize",
+nwse:"nwse-resize",nesw:"nesw-resize"};
 function df(f,fb){
 if(f.cart!==assCart){assCart=f.cart;getA().catch(function(){});}
 if(f.w&&(f.w!==W||f.h!==H)){W=f.w;H=f.h;alloc();}
 glassFrame(f);
+// The pointer's shape as the console says it (web_boot's _pointer_shape): the
+// arrow, the hand on what a press acts on, the beam on a text field, a resize's arrows.
+if(f.cursor)cv.style.cursor=CURSORS[f.cursor]||"default";
 // The EFFECTIVE input hint rides every frame (the cart's manifest hint while it
 // owns the keyboard, null on any system surface), so the keyboard summon comes
 // back the moment PLAY exits to the Editor.

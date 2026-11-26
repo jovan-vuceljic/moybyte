@@ -1372,7 +1372,7 @@
      "level": 2
     },
     "look": {
-     "type": "word:flat",
+     "type": "word:flat,badge,secret",
      "level": 2
     },
     "key": {
@@ -1738,7 +1738,7 @@
      "level": 1
     },
     "keys": {
-     "type": "word:text,number",
+     "type": "word:text,number,name",
      "level": 1
     },
     "changed": {
@@ -1773,6 +1773,10 @@
      "level": 2
     },
     "text": {
+     "type": "tpl",
+     "level": 2
+    },
+    "icons": {
      "type": "tpl",
      "level": 2
     }

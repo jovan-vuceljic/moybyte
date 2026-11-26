@@ -575,6 +575,22 @@ void moy_ui_api_table(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t lab
         kp->rows = content;
         offset = car_motion(c, kp, st, focused, count, rh, ext, offset, &cur, &opened);
     }
+    if (si >= 0 && c->cur[si].id == id && (c->in[MOY_UI_IN_PTR] & MOY_UI_P_LIVE)) {
+        // the live pointer on no row or card a press would take: the table's ground
+        int px = c->in[MOY_UI_IN_X], py = c->in[MOY_UI_IN_Y], at;
+        if (car && c->car.on == MOY_UI_LOOK_DESK) {
+            at = moy_ui_api_desk_at(c->car.g, c->car.band, offset, c->car.app_n, px, py);
+        } else if (car && cl) {
+            at = moy_ui_api_cells_at(c->car.g, c->car.band, offset, c->car.app_n, px, py);
+        } else if (car) {
+            at = moy_ui_api_carousel_at(c->car.g, c->car.band, offset, count, px, py);
+        } else {
+            int t = xa ? px - view.x - lead : py - view.y;
+            int r = moy_ui_fdiv(t + offset, rh > 0 ? rh : 1);
+            at = t >= 0 && r >= 0 && r < count ? r : -1;
+        }
+        c->cur[si].bare = (uint8_t)(at < 0);
+    }
     if (kp != NULL) {
         // the rows' own scroll: a step glides it to the row, where the
         // frame has a clock (with none, it is there at once)
@@ -1119,6 +1135,22 @@ void mua_edits_drop(moy_ui_inst_t *I, const moy_ui_ctx_t *c, uint32_t id) {
 
 #define MOY_UI_SECRET_MAX 64           // the most `*`s a secret field draws
 
+// What key `k` lands as in a name field (MOY_UI_O2_NAME) at caret byte `ca`:
+// a-z, 0-9, _ and -, a capital as its small letter, a space as -, and _ or
+// - never first; 0, refused.
+static int name_char(int k, size_t ca) {
+    if (k >= 'A' && k <= 'Z') {
+        return k + 32;
+    }
+    if (k == ' ') {
+        k = '-';
+    }
+    if ((k >= 'a' && k <= 'z') || (k >= '0' && k <= '9')) {
+        return k;
+    }
+    return (k == '_' || k == '-') && ca > 0 ? k : 0;
+}
+
 int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t label,
                          uint8_t *buf, size_t cap, size_t len, const moy_ui_over_t *o) {
     o = mua_over(o);
@@ -1214,6 +1246,7 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
         ca = fk->cy < 0 ? 0 : fk->cy > 0 ? len : ca;    // up and down: a line's start and end
         fk->cx = fk->cy = 0;
     }
+    int name = (o->flags2 & MOY_UI_O2_NAME) != 0;
     if (editing && c->typed) {
         int k = c->typed;
         c->typed = 0;
@@ -1228,9 +1261,29 @@ int32_t moy_ui_api_field(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t 
                 }
                 memmove(buf + ca, buf + was, len - was);
                 len -= was - ca;
+            } else if (name) {
+                int t = name_char(k, ca);
+                if (t && len < cap) {
+                    memmove(buf + ca + 1, buf + ca, len - ca);
+                    buf[ca++] = (uint8_t)t;
+                    len++;
+                }
             } else if (k >= 32 && k < 127 && len < cap) {
                 memmove(buf + ca + 1, buf + ca, len - ca);
                 buf[ca++] = (uint8_t)k;
+                len++;
+            }
+        }
+    }
+    if (editing && c->paste_n && name) {
+        // a name's paste: its characters alone, each as a typed one lands
+        size_t n = c->paste_n;
+        c->paste_n = 0;
+        for (size_t i = 0; i < n && len < cap; i++) {
+            int t = name_char(c->paste[i], ca);
+            if (t) {
+                memmove(buf + ca + 1, buf + ca, len - ca);
+                buf[ca++] = (uint8_t)t;
                 len++;
             }
         }

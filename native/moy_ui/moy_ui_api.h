@@ -264,6 +264,8 @@ typedef struct {
     // and row 0's top on screen, so a key step reveals its row at begin.
     int16_t row, top;
     uint8_t st;                     // the state bits it drew with (MOY_UI_ST_*)
+    uint8_t bare;                   // a table's: the live pointer over its ground, on no row
+                                    // or card a press would take (moy_ui_api_cursor's arrow)
     uint8_t quiet;                  // a press or a hover on it draws no mark: a text view's
     uint8_t cut;                    // placed while moy_ui_api_cut: inside its page's view, as stacked
     uint8_t open;                   // a field over O2_TYPING: focus coming onto it begins its edit
@@ -699,6 +701,15 @@ typedef struct {
         int8_t interact;
         uint8_t due;
     } ring;
+    // A button the open group stacked (`on`), drawn again over the card's
+    // rounded foot as the group closes where it is the last row.
+    struct {
+        moy_ui_box_t b;
+        moy_ui_button_t bt;
+        int16_t kind, flags;
+        int8_t interact;
+        uint8_t on;
+    } foot;
     // ui.icon's: the next row's icon, then the row's being drawn (an icon
     // set's slot and the glyph table's glyph, -1 none).
     int16_t icon_slot, icon_glyph, row_slot, row_glyph;
@@ -1736,6 +1747,11 @@ int moy_ui_api_split(moy_ui_ctx_t *c, const moy_ui_sink_t *s, moy_ui_span_t id, 
 // Whether (x, y) lies on a divider the last pass's splits drew, where a
 // press would hold it.
 int moy_ui_api_split_at(const moy_ui_ctx_t *c, int x, int y);
+// The pointer's shape over (x, y) of the pass drawn last: MOY_UI_CURSOR_TEXT over a
+// text field, MOY_UI_CURSOR_HAND over a stop a press marks (or a split's
+// divider), else MOY_UI_CURSOR_ARROW.
+enum { MOY_UI_CURSOR_ARROW = 0, MOY_UI_CURSOR_HAND = 1, MOY_UI_CURSOR_TEXT = 2 };
+int moy_ui_api_cursor(const moy_ui_ctx_t *c, int x, int y);
 // The split frame (docs/history/ui_api_2026-10.md §5a), asked before the frame
 // begins: whether it draws the pane the keys reach alone. That pane is the
 // one a split of the last pass named with its focus (opt's CUR), of the

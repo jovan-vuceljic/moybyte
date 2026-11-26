@@ -50,9 +50,8 @@ CONTENTS = {
     "stamps": ("Stamps", "stamp", None, FLOOR),
     "palette": ("Block palette", "blocks", None, FLOOR),
     "made": ("Code", "lock", None, FLOOR),
-    # the Editor's theme mode (runtime/editors/theme_editor.py): its two tabs
+    # the Editor's theme mode (runtime/editors/theme_editor.py): its one tab
     "theme_config": ("Config", "sliders", "theme_config", FLOOR),
-    "theme_sprites": ("Sprites", "sprite", "theme_sprites", (420, 330 + HEADER)),
 }
 
 # (key, label, icon) in the app's row's order; Ctrl+1 ... 5 is this order.
@@ -64,8 +63,7 @@ WORKSPACES = (
     ("sound", "Sound", "music"),
 )
 KEYS = tuple(k for k, _l, _i in WORKSPACES)
-# The theme mode's one workspace: Config beside Sprites. Not on the app's row,
-# which shows the two tabs instead.
+# The theme mode's one workspace: Config alone. Not on the app's row.
 THEME = "theme"
 
 # The Editor tab each workspace stands for where one tab is asked of it

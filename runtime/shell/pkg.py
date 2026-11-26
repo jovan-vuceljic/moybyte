@@ -70,7 +70,7 @@ import os
 import cart_index as _ci
 import moy_carts as _store
 from moy_store_base import _sibling_path, cart_path as _cart_path
-from moy_fs import _exists, _mkdir, _read, _remove
+import moy_store
 import app_keys as _keys
 import app_perms as _perms
 from player_fit import fit_notice as _fit_notice, board_share as _board_share
@@ -224,7 +224,7 @@ def install_check(inst, stage, folder, shelf, entry=None):
     record keeps. An InstallError when a permission it requires is one this
     console lacks, or when it is a command whose name is taken."""
     try:
-        man = json.loads(_read(stage + "/manifest.json"))
+        man = json.loads(moy_store.read(stage + "/manifest.json"))
     except (OSError, ValueError):
         man = {}
     return manifest_check(inst, man, folder, shelf, entry)
@@ -403,7 +403,7 @@ def _official_here(root, ident):
     and an add-on the board installed itself have no install record, and
     `pkg remove` takes them as Get Carts does."""
     folder = ident if ident.endswith(".moy") else ident + ".moy"
-    if _store.recorded(folder) and _exists(_cart_path(root, folder)):
+    if _store.recorded(folder) and moy_store.exists(_cart_path(root, folder)):
         return folder
     return None
 
@@ -491,7 +491,7 @@ class Pkg:
         path = self._cache_path(url)
 
         def read():
-            if not _exists(path):
+            if not moy_store.exists(path):
                 return None
             with open(path, "rb") as f:
                 return f.read()
@@ -506,7 +506,7 @@ class Pkg:
         f = []
 
         def start():
-            _mkdir(_sibling_path(self.inst.root(), CACHE_DIR))
+            moy_store.mkdir(_sibling_path(self.inst.root(), CACHE_DIR))
             f.append(open(part, "wb"))
         self.inst.op(start)
         done = False
@@ -521,7 +521,7 @@ class Pkg:
                 if done:
                     os.rename(part, path)
                 else:
-                    _remove(part)
+                    moy_store.remove(part)
             self.inst.op(end)
 
     def sources(self):
@@ -574,13 +574,13 @@ class Pkg:
             for c in carts:
                 p = _ci.plan(c, chip, fmt, ranges)
                 folder = "%s/%s" % (root, c["folder"])
-                present = _exists(folder)
+                present = moy_store.exists(folder)
                 entry = rec.get(c["folder"])
                 man = None
                 if present and (entry is None or entry.get("id") != c["id"]
                                 or _ci.is_official(c)):
                     try:
-                        man = json.loads(_read(folder + "/manifest.json"))
+                        man = json.loads(moy_store.read(folder + "/manifest.json"))
                     except (OSError, ValueError):
                         man = None
                 out.append((c, p, _ci.cart_state(c, p, entry, present, man)))

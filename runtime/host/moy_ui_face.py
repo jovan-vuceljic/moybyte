@@ -368,6 +368,7 @@ SIGS = (
     ("moy_ui_api_dock", [c.c_void_p, c.c_int, c.c_void_p], c.c_int),
     ("moy_ui_api_part_at", [c.c_void_p, c.c_void_p], c.c_int),
     ("moy_ui_api_split_at", [c.c_void_p, c.c_int, c.c_int], c.c_int),
+    ("moy_ui_api_cursor", [c.c_void_p, c.c_int, c.c_int], c.c_int),
     ("moy_ui_api_split_toward", [c.c_void_p, c.c_int, c.c_int, c.c_int, c.c_int, c.c_void_p],
      c.c_int),
     ("moy_ui_api_grid", [c.c_void_p, c.POINTER(moy_ui_sink_t), moy_ui_span_t, c.c_int, c.c_int,
@@ -620,6 +621,10 @@ def install(m, lib, ctx_, sink, span0, over, box_of):
         p_, k_ = ctx_(ctx)
         return bool(lib.moy_ui_api_split_at(p_, int(x), int(y)))
     m.api_split_at = api_split_at
+    def api_cursor(ctx, x, y):
+        p_, k_ = ctx_(ctx)
+        return int(lib.moy_ui_api_cursor(p_, int(x), int(y)))
+    m.api_cursor = api_cursor
     def api_split_toward(ctx, x, y, dx, dy, out):
         p_, k_ = ctx_(ctx)
         return bool(lib.moy_ui_api_split_toward(p_, int(x), int(y), int(dx), int(dy),

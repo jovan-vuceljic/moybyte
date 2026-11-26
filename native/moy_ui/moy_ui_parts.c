@@ -653,13 +653,34 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind,
 }
 
 // Option i's box of a seg: x from the right, `ph` tall.
+// A seg's option i's icon (r->icons, by name): its slot, else its glyph into *glyph; -1 both
+// where it has none.
+static int opt_icon(const moy_ui_vrow_t *r, int i, int *glyph) {
+    *glyph = -1;
+    if (r->icons.n == 0) {
+        return -1;
+    }
+    moy_ui_span_t n = option(r->icons, i);
+    if (n.n == 0) {
+        return -1;
+    }
+    *glyph = moy_ui_icon_glyph(n.p, n.n);
+    return moy_ui_icon_slot(n.p, n.n);
+}
+
+// The room option i's icon takes before its word: the icon and a gap, 0 with none.
+static int opt_icon_w(const pd_t *d, const moy_ui_vrow_t *r, int i) {
+    int g;
+    return opt_icon(r, i, &g) >= 0 || g >= 0 ? 18 * d->fs : 0;
+}
+
 static moy_ui_box_t seg_box(const pd_t *d, const pf_t *f, moy_ui_box_t b, const moy_ui_vrow_t *r,
                             const vgeo_t *g, int i, int scale) {
     int x = g->right - g->gap / 2;
     int ph = b.h - (d->desk ? 8 : 4) * d->fs;
     for (int j = r->n - 1; j >= 0; j--) {
         moy_ui_span_t o = option(r->value, j);
-        int ow = tw(f, o.p, o.n, scale);
+        int ow = tw(f, o.p, o.n, scale) + opt_icon_w(d, r, j);
         x -= ow;
         if (j == i) {
             return (moy_ui_box_t){(int16_t)(x - g->gap / 2), (int16_t)(b.y + (b.h - ph) / 2),
@@ -1067,7 +1088,15 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 } else if (i == r->cur) {
                     c = current(s, &d, o, (d.desk ? 6 : 4) * d.fs, ink, MOY_UI_ITEM_CELL, 0);
                 }
-                text(&d, &fv, t.p, t.n, o.x + g.gap / 2, b.y, b.h, pal(&d, c), sc);
+                int glyph, slot = opt_icon(r, i, &glyph), tx = o.x + g.gap / 2;
+                if (slot >= 0 || glyph >= 0) {
+                    // its icon before its word, a 16 px box at the scale, centred on the row
+                    int side = 16 * d.fs;
+                    icon_d(&d, slot, glyph, (moy_ui_box_t){(int16_t)tx, (int16_t)(b.y + (b.h - side) / 2),
+                                                           (int16_t)side, (int16_t)side}, c);
+                    tx += 18 * d.fs;
+                }
+                text(&d, &fv, t.p, t.n, tx, b.y, b.h, pal(&d, c), sc);
                 right = o.x;
             }
             break;
@@ -1301,7 +1330,7 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r) {
         w += r->label.n ? tw(&fl, r->label.p, r->label.n, sc) : -gap;
         for (int j = 0; j < r->n; j++) {
             moy_ui_span_t o = option(r->value, j);
-            w += tw(&fv, o.p, o.n, sc) + g.gap + (j ? (d.desk ? 4 : 2) * d.fs : 0);
+            w += tw(&fv, o.p, o.n, sc) + opt_icon_w(&d, r, j) + g.gap + (j ? (d.desk ? 4 : 2) * d.fs : 0);
         }
         return w;
     }
@@ -1718,8 +1747,13 @@ int moy_ui_tile(const moy_ui_sink_t *s, moy_ui_box_t b, int slot, int glyph, int
 // The confetti's MOY64 colours: red, yellow, green, blue, pink, orange.
 static const uint8_t s_confetti[6] = {8, 10, 11, 12, 14, 9};
 
-int moy_ui_unlock(const moy_ui_sink_t *s, int cx, int y, moy_ui_span_t head, moy_ui_span_t name,
-                  int slot, int glyph, int burst, int fs, int desk, moy_ui_box_t *out) {
+// A banner's card (the unlock's, a badge's): its tile, `head` over `name`,
+// centred on `cx` with its top at `y`, else (y < 0) its foot at `foot`. A
+// badge's (`badge`) is ringed in the accent, a slanted shine crossing it
+// `shine` (1..254) of the way over (0 or 255 none); `burst` the confetti.
+static int banner_card(const moy_ui_sink_t *s, int cx, int y, int foot, moy_ui_span_t head,
+                       moy_ui_span_t name, int slot, int glyph, int burst, int shine, int badge,
+                       int fs, int desk, moy_ui_box_t *out) {
     pd_t d;
     open_pd(s, &d, fs, desk);
     int sc = tscale(s);
@@ -1731,6 +1765,9 @@ int moy_ui_unlock(const moy_ui_sink_t *s, int cx, int y, moy_ui_span_t head, moy
         w = d.t.dw - 16 * d.fs;         // kept on the glass, its lines cut to it
     }
     int h = n + 2 * pad;
+    if (y < 0) {
+        y = foot - h;
+    }
     moy_ui_box_t b = {(int16_t)(cx - w / 2), (int16_t)y, (int16_t)w, (int16_t)h};
     if (out != NULL) {
         *out = b;
@@ -1754,6 +1791,33 @@ int moy_ui_unlock(const moy_ui_sink_t *s, int cx, int y, moy_ui_span_t head, moy
         }
     }
     moy_ui_modal(s, b, (moy_ui_span_t){NULL, 0}, fs, desk, 0);
+    uint16_t accent = pal(&d, tok(&d, MOY_UI_T_ACCENT, MOY_UI_T_VALUE));
+    if (badge && shine > 0 && shine < 255) {
+        // the shine: a band leaning right, the accent's tint over the card
+        // with a brighter core, swept from left to right, kept off the
+        // card's rounded corners and its ring
+        int r = moy_ui_modal_round(fs, desk), band = 14 * d.fs, core = 3 * d.fs;
+        uint16_t surf = pal(&d, tok(&d, MOY_UI_T_SURFACE, MOY_UI_T_PANEL));
+        uint16_t soft = mix(surf, accent, dark(&d) ? 64 : 40), hot = mix(surf, accent, dark(&d) ? 128 : 84);
+        int lo = b.x + 2 * d.fs, hi = b.x + b.w - 2 * d.fs;
+        int x0 = b.x - band - b.h / 2 + (b.w + band + b.h) * shine / 255;
+        for (int yy = b.y + r; yy < b.y + b.h - r; yy++) {
+            int x = x0 + (b.y + b.h - yy) / 2;
+            int a = x < lo ? lo : x, e = x + band > hi ? hi : x + band;
+            if (e > a) {
+                fill(&d, a, yy, e - a, 1, soft);
+            }
+            int ca = x + (band - core) / 2, ce = ca + core;
+            ca = ca < lo ? lo : ca;
+            ce = ce > hi ? hi : ce;
+            if (ce > ca) {
+                fill(&d, ca, yy, ce - ca, 1, hot);
+            }
+        }
+    }
+    if (badge) {
+        rrect(&d, b.x, b.y, b.w, b.h, moy_ui_modal_round(fs, desk), 0, 0, 2 * d.fs, accent);
+    }
     moy_ui_box_t t = {(int16_t)(b.x + pad), (int16_t)(b.y + pad), (int16_t)n, (int16_t)n};
     moy_ui_tile(s, t, slot, glyph, MOY_UI_TONE_INK, d.desk ? 8 : 6, fs, desk);
     int tx = b.x + pad + n + pad + 2 * d.fs;
@@ -1766,6 +1830,16 @@ int moy_ui_unlock(const moy_ui_sink_t *s, int cx, int y, moy_ui_span_t head, moy
     text_cut(&d, &fn, name, tx, mid + (d.desk ? 19 : 14) * d.fs - fn.ascent * sc, fn.line * sc,
              room, pal(&d, tok(&d, MOY_UI_T_INK, MOY_UI_T_INK)), sc);
     return MOY_UI_OK;
+}
+
+int moy_ui_unlock(const moy_ui_sink_t *s, int cx, int y, moy_ui_span_t head, moy_ui_span_t name,
+                  int slot, int glyph, int burst, int fs, int desk, moy_ui_box_t *out) {
+    return banner_card(s, cx, y < 0 ? 0 : y, 0, head, name, slot, glyph, burst, 0, 0, fs, desk, out);
+}
+
+int moy_ui_badge(const moy_ui_sink_t *s, int cx, int foot, moy_ui_span_t head, moy_ui_span_t name,
+                 int slot, int glyph, int shine, int burst, int fs, int desk, moy_ui_box_t *out) {
+    return banner_card(s, cx, -1, foot, head, name, slot, glyph, burst, shine, 1, fs, desk, out);
 }
 
 int moy_ui_rec(const moy_ui_sink_t *s, int right, int top, int fs, int desk, moy_ui_box_t *out) {

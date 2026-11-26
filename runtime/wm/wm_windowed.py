@@ -722,7 +722,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         p = self.parked or _Parked([], [], {}, None)
         self.parked = None
         kinds = list(p.kinds)
-        if ("menu" in kinds and not ws.text.editing_icons
+        if ("menu" in kinds and not ws.text.editing_theme
                 and ws.editor_app.project is not ws.run.project):
             kinds.remove("menu")
             win = p.wins.pop("menu", None)
@@ -1569,7 +1569,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         """The Editor's window drawn again where a game left its workspaces
         or came back to them: its bar's Play or Stop, its Game tab."""
         host = self.windows.get("menu")
-        if host is not None and not self.ws.text.editing_icons:
+        if host is not None and not self.ws.text.editing_theme:
             self.ws.editor_app.zone_gen += 1
             self.prewarm(host)
 
@@ -2298,7 +2298,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
         ws = self.ws
         ws.mark_dirty()
         ws.leave_surface(kind)
-        if kind == "menu" and not ws.text.editing_icons:
+        if kind == "menu" and not ws.text.editing_theme:
             self._end_playtest()              # its playtest goes with it
         if kind == "desktop":
             self.close_player()
@@ -2306,7 +2306,7 @@ class WindowedWM(WindowPaint, WindowChrome, WindowOverlays, WindowRoute,
             ws.procs.close(ws.procs.by_key[kind])
         else:
             self.remove_kind(kind)
-        if kind == "menu" and not ws.text.editing_icons:
+        if kind == "menu" and not ws.text.editing_theme:
             ws.editor_closed()                # back where it was opened from
 
     def _close_window(self, kind):

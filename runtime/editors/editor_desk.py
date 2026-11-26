@@ -49,8 +49,7 @@ from array import array
 _OWNERS = {"cards": ("cards_layer", "layout"), "blocks": ("block_ui", "block_layout"),
            "paint": ("paint_layer", "layout"), "map": ("map_ui", "layout"),
            "scene": ("scene_ui", "layout"), "music": ("music_ui", "layout"),
-           "theme_config": ("theme_config_layer", "layout"),
-           "theme_sprites": ("theme_sprites_layer", "layout")}
+           "theme_config": ("theme_config_layer", "layout")}
 
 # The Editor's tabs (`EditorApp._offers` answers for these).
 _OPENED = ("cards", "code", "blocks", "paint", "map", "scene", "music")
@@ -76,13 +75,13 @@ _TEXT_PANES = ("code", "theme_config")
 # drawn down to the header only, its body never seen
 # (tests/test_editor_desk.py holds it). The Sound pane's page is bare, on its
 # card.
-_FILLS_BODY = ("paint", "map", "scene", "code", "cards", "theme_config", "theme_sprites")
+_FILLS_BODY = ("paint", "map", "scene", "code", "cards", "theme_config")
 
 # Which workspace shows an Editor tab, for a tab opened from elsewhere (a
 # crash's throw to Code, Files opening a sprite sheet).
 _HOME = {"cards": "settings", "code": "code", "blocks": "code", "paint": "art",
          "map": "art", "scene": "world", "music": "sound",
-         "theme_config": P.THEME, "theme_sprites": P.THEME}
+         "theme_config": P.THEME}
 
 # The tools a pane's header carries before its grow, right to left.
 _HEAD_TOOLS = {"paint": (("rotate", "Rotate\tR", "rot"), ("flip", "Flip\tF", "fliph")),
@@ -222,7 +221,7 @@ class EditorDesk(Layer):
 
     def theme_shown(self, on):
         """The theme mode opened (`on`) or left: its one workspace, Config
-        beside Sprites, else the workspace the cart had."""
+        alone, else the workspace the cart had."""
         if on and self.key != P.THEME:
             self._was = self.key
             self.key = P.THEME
@@ -297,7 +296,7 @@ class EditorDesk(Layer):
         vals = (("big", big), ("by_blocks", self._blocks()), ("game", self.shows_game()),
                 ("col_w", col), ("run_h", 512 if col == 660 else 282),
                 ("art_w", 400 if big else 330 if h >= 420 * u else 320),
-                ("set_w", 360 if big else 300), ("theme_w", 352 if big else 260),
+                ("set_w", 360 if big else 300),
                 ("grown", self._grown_key(page)))
         for nm, v in vals:
             self._put(st, nm, v)

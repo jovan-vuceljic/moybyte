@@ -437,13 +437,12 @@ _HH = ("splash", "splash-boot", "loading", "calendar", "power", "wifi", "notice"
 _HH_CODE = ("crash-code", "code-find", "code-complete", "code-goto", "code-files")
 _HH_RUN = ("crash", "crash-compiled", "perf-hud", "perf-hud-detail")
 _HH_CARDS = ("cart-info", "new-script", "project-files")
-_HH_SET = ("web-console", "settings-fallback", "theme-door", "theme-config", "theme-sprites",
-           "theme-sprites-edited")
+_HH_SET = ("web-console", "settings-fallback", "theme-door", "theme-config")
 _S3 = ("splash-s3", "calendar-s3", "power-s3", "crash-s3", "blocks-number-s3", "web-console-s3",
        "home-grid-s3", "tool-bar-s3", "saver-s3", "recovery-s3", "home-icons-s3",
-       "home-icons-pop-s3", "home-icons-labels-s3", "theme-config-s3", "theme-sprites-s3")
+       "home-icons-pop-s3", "home-icons-labels-s3", "theme-config-s3")
 _DK = ("splash", "loading", "calendar", "power", "wifi", "web-console", "text-console",
-       "theme-editor", "fallback", "recovery", "kernel-web")
+       "fallback", "recovery", "kernel-web")
 _DK_CODE = ("crash-code", "code-find", "code-complete", "code-goto")
 _DK_CONSOLE = ("crash", "perf-hud", "home-grid", "tool-bar", "home-icons", "home-icons-pop",
                "home-icons-caption")
@@ -643,17 +642,13 @@ def _tool_cart(g, ws):
 
 # The Editor's theme mode (GAPS 56, rounds/round17.py's theme_*): the door,
 # Config on the copy just made (its caret on line 4, column 24) or on the
-# file once saved, Sprites on Home with Play already in pixels and the
-# cursor on column 6, row 3, and Home painted there in red.
-THEME_CUR = (6, 3)
-
-
+# file once saved.
 def _theme_door(g, ws):
     ws.spine.open_app(ws.app("appearance"))
     _app(ws, "appearance").show_row("Edit theme\u2026")
 
 
-def _theme(tab, copied=True, edited=False):
+def _theme(copied=True):
     def setup(g, ws):
         desk = getattr(ws.wm, "mode", None) == "desktop"
         if desk:
@@ -671,26 +666,12 @@ def _theme(tab, copied=True, edited=False):
                 ws.wm.toggle_max(win)
             dx, dy, dw, dh = ws.wm.desk_rect()
             _place(ws, "menu", dx, dy, dw, dh)
-        play = _iconsets_slot("play")
-        doc._set_tile(play, doc.seed(play))
-        doc.flags[play] = 1
-        ws.look.preview_pixels(doc.sheet, doc.flags)
-        doc.cur[:] = THEME_CUR
         ed = doc.ed
         ed.row, ed.col = (11, 31) if desk else (3, 24)
-        if edited:
-            layer = ws.theme_sprites_layer
-            layer._press(doc, THEME_CUR[0], THEME_CUR[1])
-            layer._release(doc)
-        ws.editor_app.theme_tab("theme_sprites" if tab == "sprites" else "theme_config")
+        ws.editor_app.theme_tab("theme_config")
         if desk:
             _settle(g, ws, 2)
     return setup
-
-
-def _iconsets_slot(name):
-    from runtime import iconsets
-    return iconsets.SLOT[name]
 
 
 def _arranged(arrangement, console=False):
@@ -714,12 +695,8 @@ OLD_LOOK = {
     "handheld_settings-fallback": (HANDHELD, _settings_about_at(HANDHELD)),
     "desktop_fallback": (DESK, lambda g, ws: _desk(g, ws)),
     "handheld_theme-door": (HANDHELD, _theme_door),
-    "handheld_theme-config": (HANDHELD, _theme("config")),
-    "handheld_theme-sprites": (HANDHELD, _theme("sprites")),
-    "handheld_theme-sprites-edited": (HANDHELD, _theme("sprites", edited=True)),
-    "handheld_theme-config-s3": (S3, _theme("config", copied=False)),
-    "handheld_theme-sprites-s3": (S3, _theme("sprites")),
-    "desktop_theme-editor": (DESK, _theme("sprites", copied=False, edited=True)),
+    "handheld_theme-config": (HANDHELD, _theme()),
+    "handheld_theme-config-s3": (S3, _theme(copied=False)),
     "handheld_tool-bar-s3": (S3, _tool_cart),
     "desktop_tool-bar": (CONSOLE, _tool_cart),
     "handheld_code-find": (HANDHELD, _code_overlay("find")),

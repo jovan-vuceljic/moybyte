@@ -2761,10 +2761,14 @@ def test_the_x_leaves_console_mode_with_the_windows_unrendered(tmp_path, monkeyp
 def test_the_x_back_is_a_full_repaint_in_every_buffer(tmp_path):
     """The home's X on a triple-buffered root: the windows come back
     stamped, the focused one's content held (§14.1), and every buffer
-    equals a full repaint of the desk they make."""
+    equals a full repaint of the desk they make. The banner of the badge
+    the opening found stands still, its shine across: a shine moves with
+    the clock, which a repaint after the frames cannot hold."""
+    from runtime import achievements_ui
     ws = _ws(tmp_path)
     drv = _drv(ws)
     _desk_with_three(ws, drv)
+    ws.toast_at -= achievements_ui.BURST_MS
     ring = _Ring(ws, 3)
     for _ in range(3):
         ws.mark_dirty()

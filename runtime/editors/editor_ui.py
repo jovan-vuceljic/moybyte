@@ -2,14 +2,14 @@
 (`tools lend="bar"`, replayed into the bar's zone by
 `uitree_editor.BarZone`), one lender shown at a time. On a handheld: the
 cart's tabs, undo, redo and Play, Restart and Stop in Play's place while a
-playtest runs; in theme mode, Done, the theme's two tabs, its name, undo
-and redo. On the desk: the cart's workspaces in their place, Restart
-marked while an edit waits for it; in theme mode, the theme's two tabs,
-undo and redo (the desk's Done is its window's).
+playtest runs; in theme mode, Done, the theme's name, undo and redo. On
+the desk: the cart's workspaces in their place, Restart marked while an
+edit waits for it; in theme mode, undo and redo (the desk's Done is its
+window's).
 
 `EditorApp` (editor_app.py) is the host: it writes the console's values
 this row shows into the state (`head_sync`) and does what each action
-asks (`_activate_zone_tab`, `theme_tab`, `close_theme`).
+asks (`_activate_zone_tab`, `close_theme`).
 
 On the desk each workspace is a page of its own (`SPACES`): its panes
 (`ui.panes`), which the desk places and whose bodies it draws, each its
@@ -17,7 +17,7 @@ content's own page (`EditorDesk.pane_body`). Its shape and starting sizes follow
 the cart through state its host writes (`EditorDesk._sync`): `big` (the
 1024 arrangement, a Run slot over a context pane; else one tabbed pane at
 the right), the start sizes in desk units (`col_w`, `run_h`, `art_w`,
-`set_w`, `theme_w`), the cart's tabs (`has_*`), `by_blocks` and `game`;
+`set_w`), the cart's tabs (`has_*`), `by_blocks` and `game`;
 the held sizes (`z_*`) are the dividers' and the board remembers them."""
 import uitree as ui
 from editor_panes import WORKSPACES, KEYS, THEME, CONTENTS
@@ -26,7 +26,6 @@ from editor_panes import WORKSPACES, KEYS, THEME, CONTENTS
 _host = [None]
 
 TABS = ("cards", "blocks", "code", "paint", "map", "scene", "music")
-THEME_TABS = ("theme_config", "theme_sprites")
 
 # The desk's tabbed panes' tabs, an enum each: the contents they show.
 TAB_SETS = {"t_side": ("sprites", "sounds", "maps", "log"),
@@ -40,7 +39,6 @@ TAB_SETS = {"t_side": ("sprites", "sounds", "maps", "log"),
 
 s = ui.state(
     tab=ui.enum(*TABS, init="cards"),
-    theme_tab=ui.enum(*THEME_TABS, init="theme_config"),
     theme=False, theme_name="",
     has_blocks=True, has_code=True, has_paint=True, has_map=True, has_scene=True,
     has_music=True,
@@ -50,17 +48,15 @@ s = ui.state(
     has_space_sound=True, restart_owed=False,
     # the desk's workspaces (`SPACES`): what the area and the cart make them
     big=True, by_blocks=False, game=True, has_cards=True, grown=ui.opt(""),
-    col_w=340, run_h=282, art_w=400, set_w=360, theme_w=352,
+    col_w=340, run_h=282, art_w=400, set_w=360,
     z_cards=ui.opt(0), z_right=ui.opt(0), z_run=ui.opt(0), z_palette=ui.opt(0),
-    z_paint=ui.opt(0), z_sheet=ui.opt(0), z_sounds=ui.opt(0), z_theme=ui.opt(0),
+    z_paint=ui.opt(0), z_sheet=ui.opt(0), z_sounds=ui.opt(0),
     **dict((k, ui.enum(*v, init=v[0])) for k, v in TAB_SETS.items())
 )
 ui.labels("TABS", {"cards": "Config", "blocks": "Blocks", "code": "Code", "paint": "Sprites",
                    "map": "Map", "scene": "Scene", "music": "Music"})
 ui.labels("TAB_ICONS", {"cards": "edit", "blocks": "blocks", "code": "code", "paint": "paint",
                         "map": "map", "scene": "scene", "music": "music"})
-ui.labels("THEME_TABS", {"theme_config": "Config", "theme_sprites": "Sprites"})
-ui.labels("THEME_ICONS", {"theme_config": "sliders", "theme_sprites": "sprite"})
 ui.labels("SPACES", {k: label for k, label, _i in WORKSPACES})
 ui.labels("PANES", {c: v[0] for c, v in CONTENTS.items()})
 ui.labels("SPACE_ICONS", {k: icon for k, _l, icon in WORKSPACES})
@@ -97,10 +93,6 @@ def stop():
     _host[0].open_zone_tab("stop")
 
 
-def theme_open_tab():
-    _host[0].theme_tab(s.theme_tab)
-
-
 def theme_done():
     h = _host[0]
     h.ws.defer(h.close_theme)
@@ -113,7 +105,6 @@ ui.action("redo", "Redo", redo, when="can_redo", off="grey")
 ui.action("play", "Play", play)
 ui.action("restart", "Restart", restart)
 ui.action("stop", "Stop", stop)
-ui.action("theme_open_tab", "Open", theme_open_tab)
 ui.action("theme_done", "Done", theme_done)
 
 
@@ -130,7 +121,6 @@ def head():
             ui.button("stop", icon="stop", kind="primary", shown="playing")
         with ui.tools("theme_head", lend="bar", shown="theme && !desk"):
             ui.button("theme_done", icon="back", alone=True)
-            ui.tabs("theme_tab", "THEME_TABS", icons="THEME_ICONS", on="theme_open_tab")
             ui.label("{theme_name}")
             ui.button("undo", icon="undo", alone=True)
             ui.button("redo", icon="redo", alone=True)
@@ -144,7 +134,6 @@ def head():
                       marked="restart_owed")
             ui.button("stop", icon="stop", kind="primary", shown="playing")
         with ui.tools("desk_theme", lend="bar", shown="desk && theme"):
-            ui.tabs("theme_tab", "THEME_TABS", icons="THEME_ICONS", on="theme_open_tab")
             ui.button("undo", icon="undo", alone=True)
             ui.button("redo", icon="redo", alone=True)
 
@@ -235,11 +224,10 @@ def sound_space():
 def theme_space():
     with ui.page("Editor"):
         with ui.panes("row", "root", grown="grown"):
-            _one("theme_config", size="z_theme", start="theme_w")
-            _one("theme_sprites", grow=True)
+            _one("theme_config", grow=True)
 
 
-SIZES = ("z_cards", "z_right", "z_run", "z_palette", "z_paint", "z_sheet", "z_sounds", "z_theme")
+SIZES = ("z_cards", "z_right", "z_run", "z_palette", "z_paint", "z_sheet", "z_sounds")
 SPACES = {"settings": settings_space, "code": code_space, "art": art_space,
           "world": world_space, "sound": sound_space, THEME: theme_space}
 # The pages only a desk opens: a board with no desk carries none compiled (tools/uitree_compile.py).

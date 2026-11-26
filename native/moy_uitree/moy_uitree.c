@@ -1161,6 +1161,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"),
                                   uit_kind_names[kind], name, src, uit_type_name(e->tmpls[t].type));
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    } else if (kind == UIT_SEG && !strcmp(name, "icons")) {
+        // a seg over a row_of: each row's icon before its word, a template over its model's rows
+        if (N->lit & NL_FIELD || N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF)
+            return uit_fail(e, UIT_E_ARG, UIT_MSG("seg icons=%s: a seg over a row_of, after it", "seg %s"), src);
+        model = e->slots[N->slot].model;
+        tslot = &N->t_aux;
     } else if ((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text")) {
         // a seg or tabs over a row_of: each row's word, a template over its model's rows; a
         // seg bound to a row's field: its items, one a line, a template over that row
@@ -1259,7 +1265,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             if (T->type != UIT_INT && !lit_int)
                 return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not an int", "%s %s %s %s"), uit_kind_names[kind], name, src,
                                       uit_type_name(T->type));
-        } else if (!((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text"))) {      // row words: any type
+        } else if (!((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text")) &&
+                   !(kind == UIT_SEG && !strcmp(name, "icons"))) {      // row words: any type
             if (T->type == UIT_BOOL || T->type == UIT_MODEL)
                 return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"), uit_kind_names[kind], name, src,
                                       uit_type_name(T->type));
@@ -1480,11 +1487,15 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if (!strcmp(name, "look") && kind == UIT_TOAST) {
-        // look="flat" (TS_FLAT): the pill in flat fills, the page's room its own
-        if (strcmp(src, "flat"))
-            return uit_fail(e, UIT_E_KIND, UIT_MSG("toast look=%s: \"flat\"", "toast look=%s"), src);
-        N->lit |= TS_FLAT;
-        return add_prop(e, node, name, src, repr, PK_LIT, 1);
+        // look="flat" (TS_FLAT): the pill in flat fills, the page's room its own; "badge"
+        // (TS_BADGE) and "secret" (TS_SECRET): a banner as an achievement's, at the room's foot
+        static const char *const LOOKS[] = {"flat", "badge", "secret"};
+        int i = lit_index(src, LOOKS, 3);
+        if (i < 0)
+            return uit_fail(e, UIT_E_KIND, UIT_MSG("toast look=%s: \"flat\", \"badge\" or \"secret\"",
+                                                   "toast look=%s"), src);
+        N->lit |= (uint8_t)(1 << i);
+        return add_prop(e, node, name, src, repr, PK_LIT, 1 << i);
     }
     if (!strcmp(name, "look") && kind == UIT_BUTTON) {
         // look="hero" (BT_HERO): the page's lead verb, half again a row's height, twice the pads, a
@@ -1654,11 +1665,14 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
     }
     if (kind == UIT_FIELD && (!strcmp(name, "edit") || !strcmp(name, "keys"))) {
         // edit="open": focus coming onto it begins its edit; keys="number": the on-screen
-        // keyboard's layout for it (#239), which draws nothing (the contract checked the words)
+        // keyboard's layout for it (#239), which draws nothing; keys="name": it takes a
+        // name's characters alone (the contract checked the words)
         if (!strcmp(src, "open"))
             N->lit |= NL_OPEN;
         else if (!strcmp(src, "number"))
             N->lit |= NL_NUMBER;
+        else if (!strcmp(src, "name"))
+            N->lit |= NL_NAME;
         return add_prop(e, node, name, src, repr, PK_LIT, 0);
     }
     if (kind == UIT_CELLS && !strcmp(name, "edge")) {
