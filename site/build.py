@@ -1098,10 +1098,11 @@ nav .brand em{font-style:normal;color:var(--accent)}
 nav .sp{flex:1}
 nav a.l{color:var(--body);text-decoration:none;font-size:14px}
 nav a.l:hover{color:var(--accent)}
-nav .scheme{appearance:none;border:1px solid var(--line);background:var(--surface);
+/* The page's buttons: the scheme switch, and the console's Full screen. */
+nav .scheme,.exp{appearance:none;border:1px solid var(--line);background:var(--surface);
   color:var(--ink);font:14px/1 var(--sans);padding:6px 10px;cursor:pointer;white-space:nowrap}
-nav .scheme:hover{border-color:var(--accent);color:var(--accent)}
-nav .scheme:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+nav .scheme:hover,.exp:hover{border-color:var(--accent);color:var(--accent)}
+nav .scheme:focus-visible,.exp:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 nav .brand,nav a.l{white-space:nowrap}
 nav a.l[aria-current]{color:var(--accent)}
 /* Narrow: the section anchors are one scroll away anyway, and keeping them
@@ -1343,13 +1344,8 @@ def page(pal, has_player, cards, channel=None, stills=False):
    the real sizing (a fixed overlay works everywhere), and fullscreen is asked
    for on top of it where it exists, which additionally hides the browser
    chrome. Either can end first, so the JS syncs both ways. */
-.exp{appearance:none;cursor:pointer;margin-left:auto;align-self:center;font:14px/1 var(--sans);
-  padding:7px 11px;background:var(--surface);color:var(--ink);border:1px solid var(--line)}
-.exp:hover{border-color:var(--link);color:var(--link)}
+.exp{margin-left:auto;align-self:center}
 .exp[hidden]{display:none}
-/* A phone's Expand is the icon alone, a thumb's size. */
-@media (max-width:700px){.exp span{display:none}
-  .exp{font-size:22px;min-width:44px;min-height:44px;padding:0 10px}}
 /* Filling the screen, the console sits under a strip of its own that holds
    Close: the console's OS bar is at its very top, battery and clock in its
    right corner, so a Close over the console covered them. */
@@ -1473,8 +1469,7 @@ body.noscroll{overflow:hidden}
       <span>Click the screen, then use the arrow keys, Z and X. Pick <b>Make</b> for
         the editors.</span>
       <span>Carts you make are kept in this browser.</span>
-      <button class="exp" id="expand" type="button" hidden title="Fill the screen"
-        aria-label="Expand: fill the screen">&#10530;<span> Expand</span></button>
+      <button class="exp" id="expand" type="button" hidden>&#10530; Full screen</button>
     </div>
 %(missing)s  </div>
 </div>
