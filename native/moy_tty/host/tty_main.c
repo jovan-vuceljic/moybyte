@@ -25,6 +25,9 @@
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
 // MOY_TTY_DEFER is the webhost's `defer`, comma-separated: the routes the VM answers, which
 // this console answers itself, 200 {"m":..., "t":..., "n":<body length>}.
+// MOY_TTY_PINS names the board's pins (moy_net_host.c's stand-in, the
+// /gpio allowlist), comma-separated; `pin N V` sets pin N's level from
+// outside, as a wire would; `level N` prints `LEVEL N <level> <mode>`.
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
 #include <fcntl.h>
@@ -50,6 +53,10 @@
 
 extern const moy_tty_shell_t moy_tty_moy_sh;
 extern uint64_t moy_net_ms_skew;
+extern uint8_t moy_net_host_pins[16];
+extern int moy_net_host_npins;
+extern int moy_net_host_level[64];
+extern int moy_net_host_mode[64];
 
 static pthread_t console_tid;
 static volatile int console_up;
@@ -217,6 +224,10 @@ int main(int argc, char **argv) {
     s_system = strcmp(argv[2], "-") ? argv[2] : NULL;
     s_carts = argv[3];
     s_files = argc == 5 ? argv[4] : NULL;
+    for (const char *p = getenv("MOY_TTY_PINS"); p != NULL && *p && moy_net_host_npins < 16;) {
+        moy_net_host_pins[moy_net_host_npins++] = (uint8_t)strtol(p, (char **)&p, 10);
+        p += *p == ',';
+    }
     const char *named = getenv("MOY_TTY_PAGE");
     uint8_t digest[2][32];
     if (named != NULL && strlen(named) == 129 && moy_hex_decode(named, 64, digest[0], 32)
@@ -276,6 +287,18 @@ int main(int argc, char **argv) {
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("HANGUP\n");
                 fflush(stdout);
+            } else if (strncmp(line, "pin ", 4) == 0) {
+                char *e;
+                long n = strtol(line + 4, &e, 10);
+                if (n >= 0 && n < 64) {
+                    moy_net_host_level[n] = (int)strtol(e, NULL, 10);
+                }
+            } else if (strncmp(line, "level ", 6) == 0) {
+                long n = strtol(line + 6, NULL, 10);
+                if (n >= 0 && n < 64) {
+                    printf("LEVEL %ld %d %d\n", n, moy_net_host_level[n], moy_net_host_mode[n]);
+                    fflush(stdout);
+                }
             } else if (strncmp(line, "skew ", 5) == 0) {
                 moy_net_ms_skew += (uint64_t)strtoll(line + 5, NULL, 10);
                 printf("SKEW %s\n", line + 5);

@@ -74,6 +74,22 @@
 // Reads, gets and xfers never cross: the page answers a read from the
 // records, a get from the last record read or the last 'G', and an xfer BAD.
 //
+// THE PINS: the board's pins, where it serves them to its page (moy_gpio.c),
+// are the kind "pins" (the probe's "kinds" names it, with no lists), one row
+// a page, opened 'O' id 4 "pins" and answered 'A' as a kind's open. Its
+// messages are its own, the ops moy_gpio_op's:
+//
+//   'W' id {pin(1) level(1)}  up: each pin driven as it arrives, in order;
+//                             answered only where refused: 'A' id 'W' rc(4)
+//                             pin(1), rc moy_dev's (BAD off the allowlist,
+//                             BUSY held by another process, IO)
+//   'S' id pins(1 each)       up: the pins the page watches, the last 'S'
+//                             replaced (at most 16)
+//   'G' id vals(4 each)       down: each watched pin's level (or its code),
+//                             in the order 'S' named them, after an 'S' and
+//                             whenever one changed: read after each message
+//                             of the row and each pass of the bridge's
+//
 // THE REQUESTS. A request the page would send the webhost over HTTP goes
 // on the socket instead, sealed as over HTTP (its session, sequence number
 // and tag on the target, its body AES-GCM; moy_seal.h), so the webhost's
@@ -114,7 +130,7 @@
 
 #include "moy_link.h"
 #include "moy_live.h"
-#include "moy_dev_kinds.h"           // MOY_DEV_RELAYS
+#include "moy_dev_kinds.h"           // MOY_DEV_RELAYS, MOY_DEV_PINS
 
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE && defined(MOY_NET_LINK) && MOY_NET_LINK
 
@@ -213,10 +229,10 @@ static void unlock(void) {
 #endif
 
 // The device channel (moy_live_dev.c), on a board that can relay
-// (moy_dev_kinds.h's MOY_DEV_RELAYS): named strongly there, which is what
+// (moy_dev_kinds.h's MOY_DEV_RELAYS or MOY_DEV_PINS): named strongly there, which is what
 // pulls it out of the component's archive; weak on any other, which links
 // none of it.
-#if defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS
+#if (defined(MOY_DEV_RELAYS) && MOY_DEV_RELAYS) || (defined(MOY_DEV_PINS) && MOY_DEV_PINS)
 #define DEV_HAS(f) 1
 #else
 #pragma weak moy_live_dev_message
