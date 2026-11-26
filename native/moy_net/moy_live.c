@@ -2,9 +2,10 @@
 //
 // A FRAME is one binary WebSocket message, sealed as the web terminal's are
 // (moy_seal.h: (3, i, seq) up under the session's kc, (4, i, seq) down under
-// kb, i counting each way from 0 and seq the upgrade's own), so a frame
-// dropped, replayed or moved ends the socket 1008 "seal". The open host (no
-// sign-in: a test, the dev server) carries the same plaintexts unsealed. A
+// kb, i counting each way from 0 and seq the upgrade's own, or 0 on a socket
+// that signed in on itself: THE SIGN-IN, below), so a frame dropped,
+// replayed or moved ends the socket 1008 "seal". The open host (no sign-in:
+// a test, the dev server) carries the same plaintexts unsealed. A
 // plaintext's first byte is its CHANNEL and the rest the channel's message:
 //
 //   'c'  the socket's own. 'b' a beat, either way, once a MOY_LIVE_BEAT_MS
@@ -12,7 +13,8 @@
 //        'E' + the same bytes (the page's round trip to its board); 'H' +
 //        letters down, a HINT: what the page reads from the webhost's routes
 //        changed on the board, so it asks now and asks no other way while
-//        the socket is open (THE HINTS, below).
+//        the socket is open (THE HINTS, below); 'S' up, the page's last
+//        frame in the clear (THE SIGN-IN).
 //   'n'  the radio link, where the board relays its radio
 //        (moy_web_live_link; below).
 //   'd'  the device channel: the handles of the kinds this board relays
@@ -24,6 +26,25 @@
 //        REQUESTS, below).
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
+//
+// THE SIGN-IN. A page holding a session opens the socket naming it, sealed
+// from the first frame. A page with none opens it naming none and signs in
+// on it, in the clear, as the webhost's (moy_webhost.c, THE SIGN-IN ON THE
+// LIVE SOCKET) until the bridge takes it: its 'r' requests to POST /auth,
+// the sign-in's exchanges as moy_webhost.c's header has them (the backoff
+// counting the socket's source), answered as any request is, and its
+// echoes. Nothing else is served before the seal: another request is
+// answered 401 {"error":"session"} and another channel's frame dropped. The
+// answer to a credential that made a session (a key login, a pairing) is
+// the last frame down in the clear; up, the page checks the board's proof
+// and says
+//
+//   'c' 'S'                   the last frame in the clear
+//
+// and from the next frame each way both are sealed under that session with
+// seq 0, which no sealed request takes, i from 0. The socket is then this
+// bridge's, the radio's state its first frame down, and another session's
+// page's socket is taken (moy_wa_take).
 //
 // THE RADIO LINK. The board runs no game. The page runs the cart and the
 // match (native/moy_play/moy_match.c over the page's own link,
@@ -74,13 +95,14 @@
 // Reads, gets and xfers never cross: the page answers a read from the
 // records, a get from the last record read or the last 'G', and an xfer BAD.
 //
-// THE REQUESTS. A request the page would send the webhost over HTTP goes
-// on the socket instead, sealed as over HTTP (its session, sequence number
-// and tag on the target, its body AES-GCM; moy_seal.h), so the webhost's
-// sign-in check and routes take it as they take one off a connection, and
-// its answer is the same sealed records: the socket's own seal is around
-// them, never instead of them. Up from the page, in pieces no longer than
-// the probe's "req":
+// THE REQUESTS. The page's requests to the webhost's sealed routes go on
+// the socket, never over HTTP, where a board with the socket refuses them
+// 410 {"error":"live"}. Each is sealed as a sealed route's request is (its
+// session, sequence number and tag on the target, its body AES-GCM;
+// moy_seal.h), so the webhost's sign-in check and routes take it as they
+// would take one off a connection, and its answer is the same sealed
+// records: the socket's own seal is around them, never instead of them. Up
+// from the page, in pieces no longer than the probe's "req":
 //
 //   'Q' id(2) len(4) bytes    a request's first piece: `len` bytes in all,
 //                             "METHOD TARGET\n" and its body
@@ -185,6 +207,7 @@ typedef struct {
     bufs_t *b;
     moy_live_req_t *rq;                 // the request being pieced together (the task's)
     uint32_t rq_want;                   // ...its length when whole
+    size_t pre;                         // bytes the webhost read past the sign-in, in `in`
     moy_live_req_t *handed;             // ...and the one waiting for the webhost
     moy_live_stats_t stats;
 } live_t;
@@ -648,12 +671,15 @@ static int hints(int ws) {
 
 // One page's socket, to its end.
 static void pump(int ws) {
-    size_t n = 0;
+    size_t n = L->pre;
     int devs = 0;                       // the device channel's rows open
     if (state(ws, 0) < 0) {
         return;
     }
     hints_start();
+    if (n > 0 && frames_in(ws, &n) < 0) {
+        return;
+    }
     for (;;) {
         if (L->cut) {
             moy_ws_close(ws, L->cut == 2 ? 4001 : 1008, L->cut == 2 ? "taken" : "revoked");
@@ -759,15 +785,18 @@ static void *bridge_thread(void *arg) {
 }
 #endif
 
-int moy_web_live(int fd, const struct moy_wa_seal *seal) {
+int moy_web_live(int fd, const struct moy_wa_seal *seal, const uint8_t *pre, size_t pn) {
     if (__atomic_load_n(&L->fd, __ATOMIC_ACQUIRE) >= 0) {
         L->stats.busy++;
         return -1;
     }
-    L->b = moy_net_alloc(sizeof *L->b);
-    if (L->b == NULL) {
+    if (pn > IN_CAP || (L->b = moy_net_alloc(sizeof *L->b)) == NULL) {
         return -1;
     }
+    if (pn > 0) {
+        memcpy(L->b->in, pre, pn);
+    }
+    L->pre = pn;
     if (seal != NULL) {
         L->seal = *seal;
     } else {

@@ -1134,11 +1134,15 @@ async function importP8(name, buf) {
 // key and seal is the wasm's own C (moy_seal_web.c, the same mbedTLS the board
 // runs), and this file only moves bytes. The sign-in, once per page:
 //
-//   a hello (POST /auth), then the first of: this browser's DEVICE KEY for
+//   a hello, then the first of: this browser's DEVICE KEY for
 //   the board's id (the page keeps them, page_tail.js), the QR's single-use
 //   token from the url's # (which pairs this browser: the board mints its key
 //   and the page stores it), or nothing -- the page asks to pair: by the
 //   console's password (SPAKE2+, `{t:"password"}`), or by scanning the code.
+//
+// Each exchange is one POST /auth, or, on a board with the live socket
+// (its probe names "req"), one request to it on that socket in the clear,
+// where the board signs its page in and nowhere else (liveAuth).
 //
 // THE CLAIM: a board takes its password from the browser holding the claim
 // its Improv answer carried over the cable (moy_webauth.c, THE CLAIM): its
@@ -1240,13 +1244,16 @@ function b64urlHex(s) {
     } catch (e) { return ""; }
 }
 
+// One exchange: {status, text, doc, live}, `live` the socket it went on.
 async function authPost(text) {
-    const r = await fetch("auth", { method: "POST", body: text,
+    let r, live = null;
+    if (reqPiece) ({ r, live } = await liveAuth(text));
+    else r = await fetch("auth", { method: "POST", body: text,
         headers: { "Content-Type": "application/json" } });
     const t = await r.text();
     let doc = null;
     try { doc = JSON.parse(t); } catch (e) { }
-    return { status: r.status, text: t, doc: doc || {} };
+    return { status: r.status, text: t, doc: doc || {}, live };
 }
 
 // A hello: the board's id, or the answer that stopped it (a wait, an error),
@@ -1274,7 +1281,12 @@ async function hello() {
 // The answer to a key login or a pairing: signed in, its key handed to the
 // page when it is new.
 function finish(r, fresh) {
-    if (r.status !== 200 || sw().done(swPut(utf8.encode(r.text))) !== 0) return false;
+    if (r.status !== 200) return false;
+    if (sw().done(swPut(utf8.encode(r.text))) !== 0) {
+        if (r.live) liveDrop(r.live, "proof");     // it waits for a seal that will not come
+        return false;
+    }
+    if (r.live) liveSealNow(r.live);
     signedIn = true;
     sealedOnce = true;
     if (fresh) {
@@ -1305,7 +1317,11 @@ async function withNonce(h, build) {
 
 async function signInOnce() {
     let h = await hello();
-    if (h.open) { authOpen = true; return true; }
+    if (h.open) {
+        authOpen = true;
+        if (liveWs && liveWs.readyState === 1) liveUp(liveWs);
+        return true;
+    }
     if (!h.id) return need(h.r, false);
     const k = auth.keys[h.id];
     if (k) {
@@ -1397,11 +1413,17 @@ async function pairPassword(pw, name) {
             break;
         }
     } catch (e) { why = "the console did not answer"; }
+    liveAuthDone();
     return need(null, true, why || "the console did not answer");
 }
 // The claim's {t:"claim"}: {ok, why}. `id`, when given, is the board the
 // claim was made by, held against the hello's before the claim is spent.
 async function claimPassword(claim, id, pw, name) {
+    try { return await claimOnce(claim, id, pw, name); }
+    catch (e) { return { ok: false, why: "the console did not answer" }; }
+    finally { liveAuthDone(); }
+}
+async function claimOnce(claim, id, pw, name) {
     const h = await hello();
     if (!h.id) { need(h.r, false); return { ok: false, why: (authNeed && (authNeed.wait || authNeed.why)) || "the console did not answer" }; }
     if (id && h.id !== id) return { ok: false, why: "that setup is another console's" };
@@ -1443,37 +1465,42 @@ function takeBack() {
 // plaintext, opened; `wait` the ms of a backoff, else -1. A refusal in the
 // clear (no session, a goodbye) is {status, text} as it came, never opened,
 // so nothing the network says without the session's key reads as the board's.
+// On a board with the live socket it goes there alone (boardFetch): a
+// request the socket lost is asked again, sealed anew, once the socket is
+// back, for LIVE_DOWN_MS, the page saying meanwhile that it reconnects.
 async function sealed(method, path, body, bin) {
-    let http = false;
-    for (let tries = 0; tries < 2; tries++) {
+    const until = performance.now() + LIVE_DOWN_MS;
+    for (let tries = 0; tries < 2;) {
         if (!(await signIn())) {
             const ms = authNeed ? authNeed.ms : -1;
             return { status: ms >= 0 ? 429 : 401, text: "", wait: ms };
         }
-        if (authOpen) {
-            // unsealed: a request the socket lost goes again over HTTP as it was
-            const raw = body === undefined ? null : utf8.encode(body);
-            const r = await boardFetch(method, path, raw, http).catch((e) => {
-                if (!e.live) throw e;
-                return fetch(path.slice(1), raw ? { method, body: raw,
-                    headers: { "Content-Type": "application/json" } } : { method });
-            });
-            if (bin) return { status: r.status, bytes: new Uint8Array(await r.arrayBuffer()), wait: -1 };
-            return { status: r.status, text: await r.text(), wait: -1 };
+        const raw = body === undefined ? null : utf8.encode(body);
+        let r;
+        try {
+            if (reqPiece && !(await liveWait(false))) {
+                if (!signedIn && !authOpen) continue;      // signed out meanwhile
+                throw liveFailed("down");
+            }
+            if (authOpen) {
+                r = await boardFetch(method, path, raw);
+                if (bin) return { status: r.status, bytes: new Uint8Array(await r.arrayBuffer()), wait: -1 };
+                return { status: r.status, text: await r.text(), wait: -1 };
+            }
+        } catch (e) {
+            if (!e.live || performance.now() > until) throw e;
+            continue;
         }
         const C = sw();
-        const raw = body === undefined ? null : utf8.encode(body);
         const n = swCall((m, p) => C.seal(m, p, raw ? swPut(raw) : 0), method, path);
         if (n < 0) return { status: 0, text: "", wait: -1 };
         const target = C.M.UTF8ToString(C.target()), seq = C.seq();
-        let r;
-        try { r = await boardFetch(method, target, n ? swGet(n) : null, http); }
+        try { r = await boardFetch(method, target, n ? swGet(n) : null); }
         catch (e) {
-            if (!e.live) throw e;
-            http = true;                // the socket went: once more over HTTP, sealed anew
-            continue;
+            if (!e.live || performance.now() > until) throw e;
+            continue;                   // the socket went: asked again once it is back
         }
-        if (r.status === 401) { signedIn = false; continue; }
+        if (r.status === 401) { signedIn = false; tries++; continue; }
         if ((r.headers.get("Content-Type") || "").indexOf("application/octet-stream") < 0) {
             // In the clear: a refusal at most, never the board's answer.
             if (r.status >= 200 && r.status < 300) return { status: 0, text: "", wait: -1 };
@@ -1553,13 +1580,14 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     // own documents, the apps' private folders).
     let pulled, fetched, cartsRes, live = null, probed = false;
     for (;;) {
-        // The live socket first, once a board signed this page in (the
-        // pulls' sign-in, made here first): its requests (THE REQUESTS) then
-        // carry the pulls and every sealed call after.
-        if (!probed && (await signIn()) && signedIn) {
+        // The live socket first (its probe is open; a host without one
+        // answers it 404): where the board takes requests on it (THE
+        // REQUESTS), the sign-in, the pulls and every sealed call after go
+        // there and nowhere else.
+        if (!probed) {
             probed = true;
             live = await probeLive();
-            if (live && live.req && qs.get("req") !== "0") {
+            if (live && live.req) {
                 reqPiece = live.req;
                 liveOn = true;
                 liveOpen();
@@ -1604,7 +1632,6 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
-    if (mode === "board" && !probed) live = await probeLive();   // a host with no sign-in
     const wifiDoc = mode === "board" ? await probeWifi() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
@@ -1781,8 +1808,8 @@ function shipFrame(s) {
 // carries none of them. A board without the socket 404s it.
 async function probeLive() {
     try {
-        const r = await sealed("GET", "/live");
-        const d = r.status === 200 ? sealedJson(r) : null;
+        const r = await fetch("live");
+        const d = r.status === 200 ? await r.json() : null;
         if (!d || !d.live) return null;
         const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
         const kinds = typeof d.kinds === "string" ? d.kinds : "";
@@ -1825,7 +1852,7 @@ let wifiHint = false, updateHint = false, storeHintAt = 0, storeBusy = false;
 let pushedWas = false;
 const HINTS = { w: 0, u: 0, o: 0, s: 0, pulls: 0 };
 function pushed() {
-    return liveHints && liveWs !== null && liveWs.readyState === 1;
+    return liveHints && liveUpNow();
 }
 function liveHinted(u8) {
     for (const c of u8) {
@@ -2230,7 +2257,7 @@ let termLive = null;             // {cols, rows, opened, tries} while the Termin
 function u16s(a, b) { return new Uint8Array([a & 255, a >> 8, b & 255, b >> 8]); }
 function termLiveSay(kind, u8) {
     const ws = liveWs;
-    if (!ws || ws.readyState !== 1) return false;
+    if (!liveUpNow()) return false;
     const b = new Uint8Array(2 + u8.length);
     b[0] = 0x74;
     b[1] = kind.charCodeAt(0);
@@ -2312,8 +2339,12 @@ function termPump() {
 // THE LIVE SOCKET (#256; native/moy_net/moy_live.h is the wire) on a page
 // whose board relays its radio or a device: one WebSocket to GET /live,
 // sealed as the terminal's is (seal slot 1), its frames' first byte their
-// channel. The worker opens it at boot, keeps it beating, reopens a dropped
-// one after LIVE_RETRY_MS, and moves the link channel ('n') and the device
+// channel. A page holding a session opens it sealed under that session; one
+// without opens it in the clear and signs in on it (liveAuth), and once the
+// board's proof checks says 'c' 'S' and seals it (liveSealNow): nothing but
+// the sign-in and the beat goes on it before (liveUp). The worker opens it
+// at boot, keeps it beating, reopens a dropped one after LIVE_RETRY_MS
+// (saying so while it is down), and moves the link channel ('n') and the device
 // channel ('d') between the socket and the VM between frames (web_boot's
 // live_*), never inside one: the console runs a console's match over it
 // (native/moy_net/moy_link_web.c) and its relayed devices' handles
@@ -2325,10 +2356,9 @@ const LIVE_RETRY_MS = [250, 500, 1000, 2000, 5000];
 let livePump = null, liveFeed = null, liveState = null, liveOn = false;
 let liveWs = null, liveSealed = false, liveRetry = 0, liveHidden = 0, liveWasHidden = 0;
 let liveHeard = 0, liveSaid = 0;
-// A socket that fails before it opens says nothing of why, and a board that
-// restarted has forgotten this page's session: the next open asks the same
-// route without the upgrade first, whose 401 signs in again (`sealed`).
-let liveAsk = false;
+// A sign-in wants the next socket in the clear (liveAuth); the socket was
+// up and went (the page says so until it is back).
+let liveClear = false, liveDown = false, liveAuthing = 0;
 const liveQ = [];
 const LIVE = { opens: 0, drops: 0, up: 0, down: 0, reqs: 0, rtt: [] };
 function liveSend(ws, pl) {
@@ -2338,20 +2368,20 @@ function liveSend(ws, pl) {
 }
 // THE REQUESTS (moy_live.c's; the worker's one wrapper for its board): a
 // board whose probe names "req" (the most plaintext a piece up carries)
-// answers the routes on its live socket, so while the socket is open every
-// sealed request (`sealed`) goes on it, sealed as over HTTP, the socket's
-// seal around it: 'r' 'Q' id len and the request's first piece, 'B' id and
-// the rest, "METHOD TARGET\n" and the body; its answer comes back 'A' (the
-// status, the type, the body's first bytes), 'D's (the body's next) and 'Z'
-// (its last), or one 'W' (the head and the whole body), made into the Response a
-// fetch would have given. One request is on the socket at a time, as the
-// board serves one connection at a time. Anywhere else -- the socket shut,
-// or still opening after LIVE_REQ_WAIT_MS, a board without the channel, the
-// sign-in, the sockets' own probes -- it is HTTP, and a request the socket
-// lost (it closed, or no byte of its answer came for LIVE_REQ_MS) goes
-// again over HTTP (`sealed`, sealed anew). `?req=0` keeps a page's requests
-// on HTTP, the other side of an A/B (tests/test_zero_on_glass.py).
-const LIVE_REQ_MS = 15000, LIVE_REQ_WAIT_MS = 3000;
+// answers its sign-in and its sealed routes on its live socket alone (over
+// HTTP it refuses them 410), so every sealed request (`sealed`) goes on it,
+// sealed as a sealed route's, the socket's seal around it: 'r' 'Q' id len
+// and the request's first piece, 'B' id and the rest, "METHOD TARGET\n" and
+// the body; its answer comes back 'A' (the status, the type, the body's
+// first bytes), 'D's (the body's next) and 'Z' (its last), or one 'W' (the
+// head and the whole body), made into the Response a fetch would have
+// given. One request is on the socket at a time, as the board serves one
+// connection at a time. A request waits LIVE_UP_MS for the socket to be up
+// (opening it), and one the socket lost (it closed, or no byte of its
+// answer came for LIVE_REQ_MS) is asked again on the next socket (`sealed`,
+// sealed anew) for LIVE_DOWN_MS. A board without the channel (a console) is
+// asked over HTTP.
+const LIVE_REQ_MS = 15000, LIVE_UP_MS = 10000, LIVE_DOWN_MS = 60000;
 let reqPiece = 0, reqId = 0, reqNow = null, reqChain = Promise.resolve();
 function liveFailed(why) {
     const e = new Error("live socket: " + why);
@@ -2420,25 +2450,75 @@ function liveRequest(method, target, body) {
     reqChain = p.catch(() => { });
     return p;
 }
-// Whether a request goes on the socket: it is open, or opens within
-// LIVE_REQ_WAIT_MS.
-async function liveReady() {
-    for (let t = 0; t <= LIVE_REQ_WAIT_MS; t += 50) {
+// Whether the socket is up: open, and sealed (or the open host's).
+function liveUpNow() {
+    const ws = liveWs;
+    return !!ws && ws.readyState === 1 && ws.up === true;
+}
+// Whether the socket is ready within LIVE_UP_MS, opened if it is not: up
+// for a request, or open in the clear for a sign-in (`clear`). A request
+// finds a socket in the clear with no sign-in to seal it: false at once.
+async function liveWait(clear) {
+    for (const end = performance.now() + LIVE_UP_MS; performance.now() < end;) {
+        if (taken || !liveOn) return false;
         const ws = liveWs;
-        if (!reqPiece || !liveOn || taken || !ws || ws.readyState > 1) return false;
-        if (ws.readyState === 1) return true;
+        if (!ws) liveOpen();
+        else if (ws.readyState === 1) {
+            if (clear ? !liveSealed : ws.up) return true;
+            if (!clear && !signedIn && !authOpen) return false;
+        }
         await new Promise((ok) => setTimeout(ok, 50));
     }
     return false;
 }
-// A board request: on the live socket where it takes them (unless `http`),
-// else HTTP. Throws an Error with `live` when the socket lost it.
-async function boardFetch(method, target, body, http) {
-    const path = target.split("?")[0];
-    if (!http && path !== "/live" && path !== "/term" && await liveReady()) {
-        return liveRequest(method, target, body);
-    }
+// A board request: on the live socket where the board takes them, else
+// HTTP. Throws an Error with `live` when the socket lost it.
+async function boardFetch(method, target, body) {
+    if (reqPiece) return liveRequest(method, target, body);
     return fetch(target.slice(1), body ? { method, body } : { method });
+}
+// THE SIGN-IN ON THE LIVE SOCKET (moy_live.c's header, THE SIGN-IN): one
+// exchange as a request to POST /auth on the socket in the clear, a sealed
+// one let go first (the sign-in makes a new session): {r, live}.
+async function liveAuth(text) {
+    if (liveWs && liveSealed) liveDrop(liveWs, "sign-in", true);
+    if (!liveWs) liveClear = true;
+    liveAuthing++;
+    try {
+        if (!(await liveWait(true))) throw liveFailed("down");
+        const ws = liveWs;
+        return { r: await liveRequest("POST", "/auth", utf8.encode(text)), live: ws };
+    } finally { liveAuthing--; }
+}
+// The answer that made a session was the board's last frame in the clear,
+// and the board's proof checked (finish): the page's last one, and the
+// socket sealed under the session (seq 0) from the next frame each way.
+function liveSealNow(ws) {
+    if (liveWs !== ws || ws.readyState !== 1 || liveSealed) return;
+    ws.send(new Uint8Array([0x63, 0x53]));
+    sw().ws(1, 0);
+    liveSealed = true;
+    liveUp(ws);
+}
+// A pairing that made no session leaves the socket in the clear while the
+// page still holds its session: let it go, so the next opens sealed.
+function liveAuthDone() {
+    if (reqPiece && liveWs && !liveSealed && !authOpen && signedIn) liveDrop(liveWs, "resume", true);
+}
+// The socket up: its channels' state to the VM, the Terminal's face asked
+// again, and the page told it is back.
+function liveUp(ws) {
+    if (ws.up) return;
+    ws.up = true;
+    liveQ.push({ s: 1 });
+    if (termLive) termLiveSay("O", u16s(termLive.cols, termLive.rows));
+    if (liveDown) { liveDown = false; say("live"); }
+}
+// A socket that was up went: the page says so until the next is (liveUp).
+function liveGone(ws) {
+    if (!ws.up || taken) return;
+    liveDown = true;
+    say("the console's connection dropped -- reconnecting...");
 }
 // The socket's beat and its silence: each frame's (liveStep), and before
 // the console's frames run, its boot's (liveOpen), which minds no silence:
@@ -2462,29 +2542,28 @@ function liveLater() {
     const ms = LIVE_RETRY_MS[Math.min(liveRetry++, LIVE_RETRY_MS.length - 1)];
     setTimeout(liveOpen, ms);
 }
-function liveDrop(ws, why) {
+// The socket let go: `quiet` when the page did it to sign in again.
+function liveDrop(ws, why, quiet) {
     if (liveWs !== ws) return;
     liveWs = null;
     try { ws.close(1000); } catch (e) { }
     reqEnd(liveFailed("dropped"));
     LIVE.drops++;
-    liveQ.push({ s: 0, why: why });
+    if (ws.up) liveQ.push({ s: 0, why: why });
     termLiveLost(TERM.LOST);
+    if (!quiet) liveGone(ws);
     liveLater();
 }
-async function liveOpen() {
+// The socket opened: sealed under the page's session where it holds one
+// (and no sign-in wants it in the clear), else in the clear, where the page
+// signs in.
+function liveOpen() {
     if (liveWs || !liveOn || taken) return;
     let target = "/live";
     liveSealed = false;
-    if (!(await signIn())) { liveLater(); return; }
-    if (liveAsk && !authOpen) {
-        let r = { status: 0 };
-        try { r = await sealed("GET", "/live"); } catch (e) { }
-        if (r.status !== 200) { liveLater(); return; }
-        liveAsk = false;
-    }
-    if (liveWs || !liveOn || taken) return;
-    if (!authOpen) {
+    const resume = signedIn && !authOpen && !liveClear;
+    liveClear = false;
+    if (resume) {
         const C = sw();
         if (swCall((m, p) => C.seal(m, p, 0), "GET", target) < 0) { liveLater(); return; }
         target = C.M.UTF8ToString(C.target());
@@ -2504,8 +2583,13 @@ async function liveOpen() {
         liveRetry = 0;
         LIVE.opens++;
         liveHeard = liveSaid = performance.now();
-        liveQ.push({ s: 1 });
-        if (termLive) termLiveSay("O", u16s(termLive.cols, termLive.rows));
+        if (liveSealed || authOpen) liveUp(ws);
+        else {
+            // in the clear: the page signs in on it, anew unless a sign-in
+            // opened it for itself
+            if (!liveAuthing) signedIn = false;
+            signIn();
+        }
         if (!livePump && !liveBootBeat) {
             liveBootBeat = setInterval(() => {
                 if (livePump || !liveWs) { clearInterval(liveBootBeat); liveBootBeat = 0; return; }
@@ -2538,12 +2622,14 @@ async function liveOpen() {
         liveWs = null;
         reqEnd(liveFailed("closed"));
         LIVE.drops++;
-        if (!opened) liveAsk = true;
-        liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
+        // a sealed upgrade refused: the board forgot the session (it
+        // restarted), so the next socket signs in
+        if (!opened && resume) signedIn = false;
+        if (ws.up) liveQ.push({ s: 0, why: c.code + (c.reason ? " " + c.reason : "") });
         termLiveLost(c.code === 4001 ? TERM.TAKEN : c.code === 1008 && c.reason === "revoked"
                      ? TERM.REFUSED : TERM.LOST);
         if (c.code === 4001) takenAway();
-        else liveLater();
+        else { liveGone(ws); liveLater(); }
     };
 }
 function liveFeedAll(parts) {
@@ -2583,7 +2669,7 @@ function liveStep(gap) {
     if (!liveHidden) liveWasHidden = 0;
     const ws = liveWs;
     if (!ws || ws.readyState !== 1) return;
-    if (out) {
+    if (out && ws.up) {
         const b = Uint8Array.from(atob(out), (c) => c.charCodeAt(0));
         for (let at = 0; at + 2 <= b.length;) {
             const n = b[at] | (b[at + 1] << 8);

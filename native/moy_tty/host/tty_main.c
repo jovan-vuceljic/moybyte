@@ -10,7 +10,9 @@
 // (a `sleep 30`), so the page finds the face another's; `nossh` ends it
 // with a Ctrl-C, and `hangup` as a client that went away (no signal);
 // `skew MS` moves the webhost's clock by MS (negative: back, so a lockout's
-// wait already running lasts that much longer). Each answers a line.
+// wait already running lasts that much longer); `run CMD` runs CMD to its
+// end as an SSH session's command does (`RAN <open's result>`), its writes
+// the store's changes no page made. Each answers a line.
 // `token` prints `TOKEN <hex>`, a QR's token; `claim` prints `CLAIM <claim>
 // <board id>`, what a board with no password puts in its Improv answer
 // (moy_webauth.c, THE CLAIM); `drop` forgets every paired
@@ -28,6 +30,7 @@
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -226,7 +229,7 @@ int main(int argc, char **argv) {
     pthread_t t;
     pthread_create(&t, NULL, console, NULL);
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
-    char line[64];
+    char line[256];
     size_t ln = 0;
     int ssh_fd = -1;
     moy_tty_ws_stats_t last = {0};
@@ -275,6 +278,24 @@ int main(int argc, char **argv) {
                 moy_tty_reap_all(MOY_TTY_SSH, 5000);
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("HANGUP\n");
+                fflush(stdout);
+            } else if (strncmp(line, "run ", 4) == 0 && ssh_fd < 0) {
+                int fd = -1;
+                moy_tty_hold(MOY_TTY_SSH, 1);
+                int r = moy_tty_open(MOY_TTY_SSH, line + 4, 0, 80, 24, NULL, &fd, &pid);
+                char out[256];
+                struct pollfd pf = {.fd = fd, .events = POLLIN};
+                for (int waited = 0; r == 0 && waited < 10000; waited += 50) {
+                    if (poll(&pf, 1, 50) > 0 && read(fd, out, sizeof out) <= 0) {
+                        break;          // its end: the command is done
+                    }
+                }
+                if (fd >= 0) {
+                    close(fd);
+                }
+                moy_tty_reap_all(MOY_TTY_SSH, 5000);
+                moy_tty_hold(MOY_TTY_SSH, 0);
+                printf("RAN %d\n", r);
                 fflush(stdout);
             } else if (strncmp(line, "skew ", 5) == 0) {
                 moy_net_ms_skew += (uint64_t)strtoll(line + 5, NULL, 10);

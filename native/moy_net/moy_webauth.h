@@ -55,6 +55,11 @@ void moy_wa_note(uint32_t peer, int ok);
 int moy_wa_auth(uint32_t peer, const char *body, size_t n, char *doc, size_t cap);
 // The PAKE's answer once its worker is done: its status, else 0.
 int moy_wa_later(char *doc, size_t cap);
+// The seal of the session the credential moy_wa_auth just judged made (a
+// key login, a pairing), for the live socket that signed in on itself:
+// sequence number 0, which no sealed request takes (moy_seal.h). 1 with
+// `out` filled, once; else 0.
+int moy_wa_fresh(moy_wa_seal_t *out);
 
 // A gated request's seal: MOY_WA_OK with the body opened in place (*bn its
 // plain length) and `out` the answer's seal, else MOY_WA_NONE or MOY_WA_BAD.

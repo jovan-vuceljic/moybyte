@@ -155,6 +155,7 @@ typedef struct {
     uint64_t token_at;
     uint8_t claim[MOY_SEAL_RAND];
     uint8_t token_on, claim_on, paired, claimed;
+    int8_t fresh;                       // the session signed_in made last, its slot + 1
     struct {
         uint8_t on;
         uint8_t kid[MOY_SEAL_KID], sid[MOY_SEAL_SID];
@@ -910,6 +911,7 @@ static int signed_in(wkey_t *k, const moy_seal_hs_t *h, char *doc, size_t cap,
     memcpy(s->kid, k->kid, MOY_SEAL_KID);
     moy_seal_session(h, k->kid, k->key, &s->k);
     s->at = moy_net_ms64();
+    A->fresh = (int8_t)(s - A->ss + 1);
     uint8_t proof[MOY_SEAL_MAC];
     moy_seal_proof(h, k->kid, k->key, s->sid, proof);
     char sid[2 * MOY_SEAL_SID + 1], ph[2 * MOY_SEAL_MAC + 1];
@@ -1193,7 +1195,28 @@ static int nonce_gone(char *doc, size_t cap) {
     return refuse(doc, cap, 409, "nonce");
 }
 
+int moy_wa_fresh(moy_wa_seal_t *out) {
+    memset(out, 0, sizeof *out);
+    if (A == NULL || A->fresh <= 0) {
+        return 0;
+    }
+    sess_t *s = &A->ss[A->fresh - 1];
+    A->fresh = 0;
+    if (!s->used) {
+        return 0;
+    }
+    out->on = 1;
+    memcpy(out->sid, s->sid, MOY_SEAL_SID);
+    memcpy(out->kc, s->k.kc, MOY_SEAL_KEY);
+    memcpy(out->kb, s->k.kb, MOY_SEAL_KEY);
+    memcpy(out->kid, s->kid, MOY_SEAL_KID);
+    return 1;
+}
+
 int moy_wa_auth(uint32_t peer, const char *body, size_t n, char *doc, size_t cap) {
+    if (A != NULL) {
+        A->fresh = 0;
+    }
     if (A == NULL || !A->on) {
         #if MOY_ON_BOARD
         return refuse(doc, cap, 503, "auth");

@@ -78,11 +78,8 @@ class Term:
 
 
 def test_the_probe_says_the_shell_is_on_the_socket_and_term_is_not(board):
-    status, d = board.page.json("GET", "/live")
-    assert status == 200 and d["term"] == 1, d
-    with pytest.raises(seal_client.Refused) as no:
-        board.page.call("GET", "/term")
-    assert no.value.status == 404
+    assert board.probe()["term"] == 1
+    assert seal_client.split(board.send("GET", "/term"))[0] == 404
 
 
 def test_a_face_opens_takes_keys_and_says_its_exit(board, page_so, tmp_path):
@@ -111,13 +108,10 @@ def test_another_page_takes_the_session_and_its_face(board, page_so, tmp_path):
     a = Term(_page(board, page_so, tmp_path, "a").open())
     assert a.open() == b"tA"
     a.until(b"$ ")
-    b = _page(board, page_so, tmp_path, "b")
-    b.host.page = b.host.browser()
-    b.open()
+    b = _page(board, page_so, tmp_path, "b").open(
+        signin=lambda br: br.pair_token(board.token()))
     # (the seal client keeps one slot's keys, b's now: a's bytes are read raw)
     D._until([], lambda: D._ended(a.p))
-    b.drop()                            # the busy first try, asked again as the page does
-    b.open()
     tb = Term(b)
     assert tb.open() == b"tA", "the taken page's face let the shell go"
     assert b"$ " in tb.until(b"$ ")
