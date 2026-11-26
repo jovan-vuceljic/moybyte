@@ -27,11 +27,11 @@
 // The kinds come from the /live probe's "kinds" (moy_dev_web_kinds). The
 // worker moves the bytes between frames (moy_link_web.c's queue).
 
+#include "moy_platform.h"       // first: the clock, under the port's -std=c99 too
+
 #if defined(MOY_NET_LIVE_PAGE) && MOY_NET_LIVE_PAGE
 
-#define _POSIX_C_SOURCE 200809L         // clock_gettime's CLOCK_MONOTONIC under the port's -std=c99
 #include <string.h>
-#include <time.h>
 
 #include "moy_dev.h"
 #include "moy_dev_kinds.h"
@@ -76,9 +76,7 @@ static struct {
 } W;
 
 static uint64_t now_us(void) {
-    struct timespec t;
-    clock_gettime(CLOCK_MONOTONIC, &t);
-    return (uint64_t)t.tv_sec * 1000000u + (uint64_t)t.tv_nsec / 1000u;
+    return (uint64_t)moy_now_us();
 }
 
 static int kind_of(const char *name, size_t n) {
