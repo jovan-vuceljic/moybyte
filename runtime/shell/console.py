@@ -850,6 +850,11 @@ class Workstation:
         # that console asked to install or remove carts in its own store
         # (firmware/web_runner/carts_link.BoardCarts), None everywhere else.
         self.cart_board = None
+        # `console_offline`, on such a page whose console has no screen: its
+        # Works offline row, whether that console keeps its own copy of the
+        # browser console (firmware/web_runner/offline_link.ConsoleOffline).
+        # None everywhere else.
+        self.console_offline = None
         # The index this console's own release publishes beside its firmware
         # (the browser console add-on's, runtime/carts/web_addon.py), set by a
         # board (device/wire_links.py); Get Carts and `pkg` read it last.

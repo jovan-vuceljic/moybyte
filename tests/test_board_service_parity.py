@@ -130,6 +130,9 @@ SERVICES = {
     "cart_home": "where carts are got instead, on a page a console serves",
     "cart_board": "the console with no screen serving this page, asked to install "
                   "and remove its own official carts (carts_link.BoardCarts)",
+    "console_offline": "the Works offline row on a page a console with no screen "
+                       "serves: whether that console keeps its own copy of the "
+                       "browser console (firmware/web_runner/offline_link.py)",
     "cart_own": "the index this console's own release publishes beside its "
                 "firmware, the browser console add-on's, which Get Carts reads last",
     "addon": "the step that installs the browser console add-on fitting this "
@@ -182,6 +185,9 @@ WIRING = {
                      "CORS between it and an archive -- so it never asks",
         "cart_home": "a board is where carts are got",
         "cart_board": "a board installs its own carts",
+        "console_offline": "a console with a screen keeps its own copy of the browser "
+                           "console; the choice is a headless board's, made on the page it "
+                           "serves (device/zero_offline.py)",
         "cart_own": INJECTED,
         "addon": INJECTED,
         "media_net": "a board's media service reads its own files and dials its own streams (moy_media); media_net is a page's fetch",
@@ -228,6 +234,9 @@ WIRING = {
                      "CORS between it and an archive -- so it never asks",
         "cart_home": "a board is where carts are got",
         "cart_board": "a board installs its own carts",
+        "console_offline": "a console with a screen keeps its own copy of the browser "
+                           "console; the choice is a headless board's, made on the page it "
+                           "serves (device/zero_offline.py)",
         "cart_own": INJECTED,
         "addon": INJECTED,
         "media_net": "a board's media service reads its own files and dials its own streams (moy_media); media_net is a page's fetch",
@@ -273,6 +282,9 @@ WIRING = {
                      "CORS between it and an archive -- so it never asks",
         "cart_home": "a board is where carts are got",
         "cart_board": "a board installs its own carts",
+        "console_offline": "a console with a screen keeps its own copy of the browser "
+                           "console; the choice is a headless board's, made on the page it "
+                           "serves (device/zero_offline.py)",
         "cart_own": INJECTED,
         "addon": INJECTED,
         "media_net": "a board's media service reads its own files and dials its own streams (moy_media); media_net is a page's fetch",
@@ -316,6 +328,9 @@ WIRING = {
                      "CORS between it and an archive -- so it never asks",
         "cart_home": "a board is where carts are got",
         "cart_board": "a board installs its own carts",
+        "console_offline": "a console with a screen keeps its own copy of the browser "
+                           "console; the choice is a headless board's, made on the page it "
+                           "serves (device/zero_offline.py)",
         "cart_own": INJECTED,
         "addon": INJECTED,
         "media_net": "a board's media service reads its own files and dials its own streams (moy_media); media_net is a page's fetch",
@@ -367,6 +382,7 @@ WIRING = {
         "cart_pick": "urllib reads any host, so the simulator never asks",
         "cart_home": "the simulator is a console of its own",
         "cart_board": "the simulator is a console of its own",
+        "console_offline": "the simulator serves no page",
         "cart_own": "the simulator has no release of its own to publish an add-on beside",
         "addon": "the simulator serves no browser console",
         "media_net": "the host's media service reads its own files and URLs; media_net exists because a browser's VM cannot reach the network or its store itself",
@@ -421,6 +437,7 @@ WIRING = {
         "cart_pick": INJECTED,
         "cart_home": INJECTED,
         "cart_board": INJECTED,
+        "console_offline": INJECTED,
         "media_net": INJECTED,
         "cart_own": INJECTED,
         "addon": "a page is the browser console; it installs no add-on",
