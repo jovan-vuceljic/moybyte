@@ -1,12 +1,12 @@
-<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><meta name=color-scheme content="light dark"><title>Moybyte</title>
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>Moybyte</title>
 <style>
-:root{--g:#eceef3;--c:#fff;--t:#15161d;--d:#5f6478;--a:#4c3fd6;--o:#fff;--e:#cfd3dc;--s:#f4f5f8}
-@media(prefers-color-scheme:dark){:root{--g:#0f1127;--c:#181b38;--t:#eef0fb;--d:#a1a6cc;--a:#b6a8f7;--o:#15123a;--e:#33385f;--s:#23274b}}
-body{font:16px/1.4 system-ui,sans-serif;margin:0;padding:16px;background:var(--g);color:var(--t)}
-#s{max-width:440px;margin:0 auto;padding:20px;border-radius:8px;background:var(--c);border:1px solid var(--e)}
-#s p{margin:.8em 0}#s p+p{color:var(--d)}#s input{accent-color:var(--a)}
-#s button{font:inherit;padding:.7em 1.2em;margin:1em .6em 0 0;border-radius:4px;border:1px solid var(--e);background:var(--s);color:var(--t)}
-#s button:first-of-type{background:var(--a);border-color:var(--a);color:var(--o);font-weight:600}
+:root{color-scheme:light dark;--g:#eceef3;--c:#fff;--t:#15161d;--d:#5f6478;--a:#4c3fd6;--e:#cfd3dc}
+@media(prefers-color-scheme:dark){:root{--g:#0f1127;--c:#181b38;--t:#eef0fb;--d:#a1a6cc;--a:#b6a8f7;--e:#33385f}}
+body{font:16px/1.4 system-ui,sans-serif;margin:16px;background:var(--g);color:var(--t)}
+#s{max-width:440px;margin:0 auto;padding:20px;border-radius:8px;background:var(--c);border:1px solid var(--e);accent-color:var(--a)}
+#s p{margin:.8em 0}#s p+p{color:var(--d)}
+#s button{font:inherit;padding:.7em 1.2em;margin:1em .6em 0 0;border-radius:4px;border:1px solid var(--e);background:var(--g);color:var(--t)}
+#s .p{background:var(--a);border-color:var(--a);color:var(--c);font-weight:600}
 </style>
 <body><div id=s>Loading the console...</div>
 <script>
@@ -23,7 +23,7 @@ body{font:16px/1.4 system-ui,sans-serif;margin:0;padding:16px;background:var(--g
 // lines and indentation.
 (async (MIRRORS) => {
 const S = document.getElementById("s"), T0 = performance.now(), why = [];
-const say = (t) => { S.textContent = t; };
+const say = (t) => { S.textContent = t; }, wait = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const hex = (u) => Array.from(u, (b) => b.toString(16).padStart(2, "0")).join("");
 function sha256(u) {
 const K = [], H = [], W = new Int32Array(64), r = (x, n) => x >>> n | x << 32 - n;
@@ -125,21 +125,21 @@ return;
 // page the board has the door.
 // The page's colours are the moy seed theme's, light and dark as the browser
 // prefers (native/moy_ui/themes/moy.json: desktop, surface, ink, ink_dim,
-// accent, selection_ink, border, surface_alt).
+// accent, border); the card shares them with the boot's lines (`say`).
 self.moyFast = s.tls ? 1 : 0;
 if (s.tls && location.protocol == "http:") {
 const K = "moy.fast", ask = /fast/.test(location.search);
 let fast = null;
 try { if (ask) localStorage.removeItem(K); fast = localStorage.getItem(K); } catch (e) { }
-if (fast == null && (ask || /iPhone|iPad|iPod/.test(navigator.userAgent)
+if (fast == null && (ask || /iP(hone|ad|od)/.test(navigator.userAgent)
 || navigator.platform == "MacIntel" && navigator.maxTouchPoints > 1)) {
 const [go, keep] = await new Promise((ok) => {
-S.innerHTML = "<b style=font-size:1.3em>Make it faster on iPhone?</b><p>iPhones run the console slowly on this connection. "
+S.innerHTML = "<big><b>Make it faster on iPhone?</b></big><p>iPhones run the console slowly on this connection. "
 + "The fast way uses a secure link to your board.<p>Safari will warn that it can't check the board's certificate. "
 + "That's expected for a console on your own Wi-Fi: tap <b>Show Details</b>, then <b>visit this website</b>. "
 + "You only do this once.<p><label><input type=checkbox> Remember my choice</label><br>"
-+ "<button>Make it fast</button><button>Not now</button>";
-const [m, n] = S.querySelectorAll("button"), b = S.querySelector("input");
++ "<button class=p>Make it fast</button><button>Not now</button>";
+const [b, m, n] = S.querySelectorAll("input,button");
 m.onclick = () => ok([1, b.checked]); n.onclick = () => ok([0, b.checked]);
 });
 fast = go;
@@ -148,13 +148,10 @@ if (keep) try { localStorage.setItem(K, go); } catch (e) { }
 }
 if (fast == 1) {
 say("Opening the secure link...");
-for (let i = 0; i < 50; i++) {
-let r = null;
-try { r = await (await fetch("/tls", { method: "POST" })).json(); } catch (e) { }
-if (r && r.tls == 2) { location.href = "https://" + location.hostname + "/"; return; }
-await new Promise((ok) => setTimeout(ok, 300));
+for (let i = 0; i < 50; i++, await wait(300)) {
+try { if ((await (await fetch("/tls", { method: "POST" })).json()).tls == 2) { location.href = "https://" + location.hostname + "/"; return; } } catch (e) { }
 }
-say("The secure link did not open; loading here.");
+say("No secure link; loading here.");
 }
 }
 const want = s.pack, page = s.page;
@@ -177,7 +174,8 @@ for (const [from, fetchIt] of sources) {
 const t = performance.now(), buf = await fetchIt();
 if (!buf) continue;
 say("Checking the console");
-await new Promise((ok) => setTimeout(ok, 30));   // its words paint before the hash holds the page
+// its words paint before the hash holds the page
+await wait(30);
 const t1 = performance.now(), ok = sha256(new Uint8Array(buf)) == want, t2 = performance.now();
 const items = ok && parse(buf, page);
 if (from == "link") handed.back({ kind: "pack", ok: !!items });
@@ -208,8 +206,8 @@ const html = await (await fetch(A["index.html"])).text();
 document.open(); document.write(html); document.close();
 return;
 }
-fail("The browser console could not be loaded (" + why.join("; ") + "). This board keeps no copy of it, "
-+ "so a browser fetches it from os.moybyte.com the first time: connect this one to the internet and reload.");
+fail("The browser console could not be loaded (" + why.join("; ") + "). This board keeps no copy of it: "
++ "connect this browser to the internet and reload, and it comes from os.moybyte.com.");
 })(@MIRRORS@).catch((e) => {
 document.getElementById("s").textContent = "The browser console could not start: " + e;
 });

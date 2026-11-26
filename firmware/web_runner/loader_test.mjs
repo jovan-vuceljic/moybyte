@@ -130,12 +130,11 @@ async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE], si
         set innerHTML(h) {
             this.card = h.replace(/<style>.*<\/style>/, "").replace(/<[^>]*>/g, "");
             const box = this.box = { checked: false };
-            this.btns = [...h.matchAll(/<button>([^<]*)/g)].map((m) => ({ textContent: m[1] }));
+            this.btns = [...h.matchAll(/<button[^>]*>([^<]*)/g)].map((m) => ({ textContent: m[1] }));
             if (!pick) throw new Error("the card asked and the test picks nothing");
             setTimeout(() => { box.checked = pick[1]; this.btns.find((b) => b.textContent == pick[0]).onclick(); }, 0);
         },
-        querySelectorAll() { return this.btns; },
-        querySelector() { return this.box; },
+        querySelectorAll() { return [this.box, ...this.btns]; },
     };
     const no = () => { throw new Error("SecurityError"); };
     const localStorage = store == "throw" ? { getItem: no, setItem: no, removeItem: no } : {
