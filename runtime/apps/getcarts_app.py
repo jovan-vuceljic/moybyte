@@ -110,7 +110,7 @@ import uitree_app
 import app_perms as _perms
 import cart_index as _ci
 import cart_listing as _cl
-from moy_fs import _exists, _read
+import moy_store
 from ticks import _ticks_ms, _ticks_diff
 import pkg as _pkg
 import moy_carts as _store
@@ -1195,7 +1195,7 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
             sha = ref["sha256"]
             if sha in owed or sha in flying:
                 continue
-            if board and (root is None or not _exists("%s/%s/cover.png" % (root, c["folder"]))):
+            if board and (root is None or not moy_store.exists("%s/%s/cover.png" % (root, c["folder"]))):
                 continue
             if not self.thumbs.get(sha):
                 out.append(c)
@@ -1290,13 +1290,13 @@ class GetCartsAppLayer(uitree_app.app_layer("getcarts", "Get Carts", build)):
                 return {"cart": c, "plan": p, "state": c.get("state") or "get",
                         "had": c.get("had"), "runs": _ci.runs_on(c, have), "fit": None}
             folder = "%s/%s" % (root, c["folder"])
-            present = root is not None and _exists(folder)
+            present = root is not None and moy_store.exists(folder)
             entry = rec.get(c["folder"])
             man = None
             if present and (entry is None or entry.get("id") != c["id"]
                             or _ci.is_official(c)):
                 try:
-                    man = json.loads(_read(folder + "/manifest.json"))
+                    man = json.loads(moy_store.read(folder + "/manifest.json"))
                 except (OSError, ValueError):
                     man = None
             return {"cart": c, "plan": p,
