@@ -484,7 +484,8 @@ LAN got there first. So:
    in.
 4. The console in that window makes the SPAKE2+ record
    (`native/moy_net/moy_seal.h`, `moy_sw_claim`) and sends the board the
-   record with the claim (`POST /auth`, `{"op": "claim"}`). The board takes
+   record with the claim (`{"op": "claim"}`, on the board's live socket, or
+   `POST /auth` on a board without one). The board takes
    it once and forgets the claim (`native/moy_net/moy_webauth.c`, THE
    CLAIM): a wrong claim counts with the sign-in's backoff, and a board with
    a password and no claim refuses every claim. A failed claim says why in

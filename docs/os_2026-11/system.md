@@ -410,7 +410,12 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   sealed the same way, each stream with its own counts. A request a page
   asks on its live socket (its request channel) is the same sealed request
   inside the socket's seal, checked by the same sign-in and answered in the
-  same sealed records; the sign-in itself is asked over HTTP only.
+  same sealed records. A board with the live socket signs its page in on
+  it and nowhere else: a socket opened with no session carries the sign-in
+  in the clear and nothing more, and the answer that makes a session seals
+  it under that session (`moy_live.c`, THE SIGN-IN); over HTTP that board
+  refuses the sign-in and every sealed route 410. A board without it (a
+  console) signs in over `POST /auth`.
 - **Sealed routes**: the store's pulls (`GET /carts.json`, `GET
   /files.json`, `GET /apps.json`, `GET /console.json`) and `POST /sync`, `/gpio`, `/term`, `/live`, and
   `/run` and `/update`, which the VM answers and the C seals. All of them read or change a person's work or the firmware, so none

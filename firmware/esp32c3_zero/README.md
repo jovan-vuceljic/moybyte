@@ -127,7 +127,11 @@ chip changes.
   only its statics: its task and its buffers (the page's frames waiting to
   be whole, `MOY_LIVE_IN`, half the XIAO's; one frame down; one radio frame)
   are made when the webhost hands it a page's socket and given back at its
-  end. A request the page asks on the socket (`moy_live.c`, THE REQUESTS)
+  end. The page signs in on the socket and asks every sealed route there
+  alone (`moy_live.c`, THE SIGN-IN and THE REQUESTS; over HTTP they are
+  refused 410), and a socket signing in is the webhost's until it is
+  sealed, its frames in one 1 KB buffer (`moy_webhost.c`, THE SIGN-IN ON
+  THE LIVE SOCKET). A request the page asks on the socket
   is pieced together in a block of its own length, and its answer leaves
   through one of `LIVE_PIECE` bytes (`native/moy_net/moy_webhost.c`), both
   given back once it is answered, as an HTTP request's upload buffer is.
