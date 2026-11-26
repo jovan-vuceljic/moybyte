@@ -995,6 +995,31 @@ def _cells(app, ui_draw):
     return at
 
 
+def test_a_reversed_cell_is_filled_with_its_ink(term):
+    """SGR 7 (vi's selection draws in it) reaches the Terminal's page: the
+    grid says the reversed cells back as `ESC [7m` and the text view fills
+    them with their ink, a reversed blank included, where a plain blank
+    shows the page."""
+    from runtime import ui_draw
+    ws, app = term
+    run(app, "printf 'ab\\033[7m  \\033[0m\\n'")
+    _frame(ws)
+    app.face.take()
+    rows = list(app.face.lines())
+    r = rows.index("ab\x1b[7m  \x1b[0m")
+    at = _cells(app, ui_draw)
+    cv = app._surf.canvas()
+    rgb = cv.to_rgb888()
+
+    def px(cell, dx=0, dy=0):
+        x, y = at[cell]
+        i = ((y + dy) * cv.w + x + dx) * 3
+        return rgb[i:i + 3]
+    rev, plain_ = px((r, 2)), px((r, 5))
+    assert rev != plain_
+    assert px((r, 3), 2, 2) == rev and px((r, 6), 2, 2) == plain_
+
+
 def test_a_mouse_drag_selects_and_ctrl_c_copies_it(tmp_path):
     """A mouse's drag over the log selects its cells, drawn; Ctrl+C over a
     selection copies its text to the console's clipboard (no interrupt),

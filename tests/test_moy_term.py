@@ -114,10 +114,26 @@ def test_rgb_inks_and_grounds_are_the_base_colours_exactly(term):
     assert view(s)[1] == "\x1b[31mred\x1b[0mplain"
 
 
+def test_reverse_video_is_kept_and_said_back(term):
+    """SGR 7 reverses a cell (vi's selection draws in it), 27 and a reset
+    end it. A reversed blank shows -- a selected space, a selected line's
+    break -- so it keeps its place at a line's end and carries its ink, and
+    a line read back and written again leaves the same cells."""
+    s = term(30, 4)
+    s.write("a\x1b[7mb c\x1b[27md \x1b[7m \x1b[0m\n")
+    s.write("\x1b[31;7m  \x1b[0mx\x1b[2;7mdim\x1b[m\n")
+    want = ["a\x1b[7mb c\x1b[27md \x1b[7m \x1b[0m",
+            "\x1b[31m\x1b[7m  \x1b[0mx\x1b[2m\x1b[7mdim\x1b[0m"]
+    assert view(s)[:2] == want
+    t = term(30, 4)
+    t.write("".join(ln + "\n" for ln in want))
+    assert view(t)[:2] == want
+
+
 def test_utf8_tabs_and_unknown_escapes(term):
     s = term(20, 3)
-    s.write("é→".encode("utf-8") + b"\xff|")
-    assert view(s) == ["é→�|"]
+    s.write("é→".encode("utf-8") + b"\xff" + "|\U00070000\U000E0041".encode("utf-8"))
+    assert view(s) == ["é→�|\U00070000�"]     # past U+7FFFF: nothing a font draws
     s.write("\na\tb\x1b[?1049h\x1b(Bc\x1b[?25l")
     assert view(s)[1] == "a       bc" and cursor(s)[2] == 0
     s.write("\x1b[?25h")

@@ -252,17 +252,20 @@ static void sgr(moy_term_t *t) {
     uint32_t fg = MOY_TERM_FG(t->attr);
     uint32_t bg = MOY_TERM_BG(t->attr);
     uint32_t dim = t->attr & MOY_TERM_DIM;
+    uint32_t rev = t->attr & MOY_TERM_REV;
     int np = t->np ? t->np : 1;
     for (int i = 0; i < np; i++) {
         int v = t->par[i];
         if (v == 0) {
             fg = MOY_TERM_INK;
             bg = 0;
-            dim = 0;
+            dim = rev = 0;
         } else if (v == 2) {
             dim = MOY_TERM_DIM;
         } else if (v == 22) {
             dim = 0;
+        } else if (v == 7 || v == 27) {
+            rev = v == 7 ? MOY_TERM_REV : 0;
         } else if (v >= 30 && v <= 37) {
             fg = (uint32_t)(v - 30);
         } else if (v >= 90 && v <= 97) {
@@ -282,7 +285,7 @@ static void sgr(moy_term_t *t) {
             i += used;
         }
     }
-    t->attr = (fg << MOY_TERM_FG_AT) | dim | (bg << MOY_TERM_BG_AT);
+    t->attr = (fg << MOY_TERM_FG_AT) | dim | rev | (bg << MOY_TERM_BG_AT);
 }
 
 static int arg(const moy_term_t *t, int i, int dflt) {
@@ -495,7 +498,7 @@ static void byte(moy_term_t *t, uint8_t c) {
         if ((c & 0xC0) == 0x80) {
             t->u8 = (t->u8 << 6) | (c & 0x3Fu);
             if (--t->u8n == 0) {
-                put(t, t->u8 <= 0xFFFFFu && t->u8 >= 0x80 ? t->u8 : 0xFFFDu);
+                put(t, t->u8 <= MOY_TERM_CP_MAX && t->u8 >= 0x80 ? t->u8 : 0xFFFDu);
             }
             return;
         }
@@ -632,27 +635,34 @@ size_t moy_term_line(const moy_term_t *t, int i, char *out, size_t cap) {
     if (i >= 0 && i < count && i < t->n) {
         const uint32_t *p = held(t, i);
         int end = t->cols;
-        while (end > 0 && MOY_TERM_CP(p[end - 1]) == ' ' && MOY_TERM_BG(p[end - 1]) == 0) {
+        // what a blank shows: its ground, and reversed its ink as a fill
+        const uint32_t ground = 0x1Fu << MOY_TERM_BG_AT, shows = ground | MOY_TERM_REV;
+        while (end > 0 && MOY_TERM_CP(p[end - 1]) == ' ' && (p[end - 1] & shows) == 0) {
             end--;
         }
         uint32_t was = MOY_TERM_INK << MOY_TERM_FG_AT;
         const uint32_t look = (0x3Fu << MOY_TERM_FG_AT) | MOY_TERM_DIM;
-        const uint32_t ground = 0x1Fu << MOY_TERM_BG_AT;
         char b[64];
         for (int x = 0; x < end; x++) {
             size_t m = 0;
             uint32_t c = p[x];
-            if (MOY_TERM_CP(c) != ' ' && (c & look) != (was & look)) {
+            if ((MOY_TERM_CP(c) != ' ' || (c & MOY_TERM_REV)) && (c & look) != (was & look)) {
                 m = ink(c, b);
-                was = (was & ground) | (c & look);
+                was = (was & shows) | (c & look);
                 if (memcmp(b, "\x1b[0m", 4) == 0) {
-                    was &= ~ground;             // a reset takes the ground with it
+                    was &= ~shows;              // a reset takes the ground and reverse with it
                 }
             }
             if ((c & ground) != (was & ground)) {
                 m += MOY_TERM_BG(c) ? moy_term_base_sgr(b + m, 1, (int)MOY_TERM_BG(c) - 1)
                                     : (size_t)snprintf(b + m, 8, "\x1b[49m");
                 was = (was & ~ground) | (c & ground);
+            }
+            if ((c & MOY_TERM_REV) != (was & MOY_TERM_REV)) {
+                size_t r = c & MOY_TERM_REV ? 4 : 5;
+                memcpy(b + m, c & MOY_TERM_REV ? "\x1b[7m" : "\x1b[27m", r);
+                m += r;
+                was ^= MOY_TERM_REV;
             }
             m += moy_utf8_put(MOY_TERM_CP(c), b + m);
             if (k + m + 5 > cap) {
@@ -661,7 +671,7 @@ size_t moy_term_line(const moy_term_t *t, int i, char *out, size_t cap) {
             memcpy(out + k, b, m);
             k += m;
         }
-        if ((was & (look | ground)) != ((MOY_TERM_INK << MOY_TERM_FG_AT) & look) && k + 5 <= cap) {
+        if ((was & (look | shows)) != (MOY_TERM_INK << MOY_TERM_FG_AT) && k + 5 <= cap) {
             memcpy(out + k, "\x1b[0m", 4);
             k += 4;
         }

@@ -218,10 +218,11 @@ serial face's output.
 **The terminal emulation**, a full-screen text app's surface: the app
 writes an ANSI/VT100 subset to its stdout and reads keys from stdin, as on
 any Unix; the C shell's emulator keeps the cell grid (`moy_term.h` lists the
-subset it reads: cursor motion, erase, SGR inks and grounds, scrolling and
-wrap), and the screen face draws that grid through `ui.text_view`, whose
-ANSI inks are the theme's tones and whose RGB inks and grounds are the
-nearest of the sixteen base colours, exactly; the half and whole blocks
+subset it reads: cursor motion, erase, SGR inks, grounds and reverse video,
+scrolling and wrap), and the screen face draws that grid through
+`ui.text_view`, whose ANSI inks are the theme's tones and whose RGB inks and
+grounds are the nearest of the sixteen base colours, exactly, a reversed
+cell filled with its ink (vi's visual selection); the half and whole blocks
 (▀ ▄ █) are fills, so a program draws pixel art two pixels a cell, as
 `neofetch` draws Moy. The shell's own colours are base colours as RGB, on
 every face and board (`moy_term_base_sgr`; the typed line and a text app's
