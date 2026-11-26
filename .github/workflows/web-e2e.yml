@@ -101,6 +101,9 @@ name: Web console E2E
 #                                  up over Improv, opens it, and the board
 #                                  takes its first password by its claim;
 #                                  a console added by hand by its address.
+#   tests/test_web_pointer_e2e.py  the page's CSS cursor is the console's
+#                                  pointer family, drawn from its own pixels,
+#                                  with the shape's keyword behind it.
 #
 # Every suite gated on MOYBYTE_WEB_E2E is named in the drive step below
 # (tests/test_preflight_web_filter.py), which is how first_run and
@@ -319,7 +322,7 @@ jobs:
             tests/test_web_page_rows_e2e.py tests/test_web_zero_wifi_e2e.py \
             tests/test_web_live_dev_e2e.py \
             tests/test_web_load_progress_e2e.py \
-            tests/test_web_site_embed_e2e.py \
+            tests/test_web_site_embed_e2e.py tests/test_web_pointer_e2e.py \
             tests/test_web_fonts.py tests/test_web_look_parity.py \
             tests/test_editor_ladder_icons.py
 
