@@ -1125,6 +1125,7 @@ h1 em{font-style:normal;color:var(--accent)}
 .btn{display:inline-block;padding:9px 16px;border:1px solid var(--line);
   background:var(--surface);color:var(--ink);text-decoration:none;font-size:15px}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:var(--pri-ink);font-weight:600}
 .btn.pri:hover{filter:brightness(1.08);color:var(--pri-ink)}
 /* --- the mascot ------------------------------------------------------------ */
@@ -1160,6 +1161,7 @@ button.btn:disabled{opacity:.45;cursor:default;filter:none}
 .field{font:15px var(--sans);color:var(--ink);background:var(--surface);
   border:1px solid var(--field);border-radius:0;padding:8px 10px;min-width:0}
 .field:focus-visible{outline:2px solid var(--accent);outline-offset:-1px}
+div.setup > .btn{margin:12px 12px 0 0;font-size:14px;padding:7px 13px}
 form.setup{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0}
 form.setup .note{flex:1 0 100%%;margin:0;font-size:14px;color:var(--muted)}
 form.setup .field{flex:1 1 12rem}

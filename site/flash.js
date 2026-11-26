@@ -299,7 +299,7 @@ class Card {
     const box = document.createElement("div");
     box.className = "setup";
     const go = document.createElement("button");
-    go.className = "go";
+    go.className = "btn pri go";
     go.textContent = "Connect it to Wi-Fi";
     box.append(go);
     this.el.append(box);
@@ -316,7 +316,7 @@ class Card {
               if (link) { const a = document.createElement("a"); a.href = link; a.target = "_blank"; a.textContent = link; said.append(a); }
             } });
             const open = document.createElement("button");
-            open.className = "go";
+            open.className = "btn pri go";
             open.textContent = "Open " + c.name;
             open.onclick = () => self.moyLink.open(c, secret);
             const mine = document.createElement("a");
