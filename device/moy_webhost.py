@@ -300,23 +300,40 @@ class ConsoleSystem:
 class StoreSystem:
     """The system root of a host with no console (a Zero): the Settings and
     badges a page sends, kept in the store's `system/settings` beside the
-    carts and pulled back by the next page, applied to nothing."""
+    carts and pulled back by the next page, applied to nothing.
+
+    The file is the record and no rows outlive a request: each pull and
+    batch reads it into rows of its own and frees them before it answers.
+    Rows a host kept would be blocks made mid-session and remade as a page
+    changes them, which on a board with one small heap (the C3) are the
+    islands that split its free RAM."""
 
     def __init__(self, carts_root):
-        import moy_carts
-        import moy_spine
         self.carts_root = carts_root
-        self.rows = moy_spine.Settings(
-            lambda text: moy_carts.save_system(text, carts_root) or True)
-        self.rows.adopt(moy_carts.load_system(carts_root))
         self._rx = moy_sync.SystemReceiver()
 
+    def _rows(self):
+        import moy_carts
+        import moy_spine
+        root = self.carts_root
+        rows = moy_spine.Settings(lambda text: moy_carts.save_system(text, root) or True)
+        rows.adopt(moy_carts.load_system(root))
+        return rows
+
     def pull(self):
-        return moy_sync.system_pull(self.rows)
+        rows = self._rows()
+        try:
+            return moy_sync.system_pull(rows)
+        finally:
+            rows.__del__()
 
     def apply(self, ops):
         """(applied, [(index, reason)]) of one batch's ops."""
-        applied, errors, _changed = self._rx.apply(ops, self.rows, self.carts_root)
+        rows = self._rows()
+        try:
+            applied, errors, _changed = self._rx.apply(ops, rows, self.carts_root)
+        finally:
+            rows.__del__()
         return applied, errors
 
 

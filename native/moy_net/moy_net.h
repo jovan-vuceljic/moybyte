@@ -263,6 +263,7 @@ typedef struct {
     char *shelf;                    // NULL: the folders are not noted
     size_t shelf_cap;
     const char *apps;               // NULL: no apps root
+    int spend;                      // the batch's bytes are the caller's to overwrite
 } moy_sync_store_t;
 
 typedef struct {
@@ -288,6 +289,14 @@ int moy_sync_path(const char *p, size_t n, int history);
 // Apply the ops array at [ops, ops_end) into `root` of `s`, one op at a time:
 // a bad op is refused with its reason and never aborts the batch. A system
 // root has no store here: each of its ops is refused "no such store".
+// With `spend` an op's text is decoded where it lies in the batch (a decoded
+// string and a decoded base64 are never longer than their source), so a part
+// costs its request's buffer and no second block; without, in a block of the
+// store's, and the batch is left as it came.
+// A batch whose writes its store's volume has no room for (moy_vol_room, less
+// MOY_SYNC_ROOM_KEEP) is refused whole before any of it is written, each
+// writing op with "OSError: [Errno 28]"; its removals still apply.
+#define MOY_SYNC_ROOM_KEEP (16u * 1024u)
 void moy_sync_apply(const moy_sync_store_t *s, int root, const char *ops,
                     const char *ops_end, moy_sync_result_t *res);
 

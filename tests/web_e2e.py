@@ -439,3 +439,22 @@ def menu_pick(text, enter=True):
     if enter:
         steps.append({"key": "Enter"})
     return steps
+
+
+def settings_row(key, enter=True):
+    """Steps that walk Settings' focus down to the row whose key is `key`
+    (the state's `settings.focus`: a row's own key, `update_online`), a key
+    a few frames apart, and, with `enter`, choose it. A js step's value is
+    "ROW <the focused key>"."""
+    walk = ("(function () { return new Promise(function (ok) { (function step(k) { "
+            "window.__moyState().then(function (s) { var f = (s.settings || {}).focus; "
+            "if (f == %s || k > 40) return ok('ROW ' + JSON.stringify(f)); "
+            "send({type: 'kd', code: 275, mods: 0}); setTimeout(function () { "
+            "send({type: 'ku', code: 275, mods: 0}); setTimeout(function () { step(k + 1); }, 150); "
+            "}, 120); }); })(0); }); })()" % json.dumps(key))
+    steps = [{"waitFor": "window.__moyState().then(s => s.stack.includes('settings'))",
+              "timeout": 10000}, {"wait": 600}, {"js": walk}, {"wait": 400}]
+    if enter:
+        steps.append({"key": "Enter"})
+    return steps
+

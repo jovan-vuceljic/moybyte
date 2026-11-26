@@ -94,6 +94,14 @@ CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="../../../../boards/MOYBYTE_C3_ZER
 # carry a frame up are made per frame.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
 
+# A CLOSED CONNECTION'S BLOCK GOES BACK IN SECONDS: lwIP keeps a closed TCP
+# connection's control block (208 bytes of this one heap) for twice the
+# maximum segment lifetime, two minutes at ESP-IDF's 60 s. A page's visit
+# closes a dozen, each made while that visit's larger buffers were live, so
+# for those two minutes they sat in the middle of the heap's free run. 5 s
+# is far past any segment's life on the networks this board serves.
+CONFIG_LWIP_TCP_MSL=5000
+
 # SYSTEM TASK STACKS: esp_timer's, FreeRTOS's timer service's, the idle
 # task's and mDNS's, each sized to its high-water mark under #276's session
 # with at least three quarters of a KB over it, and more than twice it (#276

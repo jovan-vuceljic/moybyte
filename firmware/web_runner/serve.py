@@ -284,6 +284,14 @@ class Static(http.server.SimpleHTTPRequestHandler):
         if not serve_pack(self, self.path.split("?", 1)[0]):
             super().do_GET()
 
+    def end_headers(self):
+        # A rebuilt dist is served at the same names: a browser that kept a
+        # file by its own heuristic would pair an old wasm with a new worker.
+        if not self._headers_buffer or b"Cache-Control" not in b"".join(
+                self._headers_buffer):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def send_head(self):
         path = self.translate_path(self.path)
         gz = path + ".gz"

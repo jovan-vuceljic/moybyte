@@ -46,6 +46,9 @@
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifndef MOY_ON_BOARD
+#include <sys/statvfs.h>            // a board's libc has none
+#endif
 #endif
 
 // -- the store's lock (moy_vol.h, THE STORE'S LOCK) ------------------------------
@@ -1310,6 +1313,42 @@ int moy_vol_remove(const moy_vol_t *v, const char *path) {
     int rc = vol_remove(v, path);
     moy_store_unlock();
     return changed(rc);
+}
+
+int moy_vol_room(const moy_vol_t *v, const char *dir, uint64_t *bytes) {
+    (void)dir;
+    int rc = MOY_ENODEV;
+    moy_store_lock();
+    switch (v->kind) {
+        #if MOY_VOL_LFS2
+        case MOY_VOL_KIND_LFS2: {
+            lfs2_t *l = v->fs;
+            lfs2_ssize_t used = lfs2_fs_size(l);
+            rc = lfs_err((int)used);
+            if (used >= 0) {
+                lfs2_size_t count = l->cfg->block_count;
+                *bytes = (lfs2_size_t)used < count
+                         ? (uint64_t)(count - (lfs2_size_t)used) * l->cfg->block_size : 0;
+            }
+            break;
+        }
+        #endif
+        #if MOY_VOL_POSIX && !defined(MOY_ON_BOARD)
+        case MOY_VOL_KIND_POSIX: {
+            struct statvfs sv;
+            errno = 0;
+            rc = statvfs(dir, &sv) == 0 ? 0 : px_err();
+            if (rc == 0) {
+                *bytes = (uint64_t)sv.f_bavail * sv.f_frsize;
+            }
+            break;
+        }
+        #endif
+        default:
+            break;
+    }
+    moy_store_unlock();
+    return rc;
 }
 
 int moy_vol_rename(const moy_vol_t *v, const char *src, const char *dst) {

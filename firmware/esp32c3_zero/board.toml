@@ -237,7 +237,7 @@ why = "the in-package flash and its VDD_SPI"
 # moy_ota.h's THE POOL, tools/board_config.py NET_PARAMS). A kept TLS session
 # holds its context, its keys and its socket in the one internal heap this
 # chip has, beside WiFi's buffers, an SSH session and an upload's buffer
-# (mpconfigboard.h's MOYBYTE_GC_SPLIT_RESERVE), and an install here is a few
+# (mpconfigboard.h's THE PYTHON HEAP), and an install here is a few
 # fetches.
 http_pool = 0
 

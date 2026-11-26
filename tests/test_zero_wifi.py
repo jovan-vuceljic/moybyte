@@ -158,6 +158,30 @@ def test_a_scan_is_asked_and_polled_never_waited(tmp_path, clock):
     assert radio.scans == 1 and not w.busy()
 
 
+def test_a_scan_keeps_the_strongest_and_the_saved_and_gives_them_back(tmp_path, clock):
+    """What a scan leaves in the board's heap is bounded, and goes when the
+    panel's asks stop (zero_host, THE HEAP'S SHAPE)."""
+    w, radio, _ = _board(tmp_path, clock, saved=((HOME, "homepw"), (RPT, "rptpw")))
+    radio.nets = dict(("street %02d" % i, ("pw", -40 - i)) for i in range(30))
+    radio.nets.update({HOME: ("homepw", -85), RPT: ("rptpw", -90)})
+    w.request({"action": "scan"})
+    _run(w, clock, 600)
+    doc = json.loads(w.answer())
+    names = [n[0] for n in doc["nets"]]
+    assert names[:zero_wifi.NETS_KEPT] == ["street %02d" % i for i in range(zero_wifi.NETS_KEPT)]
+    assert sorted(names[zero_wifi.NETS_KEPT:]) == sorted([HOME, RPT])    # saved, in range
+    assert doc["signal"] == 30                      # the joined network's, as heard
+    clock.ms += zero_wifi.NETS_HOLD_MS - 100
+    assert not w.busy() and w.nets                  # the panel may still ask
+    w.answer()
+    clock.ms += zero_wifi.NETS_HOLD_MS - 100
+    assert not w.busy() and w.nets                  # ...and each ask holds it
+    clock.ms += 200
+    assert not w.busy() and w.nets == []
+    doc = json.loads(w.answer())
+    assert doc["nets"] == [] and doc["signal"] == 30 and doc["scan_id"] == 1
+
+
 def test_saving_and_forgetting_leave_the_network_alone(tmp_path, clock):
     w, radio, store = _board(tmp_path, clock)
     assert w.request({"action": "add", "ssid": RPT, "password": "rptpw"}) == (True, "saved")

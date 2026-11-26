@@ -190,12 +190,12 @@ def _teapot_sized(entry):
             "note": "the runtime the modules are keyed for; a board built for another refuses them"}
 
 
-def _repo():
+def _repo(base=BASE):
     """A release-sized index as moybyte-org/carts writes it (indented): the
     cart installed, a compiled one with two chips' modules and a 40 KB file
     whose entry is as large as Jet Teapot's, among enough others to make the
     index as large as the C3's release index."""
-    repo = Repo(BASE)
+    repo = Repo(base)
     repo.add("target", name="Target", extra={"level.bin": os.urandom(40000)})
     _teapot_sized(repo.carts[-1])
     n = 0

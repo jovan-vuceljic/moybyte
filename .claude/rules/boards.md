@@ -477,9 +477,13 @@ stages 1–6 all absent. Its README is the authority; what bites:
   hides costs this one internal SRAM, and a new resident task or buffer on a
   Zero is measured there before it ships: SSH fits only with its stacks,
   arena and receive window sized for it, SFTP refused, the webhost's upload buffer made per
-  request and the Python heap's ceiling kept clear of both (the README's SSH
-  paragraph). A block that lives for good is made at start, beside the
-  others: one made mid-session splits the free heap for good. One factory
+  request and the Python heap one block of 64 KB that never grows (the
+  README's SSH and No PSRAM paragraphs). A block that lives for good is made
+  at start, beside the others: one made mid-session splits the free heap for
+  good, in the C side's heap and in Python's alike. A module a running host
+  imports goes in `zero_host.LASTING`, and `tests/test_zero_heap.py` fails a
+  staged module that is in neither it nor the test's reasoned list, and
+  plays a page's session at the host's twin in the heap this board has. One factory
   slot and no OTA (owner, 2026-11-17): a new image goes on by cable, and the
   website's card offers the install and the app image as its update. Its
   browser console is ONLINE (owner, 2026-11-23, board.toml's `[web]
