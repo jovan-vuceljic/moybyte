@@ -23,6 +23,8 @@
 // MOY_TTY_PAGE="<body hex> <whole hex>" names a browser console's pack, as
 // an image does (GET /sync's digests, moy_page.h).
 // FILES_DIR, when given, is the webhost's files root (/files.json, /media).
+// MOY_TTY_DEFER is the webhost's `defer`, comma-separated: the routes the VM answers, which
+// this console answers itself, 200 {"m":..., "t":..., "n":<body length>}.
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
 #include <fcntl.h>
@@ -150,7 +152,12 @@ static void *console(void *arg) {
     cfg.carts = s_carts;
     cfg.files = s_files;
     cfg.system = s_system;
-    cfg.defer = "";
+    static char defer[128];             // the list's names NUL-separated, an empty one last
+    snprintf(defer, sizeof defer - 1, "%s", getenv("MOY_TTY_DEFER") ? getenv("MOY_TTY_DEFER") : "");
+    for (char *c = defer; *c; c++) {
+        *c = *c == ',' ? '\0' : *c;
+    }
+    cfg.defer = defer;
     if (moy_web_start(&cfg) != 0) {
         perror("listen");
         exit(1);
@@ -160,6 +167,17 @@ static void *console(void *arg) {
     fflush(stdout);
     for (;;) {
         moy_web_poll();
+        const char *m, *t, *b;
+        size_t mn, tn, bn;
+        if (moy_web_take(&m, &mn, &t, &tn, &b, &bn)) {
+            const char *q = memchr(t, '?', tn);
+            char resp[512];
+            int n = snprintf(resp, sizeof resp,
+                             "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
+                             "{\"m\":\"%.*s\",\"t\":\"%.*s\",\"n\":%u}", (int)mn, m,
+                             (int)(q ? (size_t)(q - t) : tn), t, (unsigned)bn);
+            moy_web_answer(resp, (size_t)n);
+        }
         moy_tty_tail();
         int cmd = __atomic_exchange_n(&s_cmd, 0, __ATOMIC_ACQ_REL);
         if (cmd == 1) {
@@ -288,9 +306,9 @@ int main(int argc, char **argv) {
             lv_last = lv;
             printf("LIVE sessions=%u busy=%u up=%u down=%u air_out=%u air_in=%u refused=%u "
                    "echoes=%u live=%u radio=%u devs=%u dev_calls=%u dev_writes=%u "
-                   "dev_pushes=%u hints=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
+                   "dev_pushes=%u hints=%u reqs=%u\n", lv.sessions, lv.busy, lv.up, lv.down,
                    lv.air_out, lv.air_in, lv.refused, lv.echoes, lv.live, lv.radio, lv.devs,
-                   lv.dev_calls, lv.dev_writes, lv.dev_pushes, lv.hints);
+                   lv.dev_calls, lv.dev_writes, lv.dev_pushes, lv.hints, lv.reqs);
             fflush(stdout);
         }
 #endif

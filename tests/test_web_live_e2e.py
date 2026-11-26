@@ -270,7 +270,9 @@ def test_a_store_change_another_page_made_reaches_the_page_at_once(
         live_exe, tmp_path, monkeypatch):
     """The board says on the live socket that its store changed under the
     page (native/moy_net/moy_live.c, THE HINTS: another page's sync here),
-    and the page pulls it at once: the new cart is on its shelf."""
+    and the page pulls it at once: the new cart is on its shelf. The page's
+    requests ride the socket (THE REQUESTS): its boot's pulls, and the pull
+    the hint asks for."""
     import test_live_hints as H
     import test_live_link as L
     import test_web_term_e2e as W
@@ -293,7 +295,7 @@ def test_a_store_change_another_page_made_reaches_the_page_at_once(
     t = threading.Thread(target=other, daemon=True)
     t.start()
     st = ("window.__moyState().then(s => '%s ' + JSON.stringify({hints: s.hints, "
-          "opens: s.live && s.live.opens}))")
+          "opens: s.live && s.live.opens, reqs: s.live && s.live.reqs}))")
     try:
         steps = [{"waitFor": "window.__moyState().then(s => s.live && s.live.opens >= 1)",
                   "timeout": 60000},
@@ -314,6 +316,7 @@ def test_a_store_change_another_page_made_reaches_the_page_at_once(
         assert synced, "the other page never synced" + why
         assert before["hints"]["pulls"] == 0, why
         assert after["hints"]["s"] >= 1 and after["hints"]["pulls"] >= 1, why
+        assert before["reqs"] >= 3 and after["reqs"] > before["reqs"], why
         assert any(n.startswith("pushed") for n in W._tagged(js, "CARTS")), why
     finally:
         server.terminate()

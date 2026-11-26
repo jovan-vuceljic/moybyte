@@ -496,7 +496,10 @@ the page another Zero serves, on this board's radio (`docs/netplay_v1.md`
 section 5). The page runs the cart and the match; this board runs no game.
 It keeps one sealed WebSocket from the page (`GET /live`, the live socket of
 #256, `native/moy_net/moy_live.h`), served on a task of its own, and moves
-the link channel's frames between it and its ESP-NOW unchanged.
+the link channel's frames between it and its ESP-NOW unchanged. The page's
+sealed requests ride that socket too (`native/moy_net/moy_live.c`, THE
+REQUESTS), answered by the webhost's routes in its poll, so an open page is
+one connection to this board.
 
 - **The radio is up while the page holds it**: a match's run brings it up
   over the station and its end, or the socket's, takes it down. The station

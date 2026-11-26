@@ -408,7 +408,10 @@ host's and the wasm's the same release vendored (`native/moy_net/mbedtls/README.
   Terminal's WebSocket frames are sealed each way, counted from 0, and a frame
   that does not open closes the socket 1008 "seal"; the live socket's
   (`GET /live`, subprotocol `moy.live`, `native/moy_net/moy_live.h`) are
-  sealed the same way, each stream with its own counts.
+  sealed the same way, each stream with its own counts. A request a page
+  asks on its live socket (its request channel) is the same sealed request
+  inside the socket's seal, checked by the same sign-in and answered in the
+  same sealed records; the sign-in itself is asked over HTTP only.
 - **Sealed routes**: the store's pulls (`GET /carts.json`, `GET
   /files.json`, `GET /apps.json`, `GET /console.json`) and `POST /sync`, `/gpio`, `/term`, `/live`, and
   `/run` and `/update`, which the VM answers and the C seals. All of them read or change a person's work or the firmware, so none

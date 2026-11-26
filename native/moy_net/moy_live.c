@@ -10,9 +10,9 @@
 //   'c'  the socket's own. 'b' a beat, either way, once a MOY_LIVE_BEAT_MS
 //        that carried nothing else; 'e' + bytes up, answered at once with
 //        'E' + the same bytes (the page's round trip to its board); 'H' +
-//        letters down, a HINT: what the page reads over HTTP changed on the
-//        board, so it asks now and asks no other way while the socket is
-//        open (THE HINTS, below).
+//        letters down, a HINT: what the page reads from the webhost's routes
+//        changed on the board, so it asks now and asks no other way while
+//        the socket is open (THE HINTS, below).
 //   'n'  the radio link, where the board relays its radio
 //        (moy_web_live_link; below).
 //   'd'  the device channel: the handles of the kinds this board relays
@@ -20,6 +20,8 @@
 //   't'  the web terminal, a face of the board's shell
 //        (native/moy_tty/moy_tty_live.c has its messages), where the image
 //        has the face: this board then serves no GET /term.
+//   'r'  the requests: the webhost's routes asked on the socket (THE
+//        REQUESTS, below).
 //   Any other byte is a channel this board does not serve, and its frame is
 //   dropped: a page newer than its board loses that channel and nothing else.
 //
@@ -71,6 +73,37 @@
 //
 // Reads, gets and xfers never cross: the page answers a read from the
 // records, a get from the last record read or the last 'G', and an xfer BAD.
+//
+// THE REQUESTS. A request the page would send the webhost over HTTP goes
+// on the socket instead, sealed as over HTTP (its session, sequence number
+// and tag on the target, its body AES-GCM; moy_seal.h), so the webhost's
+// sign-in check and routes take it as they take one off a connection, and
+// its answer is the same sealed records: the socket's own seal is around
+// them, never instead of them. Up from the page, in pieces no longer than
+// the probe's "req":
+//
+//   'Q' id(2) len(4) bytes    a request's first piece: `len` bytes in all,
+//                             "METHOD TARGET\n" and its body
+//   'B' id(2) bytes           its next pieces, in order
+//
+// and down to it, from the webhost's poll (moy_webhost.c), whose answer
+// goes on the socket as it is written, never whole in either heap, each
+// frame a full segment where the answer has the bytes:
+//
+//   'A' id(2) status(2) n(1) ctype(n) bytes   the answer's head (its
+//                                     status, its type) and its body's
+//                                     first bytes
+//   'D' id(2) bytes                   its body's next, in order (a chunked
+//                                     answer's chunks without their framing)
+//   'Z' id(2) bytes                   its body's last, and its end
+//   'W' id(2) status(2) n(1) ctype(n) bytes   a whole answer in one frame
+//
+// One request is asked at a time: the page sends the next once the last's
+// 'Z' came. A request whose pieces do not add up, that is longer than
+// MOY_HTTP_REQ_MAX, that finds one still waiting for the webhost or no
+// memory is answered 'W' 503 at once. A request still waiting when
+// the socket ends goes with it, and the answer to one the webhost took
+// goes nowhere (moy_live_req_say: the socket of its session is gone).
 //
 // Nothing waits on the radio or the page: the bridge's task (one a page's
 // socket, made with its buffers when the webhost hands the socket over and
@@ -141,7 +174,8 @@ typedef struct {
 
 typedef struct {
     volatile int fd;                    // the socket served, or -1
-    int ws;                             // ...as the bridge's task sends on it
+    int ws;                             // ...as the bridge's task sends on it, -1 at its end
+    uint32_t gen;                       // the session's, counting sockets taken
     moy_wa_seal_t seal;
     uint32_t up_i, down_i;              // the next frame's index each way
     volatile int cut;                   // 1: the session ended, 2: another one took it
@@ -149,10 +183,38 @@ typedef struct {
     uint32_t said;                      // ...and of the board's
     int radio;                          // the radio up for the page
     bufs_t *b;
+    moy_live_req_t *rq;                 // the request being pieced together (the task's)
+    uint32_t rq_want;                   // ...its length when whole
+    moy_live_req_t *handed;             // ...and the one waiting for the webhost
     moy_live_stats_t stats;
 } live_t;
 
-static live_t S = {.fd = -1};
+static live_t S = {.fd = -1, .ws = -1};
+
+// THE SEND LOCK: the bridge's task and the webhost's poll (a request's
+// answer) both send on the socket, each frame sealed under the next index
+// down, so the seal and the send are one step under it; lwIP takes a send
+// on one task while another reads (LWIP_NETCONN_FULLDUPLEX). Its storage is
+// static, made at the first socket.
+#ifdef ESP_PLATFORM
+#include "freertos/semphr.h"
+static StaticSemaphore_t s_lock_mem;
+static SemaphoreHandle_t s_lock;
+static void lock(void) {
+    xSemaphoreTake(s_lock, portMAX_DELAY);
+}
+static void unlock(void) {
+    xSemaphoreGive(s_lock);
+}
+#else
+static pthread_mutex_t s_lock = PTHREAD_MUTEX_INITIALIZER;
+static void lock(void) {
+    pthread_mutex_lock(&s_lock);
+}
+static void unlock(void) {
+    pthread_mutex_unlock(&s_lock);
+}
+#endif
 
 // The device channel (moy_live_dev.c), on a board that can relay
 // (moy_dev_kinds.h's MOY_DEV_RELAYS): named strongly there, which is what
@@ -183,10 +245,27 @@ int moy_web_live_link(uint8_t mac[6]) {
     return 1;
 }
 
-// The plaintext at L->b->out + MOY_WS_HEAD, `n` bytes, sealed and sent: 0, or
-// -1 when the socket failed.
-static int say(int ws, size_t n) {
-    uint8_t *d = (uint8_t *)L->b->out + MOY_WS_HEAD;
+// Whether the socket's send buffer has room for a whole frame, waiting for
+// it as a send would: each segment lwIP sends holds a whole MSS of the heap
+// until the page acks it (LWIP_NETIF_TX_SINGLE_PBUF), and a frame written
+// into what one ack freed goes as several near-empty segments, so a frame
+// is written only once select() says the socket is writable (lwIP's
+// TCP_SNDLOWAT: more than two MSS free).
+static int room(int ws) {
+    fd_set w;
+    FD_ZERO(&w);
+    FD_SET(ws, &w);
+    struct timeval tv = {MOY_LIVE_SEND_MS / 1000, (MOY_LIVE_SEND_MS % 1000) * 1000};
+    return select(ws + 1, NULL, &w, NULL, &tv) > 0 ? 0 : -1;
+}
+
+// The plaintext at `d`, `n` bytes (MOY_WS_HEAD free before it, MOY_SEAL_TAG
+// after), sealed and sent on `ws` under the send lock, which the caller
+// holds: 0, or -1 when the socket failed.
+static int send_locked(int ws, uint8_t *d, size_t n) {
+    if (room(ws) < 0) {
+        return -1;
+    }
     if (L->seal.on) {
         if (moy_seal_ws(1, L->seal.kb, MOY_SEAL_DOWN, L->down_i++, L->seal.seq, d, n, d + n)
             != MOY_SEAL_OK) {
@@ -196,7 +275,24 @@ static int say(int ws, size_t n) {
     }
     L->stats.down++;
     L->said = moy_net_ms();
-    return moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, L->b->out);
+    return moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, (char *)d - MOY_WS_HEAD);
+}
+
+// The plaintext at L->b->out + MOY_WS_HEAD, `n` bytes, sealed and sent: 0, or
+// -1 when the socket failed.
+static int say(int ws, size_t n) {
+    lock();
+    int r = send_locked(ws, (uint8_t *)L->b->out + MOY_WS_HEAD, n);
+    unlock();
+    return r;
+}
+
+int moy_live_req_say(uint32_t gen, uint8_t *p, size_t n) {
+    lock();
+    int ws = L->ws;
+    int r = ws >= 0 && L->gen == gen ? send_locked(ws, p, n) : -1;
+    unlock();
+    return r;
 }
 
 uint8_t *moy_live_out(size_t *cap) {
@@ -268,6 +364,85 @@ static void sends(const uint8_t *p, size_t n) {
     }
 }
 
+// THE REQUESTS (above): 'A' 503 and 'Z' for request `id`.
+static int refuse(int ws, const uint8_t id[2]) {
+    static const char ctype[] = "application/json";
+    uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
+    o[0] = 'r';
+    o[1] = 'W';
+    o[2] = id[0];
+    o[3] = id[1];
+    o[4] = 503 & 0xff;
+    o[5] = 503 >> 8;
+    o[6] = sizeof ctype - 1;
+    memcpy(o + 7, ctype, sizeof ctype - 1);
+    return say(ws, 7 + sizeof ctype - 1);
+}
+
+static void rq_drop(void) {
+    moy_net_free(L->rq);
+    L->rq = NULL;
+}
+
+// A request's piece: 'Q' or 'B', p[0, n) past the channel's byte.
+static int request(int ws, const uint8_t *p, size_t n) {
+    if (n < 3) {
+        return 0;
+    }
+    const uint8_t *id = p + 1;
+    uint16_t want = (uint16_t)(id[0] | id[1] << 8);
+    if (p[0] == 'Q') {
+        if (n < 7) {
+            return 0;
+        }
+        uint32_t len = (uint32_t)p[3] | (uint32_t)p[4] << 8 | (uint32_t)p[5] << 16
+                       | (uint32_t)p[6] << 24;
+        rq_drop();
+        if (len == 0 || len > MOY_HTTP_REQ_MAX
+            || __atomic_load_n(&L->handed, __ATOMIC_ACQUIRE) != NULL
+            || (L->rq = moy_net_alloc(sizeof *L->rq + len + 1u)) == NULL) {
+            return refuse(ws, id);
+        }
+        L->rq->len = 0;
+        L->rq->id = want;
+        L->rq_want = len;
+        p += 7;
+        n -= 7;
+    } else if (p[0] == 'B') {
+        if (L->rq == NULL || L->rq->id != want) {
+            return 0;
+        }
+        p += 3;
+        n -= 3;
+    } else {
+        return 0;
+    }
+    moy_live_req_t *q = L->rq;
+    if (n > L->rq_want - q->len) {
+        rq_drop();
+        return refuse(ws, id);
+    }
+    memcpy(q->data + q->len, p, n);
+    q->len += (uint32_t)n;
+    if (q->len < L->rq_want) {
+        return 0;
+    }
+    q->data[q->len] = 0;
+    q->gen = L->gen;
+    L->rq = NULL;
+    L->stats.reqs++;
+    __atomic_store_n(&L->handed, q, __ATOMIC_RELEASE);
+    return 0;
+}
+
+size_t moy_web_live_req(void) {
+    return IN_CAP - 8u - MOY_SEAL_TAG;  // a page's frame head is 8 bytes, masked
+}
+
+moy_live_req_t *moy_live_req_take(void) {
+    return __atomic_exchange_n(&L->handed, NULL, __ATOMIC_ACQ_REL);
+}
+
 // One plaintext from the page: -1 when the socket must end.
 static int message(int ws, uint8_t *p, size_t n) {
     if (n < 2) {
@@ -289,6 +464,9 @@ static int message(int ws, uint8_t *p, size_t n) {
     }
     if (p[0] == 't') {
         return moy_live_term_message != NULL ? moy_live_term_message(p, n) : 0;
+    }
+    if (p[0] == 'r') {
+        return request(ws, p + 1, n - 1);
     }
     if (p[0] != 'n') {
         return 0;
@@ -394,9 +572,10 @@ static int beat(int ws) {
     return say(ws, 2);
 }
 
-// THE HINTS. What the page reads over HTTP (the store, a Zero's Wi-Fi, its
-// update, its official carts) stays there; the socket says when it changed,
-// one letter a topic, so the page asks then instead of on a clock:
+// THE HINTS. What the page reads from the webhost's routes (the store, a
+// Zero's Wi-Fi, its update, its official carts) is asked, never pushed; the
+// socket says when it changed, one letter a topic, so the page asks then
+// instead of on a clock:
 //
 //   's'  the store: the volumes took a change (moy_vol_changes) the page did
 //        not make itself, an SSH session's, a shell's, another page's sync
@@ -537,6 +716,8 @@ static void serve(int ws) {
     setsockopt(ws, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
     pump(ws);
     radio_down();
+    rq_drop();
+    moy_net_free(moy_live_req_take());
     if (DEV_HAS(moy_live_dev_end)) {
         moy_live_dev_end();
     }
@@ -552,8 +733,11 @@ static void bridge(void) {
     L->stats.sessions++;
     L->stats.live = 1;
     serve(ws);
+    lock();
+    L->ws = -1;
     shutdown(ws, SHUT_WR);
     close(ws);
+    unlock();
     L->stats.live = 0;
     moy_net_free(L->b);
     L->b = NULL;
@@ -589,7 +773,13 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal) {
     } else {
         memset(&L->seal, 0, sizeof L->seal);
     }
+#ifdef ESP_PLATFORM
+    if (s_lock == NULL) {
+        s_lock = xSemaphoreCreateMutexStatic(&s_lock_mem);
+    }
+#endif
     L->up_i = L->down_i = 0;
+    L->gen++;
     L->cut = 0;
     L->heard = L->said = moy_net_ms();
     if (moy_live_term_take != NULL) {

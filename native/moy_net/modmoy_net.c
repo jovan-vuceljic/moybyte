@@ -412,21 +412,21 @@ MP_DEFINE_CONST_OBJ_TYPE(moy_net_link_type, MP_QSTR_Link, MP_TYPE_FLAG_NONE,
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
 #include "moy_live.h"
 // live_stats() -> (sessions, busy, up, down, air_out, air_in, refused,
-// echoes, live, radio, devs, dev_calls, dev_writes, dev_pushes, hints): the
+// echoes, live, radio, devs, dev_calls, dev_writes, dev_pushes, hints, reqs): the
 // live socket's figures (moy_live.h), which a
 // Zero's `mem` and its bench read. The name is also what links the bridge
 // into the image: the webhost reaches it weakly.
 static mp_obj_t mod_live_stats(void) {
     moy_live_stats_t l;
     moy_live_stats(&l);
-    uint32_t v[15] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
+    uint32_t v[16] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
                       l.echoes, l.live, l.radio, l.devs, l.dev_calls, l.dev_writes,
-                      l.dev_pushes, l.hints};
-    mp_obj_t t[15];
-    for (int i = 0; i < 15; i++) {
+                      l.dev_pushes, l.hints, l.reqs};
+    mp_obj_t t[16];
+    for (int i = 0; i < 16; i++) {
         t[i] = mp_obj_new_int_from_uint(v[i]);
     }
-    return mp_obj_new_tuple(15, t);
+    return mp_obj_new_tuple(16, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_stats_obj, mod_live_stats);
 
