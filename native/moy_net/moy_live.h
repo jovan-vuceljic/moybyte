@@ -78,6 +78,9 @@ void moy_live_dev_end(void);
 // bytes), and its send (0, or -1 when the socket failed).
 uint8_t *moy_live_out(size_t *cap);
 int moy_live_say(size_t n);
+// Whether the page's socket came through the secure door (moy_tls_srv.c),
+// whose connections are the only ones from 127.0.0.1.
+int moy_live_behind_door(void);
 // The kinds this board relays to its page (moy_dev_relayed's text), for the
 // /live probe's "kinds": its length.
 size_t moy_web_live_kinds(char *out, size_t cap);

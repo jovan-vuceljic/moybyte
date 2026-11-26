@@ -78,7 +78,11 @@ chip changes.
   at the pairing prompt holds none). Behind it is the webhost, over
   loopback, so every route, the live socket (wss) and the Terminal work as
   over http, and the sign-in's backoff counts each browser by its own
-  address. The certificate is the board's own, self-signed, made the first
+  address. A Terminal there opens only while the internal heap has 56 KB
+  free and a 16 KB block (`MOY_TLS_TERM_FREE`): a session on top of the
+  door and the page's burst through it took the heap under 3 KB, so below
+  that the Terminal says so and Enter asks again; over http it opens as
+  ever. The certificate is the board's own, self-signed, made the first
   time and kept in `system/` (`tls.der`, `tls.key`), so Safari's one
   warning (Show Details, then visit this website) is once per board. What
   differs from http:

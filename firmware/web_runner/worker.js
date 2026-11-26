@@ -2123,7 +2123,7 @@ function gpioPump() {
 // shell here, and an answer (a board that restarted, its 401 having signed
 // this page in again) opens it again.
 const TERM = { OPEN: 2, ENDED: 3, LOST: 4, UNREACHABLE: 5, REFUSED: 6, WAIT: 7, BUSY: 8, NONE: 9,
-               TAKEN: 10 };
+               TAKEN: 10, LOW: 11 };
 let termPoll = null, termFeed = null, termState = null;
 let termWs = null, termSealed = false;
 let termSize = null;             // the grid's size taken while no socket was open, sent at its open
@@ -2295,7 +2295,10 @@ function termLiveIn(u8) {
         termLive = null;
         termQ.push({ s: TERM.ENDED, n: new DataView(u8.buffer, u8.byteOffset + 2, 4).getInt32(0, true) });
     } else if (k === 0x42) {                                                           // B
-        if (u8[2] === 0 && t.tries + 1 < TERM_BUSY_TRIES) {
+        if (u8[2] === 2) {              // too little memory behind the secure door
+            termLive = null;
+            termQ.push({ s: TERM.LOW, n: 0 });
+        } else if (u8[2] === 0 && t.tries + 1 < TERM_BUSY_TRIES) {
             setTimeout(() => { if (termLive === t) termLiveOpen(t.cols, t.rows, t.tries + 1); },
                        TERM_BUSY_MS);
         } else {

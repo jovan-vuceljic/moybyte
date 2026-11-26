@@ -515,6 +515,12 @@ void moy_tls_at(const char *system) {
     snprintf(s_system, sizeof s_system, "%s", system ? system : "");
 }
 
+int moy_tls_low(void) {
+    return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT) < MOY_TLS_TERM_FREE
+           || heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT)
+                  < MOY_TLS_TERM_BLOCK;
+}
+
 int moy_tls_open(uint16_t back) {
     int st = __atomic_load_n(&s_state, __ATOMIC_ACQUIRE);
     if (st == UP) {

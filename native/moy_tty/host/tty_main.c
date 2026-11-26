@@ -210,6 +210,13 @@ static void *console(void *arg) {
     return NULL;
 }
 
+// The secure door's heap check (moy_tls_srv.c), as `low N` sets it: the twin
+// has no door and its heap is the host's.
+static int s_low;
+int moy_tls_low(void) {
+    return __atomic_load_n(&s_low, __ATOMIC_ACQUIRE);
+}
+
 int main(int argc, char **argv) {
     if (argc != 4 && argc != 5) {
         fprintf(stderr, "usage: %s PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]\n", argv[0]);
@@ -296,6 +303,10 @@ int main(int argc, char **argv) {
                 moy_tty_reap_all(MOY_TTY_SSH, 5000);
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("RAN %d\n", r);
+                fflush(stdout);
+            } else if (strncmp(line, "low ", 4) == 0) {
+                __atomic_store_n(&s_low, atoi(line + 4), __ATOMIC_RELEASE);
+                printf("LOW %d\n", atoi(line + 4));
                 fflush(stdout);
             } else if (strncmp(line, "via ", 4) == 0) {
                 // the secure door's naming of its loopback connection (moy_tls_srv.c)

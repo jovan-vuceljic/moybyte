@@ -475,6 +475,15 @@ void moy_tls_at(const char *system);
 // Open the door in front of the webhost on `back`: MOY_TLS_UP, MOY_TLS_STARTING
 // (ask again), or -errno.
 int moy_tls_open(uint16_t back);
+// Whether the heap is too short for a Terminal behind the door: a session
+// (its shell's stack, its buffers, about 25 KB on the C3) on top of the
+// door's sessions and the page's burst through it took the C3's internal
+// heap from about 50 KB to under 3 KB (2026-11-26), so the page's Terminal
+// opens over https only above these, and says why it does not
+// (moy_tty_live.c; the page's http address has the Terminal as ever).
+#define MOY_TLS_TERM_FREE (56u * 1024u)
+#define MOY_TLS_TERM_BLOCK (16u * 1024u)
+int moy_tls_low(void);
 
 // -- the web-console switch (moy_webconsole.c) --------------------------------------
 //

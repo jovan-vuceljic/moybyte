@@ -104,6 +104,28 @@ def test_a_face_opens_takes_keys_and_says_its_exit(board, page_so, tmp_path):
     assert D._live(board).get("devs", "0") == "0"
 
 
+def test_behind_the_secure_door_a_short_heap_refuses_the_face_and_says_so(board, page_so,
+                                                                         tmp_path):
+    """Behind the secure door (a socket from 127.0.0.1, as the twin's all
+    are) a face opens only while the heap has room for it (moy_net.h,
+    MOY_TLS_TERM_FREE): short, the open answers 'B' 2 at once, and the face
+    opens once the room is back."""
+    page = _page(board, page_so, tmp_path)
+    page.open()
+    t = Term(page)
+    at = len(board.log())
+    board.say("low 1")
+    board.wait_line("LOW 1", at)
+    m = t.open()
+    assert m is not None and m[1:3] == b"B\x02", m
+    at = len(board.log())
+    board.say("low 0")
+    board.wait_line("LOW 0", at)
+    m = t.open()
+    assert m is not None and m[1:2] == b"A", m
+    assert b"$" in t.until(b"$")
+
+
 def test_another_page_takes_the_session_and_its_face(board, page_so, tmp_path):
     a = Term(_page(board, page_so, tmp_path, "a").open())
     assert a.open() == b"tA"

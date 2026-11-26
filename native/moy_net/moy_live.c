@@ -327,6 +327,14 @@ int moy_live_say(size_t n) {
     return say(L->ws, n);
 }
 
+int moy_live_behind_door(void) {
+    struct sockaddr_in a;
+    socklen_t n = sizeof a;
+    int ws = L->ws;
+    return ws >= 0 && getpeername(ws, (struct sockaddr *)&a, &n) == 0 && a.sin_family == AF_INET
+           && ((const uint8_t *)&a.sin_addr.s_addr)[0] == 127;
+}
+
 static int state(int ws, int err) {
     uint8_t *p = (uint8_t *)L->b->out + MOY_WS_HEAD;
     uint8_t mac[6] = {0};

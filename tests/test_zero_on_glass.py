@@ -944,6 +944,11 @@ def _door_listens(zero):
         return False
 
 
+# What the Terminal says where the board refuses it behind the secure door
+# (native/moy_sh/moy_sh_link.c, MOY_SH_LINK_LOW).
+FAST_TERM_LOW = "Not enough memory for the Terminal over the fast console"
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
     """On a board with the secure door, the console over https: from a reset
@@ -960,12 +965,24 @@ def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
         pytest.skip("%s has no secure door" % zero.name)
     base = "https://" + zero.url.split("//")[1]
     shell = "ln => /\\$\\s*$/.test(ln)"
+    low = "ln => ln.indexOf('%s') >= 0" % FAST_TERM_LOW
     steps = sign_in(zero) + [
         {"waitFor": BOOTED, "timeout": 120000},
         {"js": "location.reload(), 1"},
         {"waitFor": BOOTED, "timeout": 120000},
         {"waitFor": "window.__moyState().then(function (s) { return !!(s.term && "
-                    "s.term.some(%s)); })" % shell, "timeout": 60000},
+                    "s.term.some(function (ln) { return (%s)(ln) || (%s)(ln); })); })"
+                    % (shell, low), "timeout": 60000},
+        {"js": "window.__moyState().then(function (s) { return 'LOW ' + "
+               "s.term.some(%s); })" % low},
+        # a face refused while the boot's burst held the heap opens once it is
+        # over: Enter asks again (on a prompt, it is a new prompt)
+        {"wait": 20000},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return "
+                    "s.term.filter(%s).length >= 1 && (%s)(s.term[s.term.length - 1]"
+                    " || s.term[s.term.length - 2] || ''); })" % (shell, shell),
+         "timeout": 60000},
     ] + [{"key": c} for c in "echo fast-$((6*7))"] + [
         {"key": "Enter"},
         {"waitFor": "window.__moyState().then(function (s) { return s.term.some("
@@ -996,6 +1013,7 @@ def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
         path.unlink()
     out = _scrub("".join(lines), zero)
     fast, reqs = _tagged(out, "FAST"), _tagged(out, "HELD")
+    refused = _tagged(out, "LOW")
     took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
     assert fast and fast["https"] and reqs and held is not None, out[-3000:]
     # A probe of port 443 is a connection, which starts the grace again: one
@@ -1009,8 +1027,9 @@ def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
     zero.take("zero internal low-water fast", held[2] / 1024.0)
     print("%s over https: reload boot %.0f ms; internal %d free, %d largest, %d low-water "
           "with the page and its Terminal held (%d, %d before the door); %d free, %d largest "
-          "after the door closed; page %s" % (zero.name, took[1], held[0], held[1], held[2],
-                                               before[0], before[1], after[0], after[1], reqs))
+          "after the door closed; page %s; the Terminal at the boot %s" % (
+              zero.name, took[1], held[0], held[1], held[2], before[0], before[1], after[0],
+              after[1], reqs, "refused for the heap, then opened" if refused else "opened"))
     assert after[0] >= before[0] - 1024 and after[1] >= before[1] - 4096, (before, after)
 
 

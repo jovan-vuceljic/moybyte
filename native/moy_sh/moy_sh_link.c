@@ -187,6 +187,10 @@ void moy_sh_link_state(int state, int n) {
     case MOY_SH_LINK_NONE:
         snprintf(msg, sizeof msg, "%sThis console has no shell.%s\r\n", DIM, PLAIN);
         break;
+    case MOY_SH_LINK_LOW:
+        snprintf(msg, sizeof msg, "%sNot enough memory for the Terminal over the fast console: "
+                 "use the http address, or press Enter to try again.%s\r\n", DIM, PLAIN);
+        break;
     case MOY_SH_LINK_TAKEN:
         restore(l);
         snprintf(msg, sizeof msg, "%s\r\n%sAnother browser opened this console's shell, so this one "
