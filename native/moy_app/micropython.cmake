@@ -20,9 +20,15 @@ target_sources(usermod_moy_app INTERFACE
 target_include_directories(usermod_moy_app INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}
     ${CMAKE_CURRENT_LIST_DIR}/../moy_spine
-    ${CMAKE_CURRENT_LIST_DIR}/../moy_input
     ${CMAKE_CURRENT_LIST_DIR}/../moy_store
-    ${CMAKE_CURRENT_LIST_DIR}/../moy_png
     ${CMAKE_CURRENT_LIST_DIR}/../moy_net
     ${CMAKE_CURRENT_LIST_DIR}/../moy_lua/lua)
+# The pointer (native/moy_input) and the cover reader (native/moy_png), where
+# the image stages them: the Zero, which has neither, reads no pointer and
+# decodes no cover.
+foreach(dir moy_input moy_png)
+    if(EXISTS ${CMAKE_CURRENT_LIST_DIR}/../${dir})
+        target_include_directories(usermod_moy_app INTERFACE ${CMAKE_CURRENT_LIST_DIR}/../${dir})
+    endif()
+endforeach()
 target_link_libraries(usermod INTERFACE usermod_moy_app)
