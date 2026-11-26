@@ -786,8 +786,10 @@ let writtenStore = null;
 // Get Carts' record, beside the carts folder as on every console
 // (cart_index.RECORD_NAME, from the VM by bindStore).
 let installRecord = null;
-// The storage every store opens through: the origin's, or the page's channel's
-// (moy_store.channelNav), set by init before anything is seeded.
+// The storage every store opens through: the origin's OPFS, or IndexedDB in
+// its shape where the context has no OPFS (plain http, moy_store.pageNav), or
+// the page's channel's within it (moy_store.channelNav), set by init before
+// anything is seeded.
 let opfsNav = navigator;
 // The roots initStore seeded, which web_boot builds its watchers over.
 let seededRoots = null;
@@ -973,9 +975,10 @@ async function initStore(fetched) {
     if (!site) {
         persist("board", "carts are kept on the console");
     } else if (!anySite) {
-        // No OPFS at all: a private window, blocked site data, file://. The
-        // pre-#193 behaviour, but never silently -- the page says it out loud.
-        persist("none", "this browser has no local storage: work will NOT survive a reload");
+        // No storage at all, OPFS's nor IndexedDB's (moy_store.pageNav):
+        // blocked site data, file://, a private window that refuses both.
+        // The work is lost with the tab, and the page says so, once.
+        persist("none", "This tab keeps nothing");
     } else {
         // "loaded" once any root read the kid's work back from OPFS (a revisit);
         // "seeded" on a first visit. The word is the persistence evidence the

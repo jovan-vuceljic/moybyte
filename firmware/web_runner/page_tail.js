@@ -239,7 +239,8 @@ function pzSay(s,warn){send({type:"page",say:[s,"",warn?"bad":"ok"]});}
 // that keeps nothing past this tab says so as it starts.
 var KEPT={site:"In this browser",board:"On the console",none:"In this tab only"};
 function pzMode(mode,s){PZMODE=mode;window.__moyKept=s;
-send({type:"page",kept:KEPT[mode]||""});if(mode==="none")pzSay(s,true);pzAsk();}
+send({type:"page",kept:KEPT[mode]||""});
+if(mode==="none")send({type:"page",say:[s,"Your work is lost when it closes.","bad"]});pzAsk();}
 function pzAsk(){if(WORKER)WORKER.postMessage({t:"carts"});}
 // The worker decided this page keeps its carts HERE, in OPFS -- which the
 // browser may evict under disk pressure unless the origin is asked to be made

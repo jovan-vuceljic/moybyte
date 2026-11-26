@@ -329,3 +329,29 @@ def test_an_iphone_s_home_screen_app_offers_neither_full_screen(tmp_path):
         assert "Full screen" not in menu and _HOME not in menu, menu
     finally:
         p.terminate()
+
+
+_NOTICE = {"js": "window.__moyState().then(s => '%s ' + JSON.stringify("
+                 "{notice: s.notice_up, screen: s.screen, order: s.order}))"}
+
+
+def test_a_notice_takes_no_focus_and_goes_by_itself(tmp_path):
+    """A notice the page asks for (a storage one, say) never holds the pads:
+    A under it reaches the home, which plays the cart in front, and the
+    notice goes by itself after its time."""
+    p, base = _where("site", tmp_path)
+    try:
+        steps = [{"wait": 2500},
+                 {"js": "send({type: 'page', say: ['This tab keeps nothing', "
+                        "'Your work is lost when it closes.', 'bad']}), 'said'"},
+                 {"wait": 400}, dict(_NOTICE, js=_NOTICE["js"] % "UP"),
+                 {"js": "cv.focus(), 'f'"}, {"key": "Enter"}, {"wait": 1500},
+                 dict(_NOTICE, js=_NOTICE["js"] % "PLAYED"), {"wait": 6000},
+                 dict(_NOTICE, js=_NOTICE["js"] % "GONE")]
+        _out, js = _iphone(tmp_path, "notice", base, "?dev=1", steps, init=None)
+        up, played, gone = _tagged(js, "UP"), _tagged(js, "PLAYED"), _tagged(js, "GONE")
+        assert up["notice"][0] == "This tab keeps nothing", up
+        assert played["screen"] != up["screen"], ("A reached the home under the notice", up, played)
+        assert gone["notice"] is None, gone
+    finally:
+        p.terminate()

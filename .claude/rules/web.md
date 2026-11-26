@@ -190,9 +190,12 @@ nor those docs will warn you about:
   exports to a list that only shrinks, every string it holds to a filed word
   (no file, folder or suffix) and its patterns to the channel's one (the
   audit: `docs/moycore_direction.md` §3).
-- **The substrate is OPFS, not IndexedDB**: the ops ARE file writes at paths, so a
-  cart folder stays a cart folder. No OPFS (private window, blocked site data,
-  `file://`) runs in memory and **the page says so**; a quota failure requeues, and
+- **The substrate is OPFS's shape**: the ops ARE file writes at paths, so a
+  cart folder stays a cart folder. OPFS is a secure context's, so a page on
+  plain http (a dev server on the LAN) keeps the same folders in IndexedDB
+  through OPFS's calls (`moy_store.idbNav`, `pageNav`); a page with neither
+  (blocked site data, `file://`) runs in memory and **the page says so**,
+  once, as a notice that times out; a quota failure requeues, and
   after three gives up ONCE and says that too. A returning browser's shelf is
   OPFS's, never the bundle's -- except the bundle's SYSTEM carts, which reach
   it as a board's built-ins reach its SD (#47), decided in the VM

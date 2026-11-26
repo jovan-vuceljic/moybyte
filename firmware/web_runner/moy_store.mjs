@@ -233,6 +233,7 @@ const strict = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 export const CHANNEL_DIR_PREFIX = "channel-";
 
 export function channelNav(nav, channel) {
+    nav = pageNav(nav, globalThis.indexedDB);
     if (!channel) return nav;
     if (!/^[a-z][a-z0-9-]{0,31}$/.test(channel)) return { storage: null };
     const st = nav && nav.storage;
@@ -240,6 +241,131 @@ export function channelNav(nav, channel) {
     return { storage: { getDirectory: async () =>
         (await st.getDirectory()).getDirectoryHandle(CHANNEL_DIR_PREFIX + channel,
                                                      { create: true }) } };
+}
+
+// THE STORE WHERE THERE IS NO OPFS. OPFS (`storage.getDirectory`) is a
+// secure context's: a page on plain http -- a Zero's own page at its .local
+// name, a dev server on the LAN -- has none, but it has IndexedDB. This is
+// OPFS's shape over one IndexedDB object store keyed by path, with exactly
+// the calls this module makes (a directory's getDirectoryHandle,
+// getFileHandle, removeEntry and entries; a file's getFile and
+// createWritable), so a cart folder stays a cart folder and every rule above
+// runs unchanged. Each call is one transaction, as an OPFS call is one
+// operation. A browser without IndexedDB either gets null.
+const IDB_NAME = "moy-files", IDB_STORE = "fs";
+
+function idbErr(name) { return new DOMException(name, name); }
+
+function idbReq(r) {
+    return new Promise((ok, no) => { r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error); });
+}
+
+function idbChildren(db, path) {
+    // Every key under `path/`, then those one level down.
+    const lo = path ? path + "/" : "", tx = db.transaction(IDB_STORE, "readonly");
+    const range = IDBKeyRange.bound(lo, lo + "\uffff", false, false);
+    return idbReq(tx.objectStore(IDB_STORE).getAll(range)).then((rows) =>
+        rows.filter((r) => r.path !== path && r.path.indexOf("/", lo.length) < 0));
+}
+
+function idbGet(db, path) {
+    return idbReq(db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).get(path));
+}
+
+function idbPut(db, row) {
+    return idbReq(db.transaction(IDB_STORE, "readwrite").objectStore(IDB_STORE).put(row));
+}
+
+function idbFile(db, path, name) {
+    return {
+        kind: "file", name,
+        async getFile() {
+            const r = await idbGet(db, path);
+            if (!r || r.kind !== "file") throw idbErr("NotFoundError");
+            return new File([r.data], name, { lastModified: r.mtime });
+        },
+        async createWritable() {
+            const parts = [];
+            return {
+                async write(b) { parts.push(typeof b === "string" ? enc.encode(b) : new Uint8Array(b)); },
+                async truncate() { parts.length = 0; },
+                async close() {
+                    let n = 0;
+                    for (const b of parts) n += b.length;
+                    const data = new Uint8Array(n);
+                    n = 0;
+                    for (const b of parts) { data.set(b, n); n += b.length; }
+                    await idbPut(db, { path, kind: "file", data, mtime: Date.now() });
+                },
+            };
+        },
+    };
+}
+
+function idbDir(db, path, name) {
+    const at = (n) => (path ? path + "/" : "") + n;
+    return {
+        kind: "directory", name,
+        async getDirectoryHandle(n, o) {
+            const r = await idbGet(db, at(n));
+            if (r && r.kind !== "dir") throw idbErr("TypeMismatchError");
+            if (!r) {
+                if (!(o && o.create)) throw idbErr("NotFoundError");
+                await idbPut(db, { path: at(n), kind: "dir" });
+            }
+            return idbDir(db, at(n), n);
+        },
+        async getFileHandle(n, o) {
+            const r = await idbGet(db, at(n));
+            if (r && r.kind !== "file") throw idbErr("TypeMismatchError");
+            if (!r) {
+                if (!(o && o.create)) throw idbErr("NotFoundError");
+                await idbPut(db, { path: at(n), kind: "file", data: new Uint8Array(0), mtime: Date.now() });
+            }
+            return idbFile(db, at(n), n);
+        },
+        async removeEntry(n, o) {
+            const p = at(n), r = await idbGet(db, p);
+            if (!r) throw idbErr("NotFoundError");
+            const tx = db.transaction(IDB_STORE, "readwrite"), os = tx.objectStore(IDB_STORE);
+            if (r.kind === "dir") {
+                const under = IDBKeyRange.bound(p + "/", p + "/\uffff", false, false);
+                if (!(o && o.recursive) && await idbReq(os.count(under)))
+                    throw idbErr("InvalidModificationError");
+                os.delete(under);
+            }
+            os.delete(p);
+            await new Promise((ok, no) => { tx.oncomplete = ok; tx.onerror = () => no(tx.error); });
+        },
+        async *entries() {
+            for (const r of await idbChildren(db, path)) {
+                const n = r.path.slice(r.path.lastIndexOf("/") + 1);
+                yield [n, r.kind === "dir" ? idbDir(db, r.path, n) : idbFile(db, r.path, n)];
+            }
+        },
+    };
+}
+
+// A navigator-shaped `{storage: {getDirectory}}` over `idb` (an IDBFactory),
+// for openStore and channelNav, or null without one.
+function idbNav(idb) {
+    if (!idb) return null;
+    let open = null;
+    const db = () => open || (open = new Promise((ok, no) => {
+        const r = idb.open(IDB_NAME, 1);
+        r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE, { keyPath: "path" });
+        r.onsuccess = () => ok(r.result);
+        r.onerror = () => no(r.error);
+    }));
+    return { storage: { getDirectory: async () => idbDir(await db(), "", "") } };
+}
+
+// The storage a page opens its stores through: the origin's OPFS where the
+// context has it, else IndexedDB in OPFS's shape (`idbNav`), else none.
+function pageNav(nav, idb) {
+    const st = nav && nav.storage;
+    if (st && typeof st.getDirectory === "function") return nav;
+    return idbNav(idb) || { storage: null };
 }
 
 // null when the browser has no OPFS (or refuses it -- a private window, a

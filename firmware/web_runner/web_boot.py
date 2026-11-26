@@ -1307,7 +1307,8 @@ def state_json():
     buttons held (`held`), the page's word (`page`: full screen, where it
     keeps the carts, whether a console serves it, whether its browser has
     full screen, whether it runs as a home-screen app, its host), the card
-    up (`card`: its verb, title and lines; None), the glass's metric class,
+    up (`card`: its verb, title and lines; None), the notice up
+    (`notice_up`: title, sub, kind; None), the glass's metric class,
     chrome scale, top bar thickness in glass pixels and the back-stack's
     floor and depth (`glass`), the desk keyboard's
     typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
@@ -1335,6 +1336,8 @@ def state_json():
     st["input"] = _input_state(_S["ws"])
     st["wifi_panel"] = _wifi_panel(_S["ws"])
     ws = _S["ws"]
+    st["notice_up"] = (list(ws.notice_up) if ws.notice_up is not None
+                       and ws.notices.notice_active() else None)
     st["glass"] = {"cls": ws.metric_class, "cs": ws.look.effective_chrome_scale(),
                    "bar": ws.layout.status_h * ws.render_scale,
                    "floor": ws.wm.floor(), "depth": ws.wm.stack.depth()}
