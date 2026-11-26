@@ -998,9 +998,9 @@ def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
     fast, reqs = _tagged(out, "FAST"), _tagged(out, "HELD")
     took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
     assert fast and fast["https"] and reqs and held is not None, out[-3000:]
-    end = time.monotonic() + MOY_TLS_IDLE_S + 60
-    while _door_listens(zero) and time.monotonic() < end:
-        time.sleep(5)
+    # A probe of port 443 is a connection, which starts the grace again: one
+    # probe, once the grace and the browser's last connection are over.
+    time.sleep(MOY_TLS_IDLE_S + 30)
     assert not _door_listens(zero), "the door did not close after its grace"
     after = zero.look()["idf"]
     zero.take("zero page reload boot fast", took[1], took[1:2])
