@@ -151,8 +151,9 @@ def test_a_page_a_zero_serves_plays_a_console(cart, loader, live_exe, tmp_path, 
 def test_the_live_socket_comes_back_after_the_board_restarts(live_exe, tmp_path, monkeypatch):
     """The board resets under an open page: its sessions are gone, so it
     refuses the page's reopened socket with a 401 the browser cannot read.
-    The page asks the same route over HTTP, signs in again with the key it
-    paired, and its socket opens again, the page never loaded again."""
+    The page opens the next one in the clear, signs in on it again with the
+    key it paired, and seals it, the page never loaded again; meanwhile it
+    says it reconnects, and once the socket is back that it is live."""
     import test_live_link as L
     import test_moy_tty as T
     import test_web_term_e2e as W
@@ -176,13 +177,19 @@ def test_the_live_socket_comes_back_after_the_board_restarts(live_exe, tmp_path,
     t = threading.Thread(target=reset, daemon=True)
     t.start()
     st = ("window.__moyState().then(s => '%s ' + JSON.stringify({stay: window.__stay || 0, "
-          "opens: s.live && s.live.opens, drops: s.live && s.live.drops}))")
+          "opens: s.live && s.live.opens, drops: s.live && s.live.drops, "
+          "said: window.__said}))")
+    said = ("(window.__said = [], new MutationObserver(() => window.__said.push("
+            "document.getElementById('s').textContent)).observe(document.getElementById('s'), "
+            "{childList: true, characterData: true, subtree: true}), 1)")
     try:
         steps = [{"waitFor": "window.__moyState().then(s => s.live && s.live.opens >= 1)",
                   "timeout": 60000},
-                 {"js": "(window.__stay = 1, 1)"}, {"js": st % "BEFORE"},
+                 {"js": "(window.__stay = 1, 1)"}, {"js": said}, {"js": st % "BEFORE"},
                  {"waitFor": "window.__moyState().then(s => s.live && s.live.opens >= 2)",
                   "timeout": 90000},
+                 {"waitFor": "document.getElementById('s').textContent === 'live'",
+                  "timeout": 30000},
                  {"js": st % "AFTER"}]
         query = "?dev=1&desktop=1" + W._qr_fragment(host)
         out, js = web_e2e.run(tmp_path, "live_restart", query, steps, base,
@@ -194,6 +201,8 @@ def test_the_live_socket_comes_back_after_the_board_restarts(live_exe, tmp_path,
         assert before and before["opens"] == 1, why
         assert after and after["opens"] >= 2 and after["drops"] >= 1, why
         assert after["stay"] == 1, "the page loaded again" + why
+        assert "the console's connection dropped -- reconnecting..." in after["said"], why
+        assert after["said"][-1] == "live", "it said so once the socket was back" + why
     finally:
         server.terminate()
         host.end()
@@ -266,13 +275,13 @@ def test_the_terminal_of_a_page_a_zero_serves_rides_the_live_socket(
         shutil.rmtree(root, ignore_errors=True)
 
 
-def test_a_store_change_another_page_made_reaches_the_page_at_once(
+def test_a_store_change_the_page_did_not_make_reaches_it_at_once(
         live_exe, tmp_path, monkeypatch):
     """The board says on the live socket that its store changed under the
-    page (native/moy_net/moy_live.c, THE HINTS: another page's sync here),
-    and the page pulls it at once: the new cart is on its shelf. The page's
-    requests ride the socket (THE REQUESTS): its boot's pulls, and the pull
-    the hint asks for."""
+    page (native/moy_net/moy_live.c, THE HINTS: an SSH session's command
+    here), and the page pulls it at once: the new cart is on its shelf. The
+    page signs in and asks on the socket alone (THE SIGN-IN, THE REQUESTS):
+    its boot's pulls, and the pull the hint asks for."""
     import test_live_hints as H
     import test_live_link as L
     import test_web_term_e2e as W
@@ -285,11 +294,10 @@ def test_a_store_change_another_page_made_reaches_the_page_at_once(
     synced = []
 
     def other():
-        """Another page syncs a new cart once this one's socket is up."""
+        """A shell writes a new cart once the page's socket is up."""
         host.wait_line("LIVE sessions=1", timeout=120.0)
         time.sleep(3.0)
-        H._other_syncs(host, H._batch("pushed.moy/main.lua",
-                                      "function _draw() cls(3) end\n"))
+        H.shell_writes(host, "pushed.moy/main.lua", "function _draw() cls(3) end")
         synced.append(time.monotonic())
 
     t = threading.Thread(target=other, daemon=True)
@@ -313,7 +321,7 @@ def test_a_store_change_another_page_made_reaches_the_page_at_once(
         t.join(5)
         why = "\n%s\n%s" % (js, W._sides(host, tmp_path, out))
         before, after = W._tagged(js, "BEFORE"), W._tagged(js, "AFTER")
-        assert synced, "the other page never synced" + why
+        assert synced, "the shell never wrote" + why
         assert before["hints"]["pulls"] == 0, why
         assert after["hints"]["s"] >= 1 and after["hints"]["pulls"] >= 1, why
         assert before["reqs"] >= 3 and after["reqs"] > before["reqs"], why

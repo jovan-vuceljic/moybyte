@@ -105,7 +105,13 @@ def _qr_fragment(host, board=None):
     first 8 bytes of the board's id (moy_webconsole.c's paired URL)."""
     import seal_client
     if board is None:
-        board = seal_client.Browser(host.send).hello()["id"]
+        try:
+            board = seal_client.Browser(host.send).hello()["id"]
+        except seal_client.Refused as no:        # a board with the live socket
+            if no.status != 410:
+                raise
+            import test_live_link as L
+            board = L.board_id(host)
     return "#t=%s&b=%s" % (_b64url(bytes.fromhex(host.token())),
                            _b64url(bytes.fromhex(board)[:8]))
 

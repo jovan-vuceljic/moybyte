@@ -1,5 +1,14 @@
-<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>Moybyte</title>
-<body style="font:16px system-ui,sans-serif;margin:2em;background:#1d2b53;color:#fff1e8"><p id=s>Loading the console...</p>
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><meta name=color-scheme content="light dark"><title>Moybyte</title>
+<style>
+:root{--g:#eceef3;--c:#fff;--t:#15161d;--d:#5f6478;--a:#4c3fd6;--o:#fff;--e:#cfd3dc;--s:#f4f5f8}
+@media(prefers-color-scheme:dark){:root{--g:#0f1127;--c:#181b38;--t:#eef0fb;--d:#a1a6cc;--a:#b6a8f7;--o:#15123a;--e:#33385f;--s:#23274b}}
+body{font:16px/1.4 system-ui,sans-serif;margin:0;padding:16px;background:var(--g);color:var(--t)}
+#s{max-width:440px;margin:0 auto;padding:20px;border-radius:8px;background:var(--c);border:1px solid var(--e)}
+#s p{margin:.8em 0}#s p+p{color:var(--d)}#s input{accent-color:var(--a)}
+#s button{font:inherit;padding:.7em 1.2em;margin:1em .6em 0 0;border-radius:4px;border:1px solid var(--e);background:var(--s);color:var(--t)}
+#s button:first-of-type{background:var(--a);border-color:var(--a);color:var(--o);font-weight:600}
+</style>
+<body><div id=s>Loading the console...</div>
 <script>
 // The loader (docs/web_console_online_2026-11.md §3): the page a board's root
 // serves in place of the console. It asks the board which pack its image
@@ -104,6 +113,49 @@ try { s = await (await fetch("/sync", { cache: "no-store" })).json(); } catch (e
 if (!s || !s.pack) {
 fail(s ? "This board's firmware names no browser console." : "This board did not answer.");
 return;
+}
+// HTTPS on demand (native/moy_net/moy_net.h): an iPhone runs a page from a
+// plain-http address with no JIT, so where the board offers TLS the loader
+// asks an iPhone or an iPad (any browser with ?fast) whether to open the
+// board's https origin, whose certificate is the board's own. "Remember my
+// choice" keeps the answer in this origin's storage (`moy.fast`: 1 go, 0
+// stay) and the card is skipped for it after; ?fast forgets it and asks
+// again (About's Fast console on iPhone row, settings_rows.py). The board
+// opens the door, then this page goes there. self.moyFast tells the console
+// page the board has the door.
+// The page's colours are the moy seed theme's, light and dark as the browser
+// prefers (native/moy_ui/themes/moy.json: desktop, surface, ink, ink_dim,
+// accent, selection_ink, border, surface_alt).
+self.moyFast = s.tls ? 1 : 0;
+if (s.tls && location.protocol == "http:") {
+const K = "moy.fast", ask = /fast/.test(location.search);
+let fast = null;
+try { if (ask) localStorage.removeItem(K); fast = localStorage.getItem(K); } catch (e) { }
+if (fast == null && (ask || /iPhone|iPad|iPod/.test(navigator.userAgent)
+|| navigator.platform == "MacIntel" && navigator.maxTouchPoints > 1)) {
+const [go, keep] = await new Promise((ok) => {
+S.innerHTML = "<b style=font-size:1.3em>Make it faster on iPhone?</b><p>iPhones run the console slowly on this connection. "
++ "The fast way uses a secure link to your board.<p>Safari will warn that it can't check the board's certificate. "
++ "That's expected for a console on your own Wi-Fi: tap <b>Show Details</b>, then <b>visit this website</b>. "
++ "You only do this once.<p><label><input type=checkbox> Remember my choice</label><br>"
++ "<button>Make it fast</button><button>Not now</button>";
+const [m, n] = S.querySelectorAll("button"), b = S.querySelector("input");
+m.onclick = () => ok([1, b.checked]); n.onclick = () => ok([0, b.checked]);
+});
+fast = go;
+say("");
+if (keep) try { localStorage.setItem(K, go); } catch (e) { }
+}
+if (fast == 1) {
+say("Opening the secure link...");
+for (let i = 0; i < 50; i++) {
+let r = null;
+try { r = await (await fetch("/tls", { method: "POST" })).json(); } catch (e) { }
+if (r && r.tls == 2) { location.href = "https://" + location.hostname + "/"; return; }
+await new Promise((ok) => setTimeout(ok, 300));
+}
+say("The secure link did not open; loading here.");
+}
 }
 const want = s.pack, page = s.page;
 const linked = O && new Promise((ok) => {

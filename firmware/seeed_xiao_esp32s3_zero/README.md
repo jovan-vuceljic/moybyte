@@ -437,16 +437,23 @@ it, its keys file `/moy/system/webkeys`. What is true *here*:
   `docs/web_console_online_2026-11.md` §7). Pairing runs SPAKE2+ against the stored
   record, so the password never crosses the network, a copy of the record
   pairs no browser, and the browser keeps a key of its own from then on.
-- **Every route but the boot files and `GET /sync` is sealed** to a paired
-  browser's session: the store's pulls and pushes, and `/gpio`
-  and `/update` on both methods — see the Pins and Updates sections for why
-  neither `GET` is free.
+- **Every route but the boot files, `GET /sync` and the live socket's probe
+  and upgrade is sealed** to a paired browser's session: the store's pulls
+  and pushes, and `/gpio` and `/update` on both methods — see the Pins and
+  Updates sections for why neither `GET` is free.
+- **The page signs in on its live socket and asks there alone**
+  (2026-11-26; `native/moy_net/moy_live.c`, THE SIGN-IN and THE REQUESTS): a
+  socket opened with no session carries the sign-in and nothing else until
+  it is sealed under the session that sign-in made, and over HTTP this
+  board refuses `POST /auth` and every sealed route 410 `{"error":"live"}`.
+  The backoff counts the socket's source as it counts a connection's.
 - **Forgetting a browser** is `passwd -r ID|all` over SSH (below), or deleting
   `/moy/system/webkeys` over the cable (every browser pairs again). Changing
   the password forgets no browser.
-- **What stays open is the console's own boot files plus `GET /sync`.** A
-  browser has to load the page before it can ask for anything, and the page has
-  to know a board is here before it knows to ask. `/sync` also names the
+- **What stays open is the console's own boot files, `GET /sync` and the
+  live socket's probe and upgrade.** A browser has to load the page before it
+  can ask for anything, the page has to know a board is here before it knows
+  to ask, and it signs in on the socket the probe names. `/sync` also names the
   pack's two digests and whether the board serves its copy, which the page's
   own address already names to anyone who asks for `/`.
 
@@ -504,9 +511,9 @@ section 5). The page runs the cart and the match; this board runs no game.
 It keeps one sealed WebSocket from the page (`GET /live`, the live socket of
 #256, `native/moy_net/moy_live.h`), served on a task of its own, and moves
 the link channel's frames between it and its ESP-NOW unchanged. The page's
-sealed requests ride that socket too (`native/moy_net/moy_live.c`, THE
-REQUESTS), answered by the webhost's routes in its poll, so an open page is
-one connection to this board.
+sign-in and its sealed requests ride that socket too, and only that socket
+(`native/moy_net/moy_live.c`, THE SIGN-IN and THE REQUESTS), answered by the
+webhost in its poll, so an open page is one connection to this board.
 
 - **The radio is up while the page holds it**: a match's run brings it up
   over the station and its end, or the socket's, takes it down. The station
@@ -906,7 +913,7 @@ new image's host did not come up.
     That is the safe side to fail on if you were about to reflash — anything you
     changed in the store stays changed, and the old image is not running to
     undo it — but it means the board is off the network until it is power-cycled.
-  - **So do store surgery over HTTP, not over the cable.** The sync protocol has
+  - **So do store surgery from a paired page, not over the cable.** The sync protocol has
     a whole-cart delete, which is the one store edit this board needs:
     deleting the cart from a paired page's launcher sends it, it takes the
     journal with it, and a seed cart's removal is recorded, so the seed does

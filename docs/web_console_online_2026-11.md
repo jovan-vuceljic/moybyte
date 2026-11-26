@@ -501,7 +501,8 @@ LAN got there first. So:
    in.
 4. The console in that window makes the SPAKE2+ record
    (`native/moy_net/moy_seal.h`, `moy_sw_claim`) and sends the board the
-   record with the claim (`POST /auth`, `{"op": "claim"}`). The board takes
+   record with the claim (`{"op": "claim"}`, on the board's live socket, or
+   `POST /auth` on a board without one). The board takes
    it once and forgets the claim (`native/moy_net/moy_webauth.c`, THE
    CLAIM): a wrong claim counts with the sign-in's backoff, and a board with
    a password and no claim refuses every claim. A failed claim says why in
@@ -636,6 +637,20 @@ Settings, and join My consoles when you type that address.
   window is a top-level navigation, and phase 2's test checks it opens
   without a prompt on the Chrome current then.
 - **Private windows** keep IndexedDB in memory, so every visit fetches.
+- **iOS runs a page from a plain-http address with no JIT** (measured on
+  the owner's iPhone, 2026-11-26, Safari and Chrome alike; a window it opens
+  and Add to Home Screen inherit it), so the loader on `http://` is slow
+  there whatever the pack. A board whose image takes the secure door
+  (`MOY_NET_HTTPS`; the C3 Zero) offers its page over https on demand: the
+  loader's card "Make it faster on iPhone?" (iOS, or `?fast`, which also
+  forgets a remembered answer: About's Fast console on iPhone row) asks
+  `POST /tls` and goes to `https://<host>/`, where a self-signed certificate costs one
+  warning per board (`native/moy_net/moy_net.h`, HTTPS on demand; the C3
+  README says what differs). That origin is a third one: its pack cache
+  and its pairing are its own, its loader fetches from https mirrors only
+  (os.moybyte.com; a dev image needs an https mirror), and when the door
+  closes the page says "The fast console closed" and links back to
+  `http://<host>/`.
 
 ## 10. Two web modes, still
 

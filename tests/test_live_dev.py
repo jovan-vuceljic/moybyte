@@ -186,8 +186,8 @@ def _page(board, page_so, tmp_path, name="p"):
 
 
 def test_the_probe_names_the_kinds_the_board_relays(board):
-    status, d = board.page.json("GET", "/live")
-    assert status == 200 and d["kinds"] == SPEC and d["link"] == 1
+    d = board.probe()
+    assert d["kinds"] == SPEC and d["link"] == 1
 
 
 def test_a_page_sends_and_hears_its_board_s_radio(board, page_so, tmp_path):
@@ -238,15 +238,10 @@ def test_the_session_s_end_lets_the_radio_go(board, page_so, tmp_path):
     _until([a], lambda: ca.read(h) == b"x")
     # a second page takes the socket over (moy_wa_take: the newer page has
     # it): the first's session ends, and with it its process's radio
-    b = _page(board, page_so, tmp_path, "b")
-    b.host.page = b.host.browser()
-    b.open()
+    b = _page(board, page_so, tmp_path, "b").open(
+        signin=lambda br: br.pair_token(board.token()))
     # (the seal client keeps one slot's keys, b's now: a's bytes are read raw)
     _until([], lambda: _ended(a))
-    # the upgrade that took the socket found a's bridge still serving, and
-    # was closed busy, as a page's first try is: the page tries again
-    b.drop()
-    b.open()
     cb = Cart(b)
     hb = cb.open()
     assert cb.write(hb, b"mine") == 4

@@ -96,8 +96,8 @@ def _g(m):
 
 
 def test_the_probe_names_the_pins(board):
-    status, d = board.page.json("GET", "/live")
-    assert status == 200 and d.get("kinds") == "pins", d
+    d = board.probe()
+    assert d.get("kinds") == "pins", d
 
 
 def test_a_write_drives_the_pin_as_it_arrives(board):
@@ -150,7 +150,7 @@ def test_a_pin_off_the_allowlist_is_refused_and_named(board):
 
 def test_the_socket_s_end_leaves_the_pins_to_the_batches(board):
     """The socket's pins are /gpio's (moy_gpio_op): a page whose socket
-    drops reads over HTTP what it drove on the socket."""
+    drops reads in a batch on its next socket what it drove on the last."""
     p = _page(board)
     p.send(b"dO" + ROW + b"\x04pins")
     p.send(b"dW" + ROW + bytes([21, 1]))
@@ -158,6 +158,7 @@ def test_the_socket_s_end_leaves_the_pins_to_the_batches(board):
     while _level(board, 21) != (1, 2) and time.monotonic() < end:
         time.sleep(0.02)
     p.drop()
+    _page(board)
     status, d = board.page.json("POST", "/gpio", {"v": 1, "ops": [{"p": 21, "mode": "read"}]})
     assert status == 200 and d["reads"] == {"21": 1}, d
 

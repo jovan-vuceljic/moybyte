@@ -163,6 +163,8 @@ PINB.textContent=TAKEN?"take it back":"pair";
 if(TAKEN){PINP.textContent=m.why;PINM.textContent="";PINR.style.display="";
 PINEL.style.display="flex";PINB.disabled=false;return;}
 PINM.textContent=m.wait||m.why||"";
+if(FAST&&m.gone){PINM.textContent=FAST_CLOSED+": ";var back=document.createElement("a");
+back.href=FAST_BACK;back.textContent="open it again";back.style.color="inherit";PINM.appendChild(back);}
 CHOOSE=!m.pw&&!!CLAIM;
 if(CHOOSE){PINP.textContent="Choose this console's password, 8 to 64 characters: "
 +"every browser pairs with it.";PINR.style.display="";PINEL.style.display="flex";
@@ -421,9 +423,21 @@ function podSaid(s){if(s)pzSay(s,false);}
 // to gpio_link's MAX_FAILS and the persist path's give-up, and it reaches this
 // through window.__moyLinkLost or the worker's {t:"lost"} above.
 var linkGone=false;
+// THE FAST CONSOLE (native/moy_net/moy_net.h, HTTPS on demand): a page the
+// board's loader booted over https came through the board's TLS door, which
+// closes when nobody used it for its grace (a locked phone, a page left at the
+// pairing prompt) or when the board restarts. The page cannot fall back to the
+// board's http (mixed content), so a board that stopped answering is the fast
+// console closed, and the way back is the board's http root, where its button
+// opens it again: a top-level navigation, which is no mixed content.
+var FAST=location.protocol==="https:"&&!!window.moyBoot;
+var FAST_BACK="http://"+location.hostname+"/";
+var FAST_CLOSED="The fast console closed";
 function linkLost(kind,head,body,risk,go){
 if(linkGone)return;
 linkGone=true;
+if(FAST&&kind==="lost"){head=FAST_CLOSED;go=FAST_BACK;
+body="Open the console at "+FAST_BACK+" and choose the fast console again.";}
 var text=(kind==="lost")
 ?((body?body+" ":"")+((risk===false)
 ?"Nothing of yours is waiting to be saved. Reopen the console's WEB CONSOLE "

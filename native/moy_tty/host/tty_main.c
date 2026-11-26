@@ -10,7 +10,9 @@
 // (a `sleep 30`), so the page finds the face another's; `nossh` ends it
 // with a Ctrl-C, and `hangup` as a client that went away (no signal);
 // `skew MS` moves the webhost's clock by MS (negative: back, so a lockout's
-// wait already running lasts that much longer). Each answers a line.
+// wait already running lasts that much longer); `run CMD` runs CMD to its
+// end as an SSH session's command does (`RAN <open's result>`), its writes
+// the store's changes no page made. Each answers a line.
 // `token` prints `TOKEN <hex>`, a QR's token; `claim` prints `CLAIM <claim>
 // <board id>`, what a board with no password puts in its Improv answer
 // (moy_webauth.c, THE CLAIM); `drop` forgets every paired
@@ -35,6 +37,7 @@
 // Usage: tty_main PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]
 
 #include <fcntl.h>
+#include <poll.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -243,6 +246,13 @@ static void *console(void *arg) {
     return NULL;
 }
 
+// The secure door's heap check (moy_tls_srv.c), as `low N` sets it: the twin
+// has no door and its heap is the host's.
+static int s_low;
+int moy_tls_low(void) {
+    return __atomic_load_n(&s_low, __ATOMIC_ACQUIRE);
+}
+
 int main(int argc, char **argv) {
     if (argc != 4 && argc != 5) {
         fprintf(stderr, "usage: %s PORT SYSTEM_DIR CARTS_DIR [FILES_DIR]\n", argv[0]);
@@ -272,7 +282,7 @@ int main(int argc, char **argv) {
     }
 #endif
     fcntl(0, F_SETFL, fcntl(0, F_GETFL, 0) | O_NONBLOCK);
-    char line[64];
+    char line[256];
     size_t ln = 0;
     int ssh_fd = -1;
     moy_tty_ws_stats_t last = {0};
@@ -322,6 +332,36 @@ int main(int argc, char **argv) {
                 moy_tty_hold(MOY_TTY_SSH, 0);
                 printf("HANGUP\n");
                 fflush(stdout);
+            } else if (strncmp(line, "run ", 4) == 0 && ssh_fd < 0) {
+                int fd = -1;
+                moy_tty_hold(MOY_TTY_SSH, 1);
+                int r = moy_tty_open(MOY_TTY_SSH, line + 4, 0, 80, 24, NULL, &fd, &pid);
+                char out[256];
+                struct pollfd pf = {.fd = fd, .events = POLLIN};
+                for (int waited = 0; r == 0 && waited < 10000; waited += 50) {
+                    if (poll(&pf, 1, 50) > 0 && read(fd, out, sizeof out) <= 0) {
+                        break;          // its end: the command is done
+                    }
+                }
+                if (fd >= 0) {
+                    close(fd);
+                }
+                moy_tty_reap_all(MOY_TTY_SSH, 5000);
+                moy_tty_hold(MOY_TTY_SSH, 0);
+                printf("RAN %d\n", r);
+                fflush(stdout);
+            } else if (strncmp(line, "low ", 4) == 0) {
+                __atomic_store_n(&s_low, atoi(line + 4), __ATOMIC_RELEASE);
+                printf("LOW %d\n", atoi(line + 4));
+                fflush(stdout);
+            } else if (strncmp(line, "via ", 4) == 0) {
+                // the secure door's naming of its loopback connection (moy_tls_srv.c)
+                unsigned port = 0, a = 0, b = 0, c = 0, d = 0;
+                if (sscanf(line + 4, "%u %u.%u.%u.%u", &port, &a, &b, &c, &d) == 5) {
+                    moy_web_via((uint16_t)port, a | b << 8 | c << 16 | (uint32_t)d << 24);
+                    printf("VIA %u\n", port);
+                    fflush(stdout);
+                }
             } else if (strncmp(line, "pin ", 4) == 0) {
                 char *e;
                 long n = strtol(line + 4, &e, 10);

@@ -24,7 +24,8 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   THE LIVE SOCKET. The page's echo round trip to its board (`__moyState().
   live.rtt`, one beat a second), bounded where power save (about 100 ms a
   round trip) cannot pass, and the board's internal RAM while the page holds
-  the socket.
+  the socket. The page signs in and asks every sealed route on it, and over
+  HTTP the board refuses them 410.
 
   GET CARTS. The page's Get Carts, driven by its keys, has the board
   install an official cart it lacks, remove the flash's Calc and get it
@@ -111,6 +112,9 @@ BOARDS = (
 )
 RUNNER = ROOT / "firmware" / "web_runner"
 SERVING = re.compile(r"ZERO serving (\S+)\s+\(mDNS (\S+)\)")
+# The secure door's grace (native/moy_net/moy_net.h), read where it is set.
+MOY_TLS_IDLE_S = int(re.search(r"#define MOY_TLS_IDLE_MS (\d+)u", (
+    ROOT / "native" / "moy_net" / "moy_net.h").read_text()).group(1)) / 1000
 SETUP = "ZERO SETUP  join "
 STORE = "/moy"
 CARTS = STORE + "/carts"
@@ -532,11 +536,16 @@ def test_improv_over_the_cable_joins_a_board_with_no_network(zero):
 def test_sync_names_the_pack_the_image_names(zero):
     """GET /sync carries both digests of the pack this build wrote beside
     the image; `local` says whether the board serves its copy: a Zero, whose
-    console is online, keeps none unless its owner chose Works offline."""
+    console is online, keeps none unless its owner chose Works offline;
+    `tls` that it opens the secure door (native/moy_net/moy_net.h, HTTPS on
+    demand), where its board defines MOY_NET_HTTPS."""
     page, whole = _pack(zero)
     doc = json.loads(_get(zero.url + "/sync")[0])
-    assert doc == {"sync": 1, "page": page, "pack": whole,
-                   "local": 0 if zero.online else 1}
+    want = {"sync": 1, "page": page, "pack": whole, "local": 0 if zero.online else 1}
+    if any(re.search(r"#define MOY_NET_HTTPS\s+\(1\)", h.read_text())
+           for h in zero.dir.glob("boards/*/mpconfigboard.h")):
+        want["tls"] = 1
+    assert doc == want
 
 
 def test_the_root_and_what_a_page_load_costs_the_board(zero):
@@ -850,28 +859,39 @@ def _page_held(zero, tmp_path, name, query):
     return took[-1], held, heap, live
 
 
+def _refused(url, method):
+    """The status a request in the clear gets over HTTP."""
+    req = urllib.request.Request(url, data=b"{}" if method == "POST" else None, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_the_page_s_requests_ride_its_live_socket(zero, mirror, tmp_path):
-    """The page's sealed requests -- its boot's pulls and probes and every
-    one after -- go on its live socket (native/moy_net/moy_live.c, THE
-    REQUESTS), so the board serves the page one connection. The other arm
-    keeps them on HTTP (`?req=0`); each from a reset board, its boot, its
-    internal RAM with the page held open and the requests the board took on
-    the socket printed and taken, side by side."""
+def test_the_page_signs_in_and_asks_on_its_live_socket_alone(zero, mirror, tmp_path):
+    """The page signs in on its live socket and asks every sealed route
+    there -- its boot's pulls and probes and every one after
+    (native/moy_net/moy_live.c, THE SIGN-IN and THE REQUESTS) -- so the board
+    serves the page one connection, and over HTTP it refuses the sign-in and
+    every sealed route 410. From a reset board: the page's boot, its
+    internal RAM with the page held open, and the requests the board took
+    on the socket."""
     _needs_password(zero)
-    arms = {}
-    for arm, query in (("http", "?dev=1&desktop=1&req=0"), ("socket", "?dev=1&desktop=1")):
-        boot, held, heap, live = _page_held(zero, tmp_path, arm, query)
-        arms[arm] = (boot, held, heap, live)
-        zero.take("zero page boot %s" % arm, boot, [boot])
-        zero.take("zero internal free held %s" % arm, heap[0] / 1024.0)
-        zero.take("zero internal largest held %s" % arm, heap[1] / 1024.0)
-        zero.take("zero internal low-water held %s" % arm, heap[2] / 1024.0)
-        print("%s over %s: boot %.0f ms; internal %d free, %d largest, %d low-water; "
-              "page %s; socket requests %s" % (zero.name, arm, boot, heap[0], heap[1], heap[2],
-                                                held, live[15] if len(live) > 15 else None))
-    assert arms["http"][1]["reqs"] == 0, arms["http"]
-    assert arms["socket"][1]["reqs"] >= 3 and arms["socket"][3][15] >= 3, arms["socket"]
+    for method, path in (("POST", "/auth"), ("GET", "/carts.json"), ("POST", "/sync"),
+                         ("GET", "/wifi")):
+        status, body = _refused(zero.url + path, method)
+        assert (status, json.loads(body)) == (410, {"error": "live"}), (path, status, body)
+    boot, held, heap, live = _page_held(zero, tmp_path, "socket", "?dev=1&desktop=1")
+    zero.take("zero page boot socket", boot, [boot])
+    zero.take("zero internal free held socket", heap[0] / 1024.0)
+    zero.take("zero internal largest held socket", heap[1] / 1024.0)
+    zero.take("zero internal low-water held socket", heap[2] / 1024.0)
+    print("%s on its socket: boot %.0f ms; internal %d free, %d largest, %d low-water; "
+          "page %s; socket requests %s" % (zero.name, boot, heap[0], heap[1], heap[2],
+                                            held, live[15] if len(live) > 15 else None))
+    assert held["reqs"] >= 3 and live[15] >= 3, (held, live)
 
 
 PIN_LIGHT = "moybyte.pin_light.moy"
@@ -1076,6 +1096,120 @@ def test_the_page_s_terminal_runs_the_board_s_shell(zero, mirror, tmp_path):
     zero.take("zero internal low-water terminal", heap[2] / 1024.0)
     print("%s with the page and its Terminal open: internal %d free, %d largest, "
           "%d low-water; live socket %s" % (zero.name, heap[0], heap[1], heap[2], got["live"]))
+
+
+# -- the fast console (native/moy_net/moy_net.h, HTTPS on demand) -------------------------
+
+
+def _door_open(zero):
+    """POST /tls until the door listens: False where the board has none."""
+    if "tls" not in json.loads(_get(zero.url + "/sync")[0]):
+        return False
+    for _ in range(100):
+        req = urllib.request.Request(zero.url + "/tls", data=b"", method="POST")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            if json.loads(r.read()).get("tls") == 2:
+                return True
+        time.sleep(0.2)
+    raise AssertionError("the door did not open")
+
+
+def _door_listens(zero):
+    import socket
+    try:
+        socket.create_connection((zero.url.split("//")[1], 443), timeout=3).close()
+        return True
+    except OSError:
+        return False
+
+
+# What the Terminal says where the board refuses it behind the secure door
+# (native/moy_sh/moy_sh_link.c, MOY_SH_LINK_LOW).
+FAST_TERM_LOW = "Not enough memory for the Terminal over the fast console"
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_the_fast_console_runs_through_the_secure_door(zero, mirror, tmp_path):
+    """On a board with the secure door, the console over https: from a reset
+    board, the door opened, the page paired on its own origin, booted,
+    reloaded, its Terminal running the board's shell over the wss live
+    socket, and the board's internal RAM read while the page holds it; then
+    the page gone, the door closes itself and its RAM comes back. The page's
+    pack comes from this machine's http mirror, which headless Chrome fetches
+    from an https page and Safari would not (the C3 README)."""
+    _needs_password(zero)
+    zero.restart()
+    before = zero.look()["idf"]
+    if not _door_open(zero):
+        pytest.skip("%s has no secure door" % zero.name)
+    base = "https://" + zero.url.split("//")[1]
+    shell = "ln => /\\$\\s*$/.test(ln)"
+    low = "ln => ln.indexOf('%s') >= 0" % FAST_TERM_LOW
+    steps = sign_in(zero) + [
+        {"waitFor": BOOTED, "timeout": 120000},
+        {"js": "location.reload(), 1"},
+        {"waitFor": BOOTED, "timeout": 120000},
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.term && "
+                    "s.term.some(function (ln) { return (%s)(ln) || (%s)(ln); })); })"
+                    % (shell, low), "timeout": 60000},
+        {"js": "window.__moyState().then(function (s) { return 'LOW ' + "
+               "s.term.some(%s); })" % low},
+        # a face refused while the boot's burst held the heap opens once it is
+        # over: Enter asks again (on a prompt, it is a new prompt)
+        {"wait": 20000},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return "
+                    "s.term.filter(%s).length >= 1 && (%s)(s.term[s.term.length - 1]"
+                    " || s.term[s.term.length - 2] || ''); })" % (shell, shell),
+         "timeout": 60000},
+    ] + [{"key": c} for c in "echo fast-$((6*7))"] + [
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.term.some("
+                    "function (ln) { return ln.indexOf('fast-42') >= 0; }); })",
+         "timeout": 30000},
+        {"wait": 5000},
+        {"js": "'FAST ' + JSON.stringify({https: location.protocol == 'https:', "
+               "boot: window.moyBoot || null})"},
+        {"js": REQS % "HELD"},
+        {"wait": 15000},
+    ]
+    path = _scenario(tmp_path / "fast", steps, "?dev=1&desktop=1&cart=Terminal")
+    flags = (os.environ.get("MOY_CHROME_FLAGS", "") + " --ignore-certificate-errors").strip()
+    proc = subprocess.Popen(["node", "browsershot.mjs", str(path), str(tmp_path / "fast")],
+                            cwd=str(RUNNER),
+                            env=dict(os.environ, MOY_BASE=base, MOY_CHROME_FLAGS=flags),
+                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    lines, held = [], None
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if held is None and 'js -> "HELD ' in line:
+                held = zero.look()["idf"]
+        proc.wait(timeout=120)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+        path.unlink()
+    out = _scrub("".join(lines), zero)
+    fast, reqs = _tagged(out, "FAST"), _tagged(out, "HELD")
+    refused = _tagged(out, "LOW")
+    took = [float(v) for v in re.findall(r"waitFor -> (\d+)", out)]
+    assert fast and fast["https"] and reqs and held is not None, out[-3000:]
+    # A probe of port 443 is a connection, which starts the grace again: one
+    # probe, once the grace and the browser's last connection are over.
+    time.sleep(MOY_TLS_IDLE_S + 30)
+    assert not _door_listens(zero), "the door did not close after its grace"
+    after = zero.look()["idf"]
+    zero.take("zero page reload boot fast", took[1], took[1:2])
+    zero.take("zero internal free fast", held[0] / 1024.0)
+    zero.take("zero internal largest fast", held[1] / 1024.0)
+    zero.take("zero internal low-water fast", held[2] / 1024.0)
+    print("%s over https: reload boot %.0f ms; internal %d free, %d largest, %d low-water "
+          "with the page and its Terminal held (%d, %d before the door); %d free, %d largest "
+          "after the door closed; page %s; the Terminal at the boot %s" % (
+              zero.name, took[1], held[0], held[1], held[2], before[0], before[1], after[0],
+              after[1], reqs, "refused for the heap, then opened" if refused else "opened"))
+    assert after[0] >= before[0] - 1024 and after[1] >= before[1] - 4096, (before, after)
 
 
 # -- the board's Wi-Fi from its page -------------------------------------------------------

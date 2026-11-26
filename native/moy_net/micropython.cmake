@@ -25,6 +25,7 @@ target_sources(usermod_moy_net INTERFACE
     ${CMAKE_CURRENT_LIST_DIR}/moy_sync_apply.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_webhost.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_webauth.c
+    ${CMAKE_CURRENT_LIST_DIR}/moy_tls_srv.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live_dev.c
     ${CMAKE_CURRENT_LIST_DIR}/moy_live_svc.c

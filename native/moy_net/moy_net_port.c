@@ -227,6 +227,16 @@ int moy_http_accept(int lfd, uint32_t *peer) {
     return fd;
 }
 
+uint16_t moy_http_peer_port(int fd) {
+    struct sockaddr_in a;
+    socklen_t an = sizeof(a);
+    memset(&a, 0, sizeof(a));
+    if (getpeername(fd, (struct sockaddr *)&a, &an) != 0 || a.sin_family != AF_INET) {
+        return 0;
+    }
+    return ntohs(a.sin_port);
+}
+
 int moy_http_recv(int fd, char *buf, size_t cap, moy_http_req_t *r,
                   size_t *got) {
     size_t n = 0;

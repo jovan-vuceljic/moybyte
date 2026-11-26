@@ -197,3 +197,27 @@ def test_an_iphone_offers_both_full_screens(tmp_path):
         assert ("Full screen" in rows, _HOME in rows) == (full, home), (ev, rows)
     ws.page.home_screen(ws)
     assert ws.confirm.line_rows()[0][0] == "True full screen, no browser bars:"
+
+
+def test_about_offers_the_fast_console_where_the_board_has_it(tmp_path):
+    """Where the board serving the page has the fast console (its https
+    origin, loader.html), About's Fast console on iPhone row shows on an
+    iPhone's page (Off) and on the fast page itself (On), nowhere else; it
+    sends the page to the loader at the board's http address, which asks
+    again."""
+    import settings_rows
+    ws = build_ws(tmp_path)
+    ws.page = page_link.PageLink(served=True)
+    drv = make_drv(ws)
+    ws.open_settings()
+    cases = (({"fast": 0, "ios": True}, False, "Off"),
+             ({"fast": 1, "ios": False}, False, "Off"),
+             ({"fast": 1, "ios": True}, True, "Off"),
+             ({"fast": 2, "ios": False}, True, "On"))
+    for ev, shown, word in cases:
+        ws.page.heard(ws, dict(ev, host="mojbajt.local"))
+        drv.frame(1 / 30)
+        assert (settings_rows.s.has_fast, settings_rows.s.fast_word) == (shown, word), ev
+    ws.page.drain()
+    ws.page.fast_again()
+    assert ws.page.drain() == [{"do": "go", "url": "http://mojbajt.local/?fast"}]

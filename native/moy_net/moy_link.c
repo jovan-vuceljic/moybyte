@@ -71,7 +71,17 @@ void moy_link_stop(void) {
     s_up = 0;
     portENTER_CRITICAL(&s_latch);
     s_ring.head = s_ring.used = 0;
+    // Without PSRAM the ring is the one internal heap's: it goes with the
+    // match, made again at the next (moy_link_start), so no block of it
+    // outlasts the page that started it.
+    uint8_t *buf = NULL;
+    #ifndef MOY_HAS_PSRAM
+    buf = s_ring.buf;
+    s_ring.buf = NULL;
+    s_ring.cap = 0;
+    #endif
     portEXIT_CRITICAL(&s_latch);
+    heap_caps_free(buf);
 }
 
 int moy_link_rate(int rate) {

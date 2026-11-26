@@ -40,7 +40,7 @@ BOARDS = {
     "guition_p4": ("guition_jc8012p4a1c", 0xD50000, (16 << 20) - 0xD50000),
     "elecrow_p4": ("elecrow_crowpanel_p4_10_1", 0xD50000, (16 << 20) - 0xD50000),
     "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x500000, 0x300000),
-    "c3_zero": ("esp32c3_zero", 0x1E0000, 0x220000),
+    "c3_zero": ("esp32c3_zero", 0x1F0000, 0x210000),
 }
 SIZES = {1: 0, 2: 1, 4: 2, 8: 3, 16: 4, 32: 5}
 TYPES = {"app": 0, "data": 1}

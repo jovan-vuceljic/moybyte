@@ -9,8 +9,9 @@
 // the socket as over HTTP) and the apps' messages (a window on the page and
 // its service on the board, moy_live_svc.c). moy_live.c's header is the wire.
 //
-// The webhost answers GET /live's upgrade (moy_webhost.c, sealed as /term
-// is) and hands the socket here. A board builds the bridge where its
+// The webhost answers GET /live's upgrade (moy_webhost.c: sealed as /term
+// is where it names a session, else the page signs in on the socket first,
+// moy_live.c's THE SIGN-IN) and hands the socket here. A board builds the bridge where its
 // mpconfigboard.h says MOY_NET_LIVE (the Zeros); everywhere else /live is
 // absent (404) and a page has no live socket.
 
@@ -23,8 +24,10 @@
 struct moy_wa_seal;
 
 // The upgraded socket `fd` taken, under the session's `seal` (NULL on the
-// open host): 0, else nonzero (another page's socket is live, or no memory).
-int moy_web_live(int fd, const struct moy_wa_seal *seal);
+// open host), with `pn` bytes the webhost read off it past the page's
+// sign-in at `pre`: 0, else nonzero (another page's socket is live, or no
+// memory).
+int moy_web_live(int fd, const struct moy_wa_seal *seal, const uint8_t *pre, size_t pn);
 // 1 where the board relays its radio on the link channel, with its address
 // on the air (the page's, which its Python reads from the /live probe before
 // the socket opens) into `mac`.
@@ -76,6 +79,9 @@ void moy_live_dev_end(void);
 // bytes), and its send (0, or -1 when the socket failed).
 uint8_t *moy_live_out(size_t *cap);
 int moy_live_say(size_t n);
+// Whether the page's socket came through the secure door (moy_tls_srv.c),
+// whose connections are the only ones from 127.0.0.1.
+int moy_live_behind_door(void);
 // The kinds this board relays to its page (moy_dev_relayed's text), for the
 // /live probe's "kinds": its length.
 size_t moy_web_live_kinds(char *out, size_t cap);

@@ -18,6 +18,7 @@ echo, and a channel the board does not serve passed over.
 """
 import base64
 import ctypes
+import json
 import os
 import random
 import shutil
@@ -27,6 +28,7 @@ import subprocess
 import sys
 import threading
 import time
+import types
 
 import pytest
 
@@ -147,21 +149,46 @@ def air():
 
 # -- a board twin and its page -------------------------------------------------
 
-def _twin(exe, tmp_path, monkeypatch, air, mac, sealed):
+def _twin(exe, tmp_path, monkeypatch, air, mac, sealed, **kw):
     monkeypatch.setenv("MOY_AIR", str(air.port))
     monkeypatch.setenv("MOY_AIR_MAC", mac.hex())
-    h = T.Host(exe, tmp_path, sealed=sealed)
-    if sealed:
-        h.page = h.browser()
+    return live_host(T.Host(exe, tmp_path, sealed=sealed, **kw))
+
+
+def live_host(h):
+    """A twin whose page talks to it on its live socket alone: `h.page` the
+    signed-in page's client once a Page signed in (its requests ride the
+    host's open Page, `h.sock`), `h.probe()` the open GET /live."""
+    h.page = None
+    h.sock = None
+    h.ask = lambda method, target, body=b"": h.sock.ask(method, target, body)
+    h.probe = lambda: json.loads(seal_client.split(h.send("GET", "/live"))[2])
     return h
+
+
+def board_id(host):
+    """A board's id, from a hello on a socket signing in: a board with the
+    live socket answers no sign-in over HTTP."""
+    shim = live_host(types.SimpleNamespace(port=host.port, send=host.send))
+    page = Page(shim, None, True).open(bare=True)
+    try:
+        return seal_client.Browser(shim.ask).hello()["id"]
+    finally:
+        page.drop()
 
 
 class Page:
     """A page's socket and link, the worker's job done by hand: what the
-    link queued goes up, what the board sends goes into the link."""
+    link queued goes up, what the board sends goes into the link. On a
+    sealed twin its first socket signs in on itself (the QR's token, as
+    the worker's sign-in), and a later one resumes the session; its
+    requests (`ask`) are the worker's request channel."""
 
     def __init__(self, host, lib, sealed):
         self.host, self.lib, self.sealed = host, lib, sealed
+        self.on = False                 # its frames sealed
+        self.id = 0                     # its last request's
+        self.frames = []                # (kind, plaintext length) of each answer frame
         self.c = None
         self.buf = b""
         self.closed = None
@@ -171,12 +198,29 @@ class Page:
         self.answers = []               # the requests' messages, 'r' and all
         self.out = ctypes.create_string_buffer(16384)
 
-    def open(self, proto="moy.live"):
+    def open(self, proto="moy.live", signin=None, bare=False, via=None):
+        """The socket: sealed under the host's session where it has one,
+        else signed in on itself by `signin` (a Browser's pairing, called
+        with it; the QR's token by default), or left in the clear and not
+        signed in (`bare`). `via`: from 127.0.0.1 as the secure door
+        connects, the browser it names that address (moy_net.h, THE DOOR'S
+        BROWSERS)."""
         path = "/live"
-        if self.sealed:
+        self.on = False
+        resume = self.sealed and self.host.page is not None and signin is None and not bare
+        if resume:
             path, _b, seq = self.host.page.seal("GET", "/live")
             seal_client.lib().moy_sw_ws(1, seq)
-        c = socket.create_connection(("127.0.0.1", self.host.port), timeout=5)
+        if via is None:
+            c = socket.create_connection(("127.0.0.1", self.host.port), timeout=5)
+        else:
+            c = socket.socket()
+            c.settimeout(5)
+            c.bind(("127.0.0.1", 0))
+            at = len(self.host.log())
+            self.host.say("via %d %s" % (c.getsockname()[1], via))
+            self.host.wait_line("VIA %d" % c.getsockname()[1], at)
+            c.connect(("127.0.0.1", self.host.port))
         key = base64.b64encode(os.urandom(16)).decode()
         c.sendall(("GET %s HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n"
                    "Sec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n"
@@ -192,16 +236,75 @@ class Page:
         c.setblocking(False)
         self.c = c
         self.closed = None
-        self.lib.moy_link_web_open(1)
+        self.piece = self.host.probe().get("req", 0)
+        self.host.sock = self
+        self.on = resume
+        if self.sealed and not resume and not bare:
+            self.sign_in(signin or (lambda b: b.pair_token(self.host.token())))
+        if self.lib is not None:
+            self.lib.moy_link_web_open(1)
         return self
+
+    def sign_in(self, how):
+        """The sign-in on the socket, then its last frame in the clear and
+        the seal (moy_live.c, THE SIGN-IN)."""
+        b = seal_client.Browser(self.host.ask)
+        how(b)
+        self.send(b"cS")
+        seal_client.lib().moy_sw_ws(1, 0)
+        self.on = True
+        self.host.page = b
+        return b
+
+    def ask(self, method, target, body=b""):
+        """One request on the socket (moy_live.c, THE REQUESTS): its answer
+        as the raw HTTP a client reads."""
+        self.id += 1
+        req = method.encode() + b" " + target.encode() + b"\n" + body
+        first = self.piece - 8
+        self.send(b"rQ" + struct.pack("<HI", self.id, len(req)) + req[:first])
+        for at in range(first, len(req), self.piece - 4):
+            self.send(b"rB" + struct.pack("<H", self.id) + req[at:at + self.piece - 4])
+        status, ctype, body = self.answer()
+        return b"HTTP/1.1 %d -\r\nContent-Type: %s\r\n\r\n" % (status, ctype) + body
+
+    def answer(self, timeout=10.0):
+        """(status, Content-Type, body) of request self.id, once its 'Z' or
+        its 'W' came; each frame's (kind, plaintext length) kept in
+        self.frames."""
+        status, ctype, body = None, b"", b""
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            self.pump()
+            got, self.answers = self.answers, []
+            for m in got:
+                kind, mid = m[1:2], struct.unpack("<H", m[2:4])[0]
+                assert mid == self.id, (mid, self.id)
+                self.frames.append((kind, len(m)))
+                at = 4
+                if kind in (b"A", b"W"):
+                    assert status is None, "a second head"
+                    status, at = struct.unpack("<H", m[4:6])[0], 7 + m[6]
+                    ctype = m[7:at]
+                else:
+                    assert kind in (b"D", b"Z"), kind
+                    assert status is not None, "a body before its head"
+                body += m[at:]
+                if kind in (b"Z", b"W"):
+                    return status, ctype, body
+            if self.closed:
+                raise AssertionError("the socket closed: %r" % (self.closed,))
+            time.sleep(0.005)
+        raise AssertionError("no answer to request %d" % self.id)
 
     def drop(self):
         self.c.close()
         self.c = None
-        self.lib.moy_link_web_open(0)
+        if self.lib is not None:
+            self.lib.moy_link_web_open(0)
 
     def send(self, pl, op=2):
-        if self.sealed:
+        if self.on:
             n = seal_client.lib().moy_sw_ws_up(1, seal_client.put(pl))
             assert n > 0
             pl = seal_client.got(n)
@@ -243,12 +346,13 @@ class Page:
                 continue
             if op != 2:
                 continue
-            if self.sealed:
+            if self.on:
                 n = seal_client.lib().moy_sw_ws_down(1, seal_client.put(pl))
                 assert n >= 0, "a frame down that does not open"
                 pl = seal_client.got(n)
             if pl[:1] in (b"n", b"d", b"m"):
-                self.lib.moy_link_web_give(pl, len(pl))
+                if self.lib is not None:
+                    self.lib.moy_link_web_give(pl, len(pl))
             elif pl[:2] == b"cE":
                 self.echoes.append(pl[2:])
             elif pl[:1] == b"t":
@@ -257,6 +361,8 @@ class Page:
                 self.hints.append(pl[2:])
             elif pl[:1] == b"r":
                 self.answers.append(pl)
+        if self.lib is None:
+            return
         n = self.lib.moy_link_web_take(self.out, len(self.out))
         raw = self.out.raw[:n]
         at = 0
@@ -432,8 +538,8 @@ def two_pages(twin_exe, page_so, tmp_path, monkeypatch, air):
 
 def test_the_probe_says_the_board_relays_its_radio_and_its_address(two_pages):
     ha, hb, pa, pb, air = two_pages
-    assert ha.page.json("GET", "/live") == (200, {"live": 1, "link": 1, "mac": MAC_A.hex(), "term": 1, "hints": 1,
-                                                 "req": 4096 - 8 - 16})
+    assert ha.probe() == {"live": 1, "link": 1, "mac": MAC_A.hex(), "term": 1, "hints": 1,
+                          "req": 4096 - 8 - 16}
     assert "Sec-WebSocket-Protocol: moy.live" in pa.head
 
 

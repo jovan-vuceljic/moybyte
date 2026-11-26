@@ -45,7 +45,9 @@ chip changes.
   goes on by cable. The store is the space after the slot. The website's
   card offers the install, the merged image and an empty store
   (`tools/store_image.py`), and, as the C3's only update, the merged image
-  as it is, which keeps the store.
+  as it is, which keeps the store while the table stays. The slot grew by
+  64 KB for the fast console (below; owner, 2026-11-26, at the store's
+  expense), and the flash that brings that table formats the store once.
 - **The browser console is not in its install** (owner, 2026-11-23): the
   add-on cart outgrew this store, so board.toml declares the console online
   (`[web] console = "online"`): the website's install lays down an empty
@@ -60,6 +62,42 @@ chip changes.
   `serve.py` first), so a page load costs the board the loader and `/sync`,
   not the pack. The board asks its release for no add-on
   (`zero_host.make_addon` is None where `moy_web.online()`).
+- **The fast console: its page over https, on demand.** iOS runs a page
+  that came from a plain-http address with no JIT, in every browser there,
+  and a window or a home-screen app opened from it inherits that. So the
+  loader asks an iPhone or iPad (and any browser with `?fast` in the
+  address) "Make it faster on iPhone?" (the owner's words, 2026-11-26).
+  Make it fast asks `POST /tls`, which opens the board's TLS door on port
+  443, and goes to `https://<the same host>/`; Remember my choice keeps the
+  answer in the http origin's storage, and the loader skips the card for
+  it after. About's Fast console on iPhone row goes to `?fast`, which
+  forgets the answer and asks again
+  (`native/moy_net/moy_net.h`, HTTPS on demand; `moy_tls_srv.c`). Joining
+  the board stays plain http; the door holds RAM only while it is open, and
+  closes itself two minutes after its last connection ends (a page waiting
+  at the pairing prompt holds none). Behind it is the webhost, over
+  loopback, so every route, the live socket (wss) and the Terminal work as
+  over http, and the sign-in's backoff counts each browser by its own
+  address. A Terminal there opens only while the internal heap has 56 KB
+  free and a 16 KB block (`MOY_TLS_TERM_FREE`): a session on top of the
+  door and the page's burst through it took the heap under 3 KB, so below
+  that the Terminal says so and Enter asks again; over http it opens as
+  ever. The certificate is the board's own, self-signed, made the first
+  time and kept in `system/` (`tls.der`, `tls.key`), so Safari's one
+  warning (Show Details, then visit this website) is once per board. What
+  differs from http:
+  - **Pairing is per origin.** A browser paired on `http://` pairs again on
+    `https://`: its key lives in the origin's storage.
+  - **A mirror must be https.** From the fast console the loader cannot
+    fetch an `http://` mirror (mixed content), so it boots from
+    os.moybyte.com, which holds the published packs, or the browser's cache.
+    A worktree build's `serve.py` mirror is http: a dev image needs an https
+    mirror named in its build (`MOYBYTE_WEB_MIRRORS`) for a phone.
+  - **When the door closes** (a phone locked past the grace, a reboot), the
+    page cannot fall back to http: it says "The fast console closed" and
+    links `http://<host>/`, where the button opens it again.
+  The Zero suite's `test_the_fast_console_runs_through_the_secure_door` runs
+  it on this board and reads its RAM.
 - **The image carries the core carts alone** (owner, 2026-11-17;
   `moy_seed.CORE`, board.toml's `[roster] image`), under the XIAO's seed
   rule (`zero_host.seed_carts`): the app slot has no room for more. The
@@ -127,13 +165,18 @@ chip changes.
   only its statics: its task and its buffers (the page's frames waiting to
   be whole, `MOY_LIVE_IN`, half the XIAO's; one frame down; one radio frame)
   are made when the webhost hands it a page's socket and given back at its
-  end. A request the page asks on the socket (`moy_live.c`, THE REQUESTS)
+  end. The page signs in on the socket and asks every sealed route there
+  alone (`moy_live.c`, THE SIGN-IN and THE REQUESTS; over HTTP they are
+  refused 410), and a socket signing in is the webhost's until it is
+  sealed, its frames in one 1 KB buffer (`moy_webhost.c`, THE SIGN-IN ON
+  THE LIVE SOCKET). A request the page asks on the socket
   is pieced together in a block of its own length, and its answer leaves
   through one of `LIVE_PIECE` bytes (`native/moy_net/moy_webhost.c`), both
   given back once it is answered, as an HTTP request's upload buffer is.
   The radio's receive ring (`MOY_LIVE_RING`, a quarter of the XIAO's)
-  is the kernel link's, made at the first match and kept, as the link keeps
-  it on every board (`native/moy_net/moy_link.c`). A socket whose buffers do
+  is the kernel link's, made when a match brings the radio up and given
+  back when it goes down, where a board with PSRAM keeps it
+  (`native/moy_net/moy_link.c`). A socket whose buffers do
   not fit is refused like a second page's, and the page tries again. The
   whole protocol is wired; what the C3 leaves out is room, not a feature: a
   match beside an SSH session competes for the internal heap that session

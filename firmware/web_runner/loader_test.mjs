@@ -120,16 +120,36 @@ function opener(origin, answer = () => { }) {
 }
 
 // One page load: `sync` is the board's /sync, `net` {url: bytes or status},
-// `idb` the origin's store, `site` the opener (opener()). Returns what the
-// loader did.
-async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE], site = null }) {
-    const asked = [], status = { textContent: "" };
+// `idb` the origin's store, `site` the opener (opener()), `ua` the browser's
+// user agent, `store` its localStorage as a Map ("throw": one that throws),
+// `search` the address's query, `pick` the fast console card's answer
+// [button, remember]. Returns what the loader did.
+async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE], site = null,
+                      ua = "node", store = new Map(), search = "", pick = null }) {
+    const asked = [], status = { textContent: "", card: null,
+        set innerHTML(h) {
+            this.card = h.replace(/<style>.*<\/style>/, "").replace(/<[^>]*>/g, "");
+            const box = this.box = { checked: false };
+            this.btns = [...h.matchAll(/<button>([^<]*)/g)].map((m) => ({ textContent: m[1] }));
+            if (!pick) throw new Error("the card asked and the test picks nothing");
+            setTimeout(() => { box.checked = pick[1]; this.btns.find((b) => b.textContent == pick[0]).onclick(); }, 0);
+        },
+        querySelectorAll() { return this.btns; },
+        querySelector() { return this.box; },
+    };
+    const no = () => { throw new Error("SecurityError"); };
+    const localStorage = store == "throw" ? { getItem: no, setItem: no, removeItem: no } : {
+        getItem: (k) => store.has(k) ? store.get(k) : null,
+        setItem: (k, v) => store.set(k, String(v)),
+        removeItem: (k) => store.delete(k),
+    };
     let written = null;
     const fetch = async (url) => {
         url = String(url);
         if (url.startsWith("blob:")) return new Response(resolveObjectURL(url));
         asked.push(url);
         if (url == "/sync") return new Response(JSON.stringify(sync));
+        if (url == "/tls") return new Response(JSON.stringify({ tls: 2, port: 443 }));
         const got = net[url];
         if (got === undefined) throw new TypeError("unreachable");
         return typeof got == "number" ? new Response("", { status: got }) : new Response(got);
@@ -141,14 +161,15 @@ async function load({ sync, net = {}, idb = fakeIDB(), mirrors = [DEV, SITE], si
     };
     const ctx = vm.createContext({ document, fetch, indexedDB: idb, performance, console,
         DecompressionStream, Response, Blob, TextDecoder, URL, setTimeout,
-        location: { href: "http://192.168.1.57/" },
+        location: { href: "http://192.168.1.57/" + search, protocol: "http:", hostname: "192.168.1.57", search },
+        navigator: { userAgent: ua, platform: "", maxTouchPoints: 0 }, localStorage,
         addEventListener: (t, f) => { if (t == "message" && site) site.listeners.push(f); } });
     ctx.self = ctx.window = ctx;
     ctx.opener = site ? site.win : null;
     if (site) site.clone = vm.runInContext("(u) => new Uint8Array(u).buffer", ctx);
     await vm.runInContext(SCRIPT.replace("@MIRRORS@", JSON.stringify(mirrors)), ctx);
     return { asked, written, said: status.textContent, assets: ctx.moyAssets, boot: ctx.moyBoot, idb,
-             link: ctx.moyLink };
+             link: ctx.moyLink, card: status.card, went: ctx.location.href, fast: ctx.moyFast };
 }
 
 const syncOf = (p, local = 0) => ({ sync: 1, page: p.page, pack: p.pack, local });
@@ -327,6 +348,39 @@ const handing = (bytes) => (m, send) => {
     ok("an image that names no console says so", r.written === null && /names no/.test(r.said));
     r = await load({ sync: null });
     ok("a board with no answer says so", r.written === null && /did not answer/.test(r.said), r.said);
+}
+
+// The fast console (HTTPS on demand): an iPhone is asked once; a remembered
+// answer is gone to at once; ?fast forgets it and asks any browser again.
+{
+    const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)";
+    const sync = Object.assign(syncOf(good), { tls: 1 }), net = { [SITE + good.page + ".pack"]: good.data };
+    const HTTPS = "https://192.168.1.57/";
+    let store = new Map();
+    let r = await load({ sync, net, ua: IPHONE, store, pick: ["Make it fast", false] });
+    ok("an iPhone is asked in the owner's words", /^Make it faster on iPhone\?/.test(r.card || "")
+       && /tap Show Details, then visit this website\. You only do this once\./.test(r.card)
+       && /Remember my choice/.test(r.card), r.card);
+    ok("Make it fast opens the door and goes to the https origin",
+       r.asked.includes("/tls") && r.went == HTTPS && r.written === null, r.went);
+    ok("an answer not asked to be remembered is not kept", store.size == 0);
+    r = await load({ sync, net, ua: IPHONE, store, pick: ["Not now", true] });
+    ok("Not now boots the console here", r.written == PAGE && !r.asked.includes("/tls"));
+    ok("Remember my choice keeps the answer", store.get("moy.fast") == "0");
+    r = await load({ sync, net, ua: IPHONE, store });
+    ok("a remembered Not now skips the card", r.card === null && r.written == PAGE);
+    store.set("moy.fast", "1");
+    r = await load({ sync, net, ua: IPHONE, store });
+    ok("a remembered Make it fast goes at once", r.card === null && r.went == HTTPS);
+    r = await load({ sync, net, store, search: "?fast", pick: ["Not now", false] });
+    ok("?fast forgets the choice and asks any browser", r.card !== null && r.written == PAGE && store.size == 0);
+    r = await load({ sync, net });
+    ok("a browser not asked boots here and tells the page the board has the door",
+       r.card === null && r.written == PAGE && r.fast == 1);
+    r = await load({ sync, net, ua: IPHONE, store: "throw", pick: ["Make it fast", true] });
+    ok("a browser that keeps nothing is still asked and goes", r.went == HTTPS);
+    r = await load({ sync: syncOf(good), net, ua: IPHONE });
+    ok("a board without the door asks nothing", r.card === null && r.written == PAGE && r.fast == 0);
 }
 
 if (fail) { console.log(fail + " failed"); process.exit(1); }

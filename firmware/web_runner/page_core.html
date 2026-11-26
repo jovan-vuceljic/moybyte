@@ -601,11 +601,13 @@ else{k.unlock();window.__moyLocked=0;}}
 document.addEventListener("fullscreenchange",kLock);
 document.addEventListener("webkitfullscreenchange",kLock);
 // Whether the page runs as a home-screen app, and the host it was opened
-// at: the console's Add to Home Screen row and card read them.
+// at: the console's Add to Home Screen row and card read them. `fast`: the
+// board serving it has the fast console (its loader's self.moyFast), 2 where
+// this page is it (https): About's Fast console on iPhone row reads it.
 function asApp(){return navigator.standalone===true||!!(window.matchMedia&&
 (matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches));}
 send({type:"page",fs:false,canfs:fsCan(),ios:IOS,app:asApp(),
-host:location.hostname});
+host:location.hostname,fast:window.moyFast?(location.protocol==="https:"?2:1):0});
 // THE ASKS (page_link.py): what the console's rows ask of the browser. A
 // download, Play on the console and going to where the console moved go at once. A browser grants full screen
 // and its file chooser only inside a user's gesture, so those are done at

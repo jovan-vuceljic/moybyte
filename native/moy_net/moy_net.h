@@ -89,6 +89,8 @@ int moy_http_listen(uint16_t port);
 // One pending connection, blocking with the two timeouts above, or -1.
 // `*peer` is its IPv4 address (network order), 0 where there is none.
 int moy_http_accept(int lfd, uint32_t *peer);
+// The port a connection's peer sends from (host order), 0 where none reads.
+uint16_t moy_http_peer_port(int fd);
 // Read one request off `fd` into `buf`: its head and as much of its body as
 // Content-Length names, up to `cap` bytes. MOY_HTTP_OK and `*got`, or
 // MOY_HTTP_BAD when no head arrived.
@@ -417,6 +419,16 @@ void moy_web_answer(const void *resp, size_t n);
 // Close the connection a poll was serving when the VM's store raised under it.
 void moy_web_abort(void);
 
+// THE DOOR'S BROWSERS (moy_tls_srv.c): a connection the secure door joins to
+// the webhost comes from 127.0.0.1, so before it connects the door names the
+// browser behind it by its own end's port, and the webhost takes that
+// browser's address as the connection's source (the sign-in's backoff counts
+// per browser, not once for every browser behind the door). An address of 0
+// forgets the port. Only a connection from 127.0.0.1 is looked up, and each
+// name is taken once.
+#define MOY_WEB_VIA_MAX 4
+void moy_web_via(uint16_t port, uint32_t ip);
+
 // Bind the configured host on `port` (a configure-only moy_web_start first):
 // 0, or the errno the bind failed with. A listener already on `port` stays.
 int moy_web_bind(uint16_t port);
@@ -441,6 +453,40 @@ int moy_web_pack(const char *root, const char *kinds, int bytes, char **out,
 
 // The image's bundle: "<count> <bytes> <digest>", or NULL with none baked.
 const char *moy_web_stamp_text(void);
+
+// -- HTTPS on demand (moy_tls_srv.c) --------------------------------------------
+//
+// An iPhone runs a page that came from a plain-http address with no JIT, so
+// the console offers its page over TLS too, on demand: `POST /tls` (open, as
+// the page asks before it signs in on the new origin) opens the door on
+// MOY_TLS_PORT, making the board's self-signed certificate the first time
+// (kept in the system folder as MOY_TLS_CERT and MOY_TLS_KEY), and the door
+// closes itself MOY_TLS_IDLE_MS after its last connection ends. Behind it is
+// the webhost itself, over loopback: every route, seal and socket as over
+// http. An image takes it where its board defines MOY_NET_HTTPS; elsewhere
+// the route answers 404 and GET /sync names no "tls".
+#define MOY_TLS_PORT 443
+#define MOY_TLS_CONNS 2             // connections at once (the live socket, a request); past them the backlog waits
+#define MOY_TLS_IDLE_MS 120000u      // a page at the pairing prompt holds no connection
+#define MOY_TLS_CERT "/tls.der"
+#define MOY_TLS_KEY "/tls.key"
+#define MOY_TLS_STARTING 1
+#define MOY_TLS_UP 2
+
+// The system folder the certificate is kept in.
+void moy_tls_at(const char *system);
+// Open the door in front of the webhost on `back`: MOY_TLS_UP, MOY_TLS_STARTING
+// (ask again), or -errno.
+int moy_tls_open(uint16_t back);
+// Whether the heap is too short for a Terminal behind the door: a session
+// (its shell's stack, its buffers, about 25 KB on the C3) on top of the
+// door's sessions and the page's burst through it took the C3's internal
+// heap from about 50 KB to under 3 KB (2026-11-26), so the page's Terminal
+// opens over https only above these, and says why it does not
+// (moy_tty_live.c; the page's http address has the Terminal as ever).
+#define MOY_TLS_TERM_FREE (56u * 1024u)
+#define MOY_TLS_TERM_BLOCK (16u * 1024u)
+int moy_tls_low(void);
 
 // -- the web-console switch (moy_webconsole.c) --------------------------------------
 //

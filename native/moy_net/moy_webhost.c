@@ -7,7 +7,11 @@
 //                                              digests the loader checks:
 //                                              {"sync":1,"page":<body sha256>,
 //                                              "pack":<whole sha256>,"local":0|1}
-//   POST /auth                                 open: the sign-in (moy_seal.h, moy_webauth.c)
+//   POST /auth                                 open: the sign-in (moy_seal.h, moy_webauth.c),
+//                                              on the live socket where the board has one
+//   POST /tls                                  open, where the board takes the secure door:
+//                                              it opens (moy_net.h, HTTPS on demand),
+//                                              {"tls":1} while it starts, {"tls":2} up
 //   GET  /carts.json, /files.json, /apps.json  sealed: the store, streamed
 //   GET  /media                                sealed: the music folder's songs, the
 //                                              bytes a browser's Music plays (below)
@@ -21,9 +25,12 @@
 //                                              {"term":1}: the session is good and a shell is
 //                                              here (the page asks it why a socket failed,
 //                                              which a WebSocket never says)
-//   GET  /live (Upgrade: websocket)            sealed: the live socket, handed to its bridge
-//                                              (moy_live.h) with the session's keys;
-//                                              without the upgrade, {"live":1,"link":0|1}
+//   GET  /live (Upgrade: websocket)            the live socket, handed to its bridge
+//                                              (moy_live.h): sealed with the session's keys
+//                                              where it names one, else open, the page
+//                                              signing in on it (THE SIGN-IN ON THE LIVE
+//                                              SOCKET, below); without the upgrade, open,
+//                                              {"live":1,"link":0|1}
 //                                              and "kinds" where it relays any, "term":1
 //                                              where it carries the web terminal, "hints":1
 //                                              where it says what changed, "req":N where it
@@ -36,9 +43,13 @@
 //   anything in the configured `defer`         sealed, then parked for the VM (/run, /update,
 //                                              /console.json; "*": every path)
 //
-// Every route but /auth, /live and /term is asked on the live socket as well,
-// where the board builds it (THE REQUESTS, below): the same route, sign-in
-// check and park, its answer the same bytes in the socket's frames.
+// A board that builds the live socket answers its page there alone: the
+// sign-in on the socket before it is sealed, every sealed route on it after
+// (THE REQUESTS, below: the same route, sign-in check and park, its answer
+// the same bytes in the socket's frames), and over HTTP POST /auth and every
+// sealed route are refused 410 {"error":"live"}. Its HTTP is the bundle, the
+// marker, the probe and the upgrade, and the setup form's host (below). A
+// board without the socket (the consoles) serves them all over HTTP.
 //
 // A SEALED ROUTE takes a request of a signed-in session and nothing else
 // (moy_seal.h: the session, the sequence number and the tag ride the query;
@@ -57,14 +68,15 @@
 // browser in with its device key; "token" pairs a browser with the QR's
 // single-use token; "pake" and "confirm" pair one with the console's password
 // by SPAKE2+, its curve work on a worker while this poll goes on (the request
-// is held, `afd`, and answered at a later poll); "claim" sets the first
+// is held, `afd` or the sign-in socket's `asi`, and answered at a later
+// poll); "claim" sets the first
 // password of a board that has none, with the claim the cable's Improv
 // carried (moy_webauth.c, THE CLAIM). docs/os_2026-11/system.md section 3 is
 // the threat model.
 //
 // THE BACKOFF (moy_webauth.c): every credential the sign-in checks -- a
 // device key, a token, a password's PAKE -- counts. A source (the peer's IPv4
-// address; 0 off a socket) has MOY_WEB_AUTH_FREE wrong ones; each past them
+// address, a connection's or a live socket's; 0 off a socket) has MOY_WEB_AUTH_FREE wrong ones; each past them
 // shuts it out for a window that starts at MOY_WEB_AUTH_WAIT_MS and doubles
 // up to MOY_WEB_AUTH_WAIT_MAX_MS. Past MOY_WEB_AUTH_FREE_ALL wrong ones from
 // anywhere, every source that has not signed in since waits the same way, so
@@ -167,6 +179,9 @@ static const moy_htab_mem_t STORE_MEM = { moy_store_alloc, moy_store_free };
 #pragma weak moy_web_live_req
 #pragma weak moy_live_req_take
 #pragma weak moy_live_req_say
+// The secure door (moy_tls_srv.c), where the board takes it.
+#pragma weak moy_tls_at
+#pragma weak moy_tls_open
 
 #define CHUNK_MIN 8192
 #define CHUNK_HEAD 8
@@ -201,6 +216,23 @@ static const struct {
     {"icon-512.png", "image/png"},
 };
 
+// A live socket signing in (THE SIGN-IN ON THE LIVE SOCKET, below).
+#define SIGNINS 2                       // held at once
+#define SIGNIN_IN 1024                  // its frames waiting to be whole
+#define SIGNIN_IDLE_MS 5000             // a page silent this long is gone
+#define SIGNIN_HAND_MS 2000             // ...and the bridge given this long to take it
+
+enum { SI_AUTH, SI_SEALING, SI_HANDING };
+
+typedef struct {
+    int fd;                             // -1: none
+    uint8_t state;                      // SI_*
+    uint32_t peer;                      // its source, as a connection's
+    uint32_t heard, at;                 // moy_net_ms of its last frame, of its state's start
+    moy_wa_seal_t seal;                 // the session its sign-in made
+    size_t n;                           // bytes in `in`
+    uint8_t *in;                        // SIGNIN_IN, made with it
+} signin_t;
 
 typedef struct {
     int lfd;                        // the listener, -1 when none
@@ -210,6 +242,9 @@ typedef struct {
     uint16_t pid;                   // ...its id
     uint32_t pgen;                  // ...and its socket's session (moy_live.h)
     int afd;                        // the connection a PAKE answers, -1 when none
+    int8_t asi;                     // ...or the sign-in socket, -1 when none
+    uint16_t aid;                   // ...and its request's id
+    signin_t si[SIGNINS];           // live sockets signing in
     uint8_t closing, taken;
     uint16_t port;
     uint32_t closing_at, parked_at, requests, events;
@@ -283,6 +318,10 @@ static int ensure(void) {
         return 0;
     }
     w->lfd = w->cur = w->pfd = w->afd = -1;
+    w->asi = -1;
+    for (int i = 0; i < SIGNINS; i++) {
+        w->si[i].fd = -1;
+    }
     W = w;
     return 1;
 }
@@ -322,6 +361,9 @@ static void config(const moy_web_cfg_t *cfg) {
     copy_list(W->kinds, sizeof(W->kinds), cfg->kinds);
     copy_list(W->defer, sizeof(W->defer), cfg->defer);
     moy_wa_config(cfg->system);
+    if (moy_tls_at != NULL) {
+        moy_tls_at(cfg->system);
+    }
     moy_page_at(W->carts);
 }
 
@@ -400,11 +442,16 @@ int moy_web_bind(uint16_t port) {
     return 0;
 }
 
+static void signin_drop(int i, int code, const char *why);
+
 static void stop_now(void) {
     moy_gpio_release();
     close_conn(&W->lfd);
     close_conn(&W->pfd);
     close_conn(&W->afd);
+    for (int i = 0; i < SIGNINS; i++) {
+        signin_drop(i, 1001, "stopped");
+    }
     W->plive = 0;                   // the page's socket asks again
     if (W->cur < 0) {
         req_done();                 // a stop from inside a route leaves serve() its request
@@ -1247,8 +1294,9 @@ static void sync_marker(out_t *o) {
         x[j][64] = '\0';
     }
     char doc[192];
-    snprintf(doc, sizeof(doc), "{\"sync\":1,\"page\":\"%s\",\"pack\":\"%s\",\"local\":%d}",
-             x[0], x[1], moy_page_state() == MOY_PAGE_READY);
+    snprintf(doc, sizeof(doc), "{\"sync\":1,\"page\":\"%s\",\"pack\":\"%s\",\"local\":%d%s}",
+             x[0], x[1], moy_page_state() == MOY_PAGE_READY,
+             moy_tls_open != NULL ? ",\"tls\":1" : "");
     json(o, 200, doc);
 }
 
@@ -1583,6 +1631,14 @@ static int route(out_t *o, const char *m, size_t mn, const char *t, size_t tn,
     const char *q = memchr(t, '?', tn);
     size_t pn = q ? (size_t)(q - t) : tn;
     int post = path_is(m, mn, "POST"), get = path_is(m, mn, "GET");
+    // A board with the live socket signs its page in and answers its sealed
+    // routes there alone (THE SIGN-IN ON THE LIVE SOCKET): over HTTP they are
+    // gone.
+    if (moy_web_live != NULL && o->lv == NULL
+        && ((post && path_is(t, pn, "/auth")) || gated(post, get, t, pn))) {
+        json(o, 410, "{\"error\":\"live\"}");
+        return ROUTE_DONE;
+    }
     if (post && path_is(t, pn, "/auth")) {
         char doc[DOC_MAX];
         int st = moy_wa_auth(W->peer, b, bn, doc, sizeof doc);
@@ -1590,6 +1646,21 @@ static int route(out_t *o, const char *m, size_t mn, const char *t, size_t tn,
             return ROUTE_LATER;
         }
         json(o, st, doc);
+        return ROUTE_DONE;
+    }
+    // THE SECURE DOOR (moy_net.h, HTTPS on demand) opens for anyone: the page
+    // asks before it has a session on the https origin, and what it costs is
+    // RAM the door gives back when idle, as an http connection costs.
+    if (post && path_is(t, pn, "/tls") && moy_tls_open != NULL) {
+        int st = moy_tls_open(W->port);
+        char doc[64];
+        if (st < 0) {
+            snprintf(doc, sizeof doc, "{\"error\":\"tls\",\"errno\":%d}", -st);
+            json(o, 503, doc);
+        } else {
+            snprintf(doc, sizeof doc, "{\"tls\":%d,\"port\":%d}", st, MOY_TLS_PORT);
+            json(o, 200, doc);
+        }
         return ROUTE_DONE;
     }
     if (gated(post, get, t, pn)) {
@@ -1782,9 +1853,13 @@ static int upgrade(out_t *o, const moy_http_req_t *r, const char *key, size_t kn
     return moy_http_send(o->fd, head, (size_t)hn) < 0 ? -1 : 0;
 }
 
-// GET /term and GET /live. 1 when the socket was handed to its bridge (the
-// caller neither answers nor closes it), 0 when the request was answered
-// here.
+static int signin_take(int fd, uint32_t peer);
+
+// GET /term and GET /live. 1 when the socket was handed on (to its bridge,
+// or to its sign-in: the caller neither answers nor closes it), 0 when the
+// request was answered here. The live socket's probe is open, and its
+// upgrade naming no session is a page that signs in on it (THE SIGN-IN ON
+// THE LIVE SOCKET); one naming a session is sealed as /term's.
 static int stream(out_t *o, const moy_http_req_t *r, int which) {
     // a board whose live socket carries the terminal serves no /term
     int live_term = moy_web_live_term != NULL && moy_web_live_term();
@@ -1793,11 +1868,15 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
         simple(o, 404, "text/plain; charset=utf-8", "not found");
         return 0;
     }
-    if (!signed_in(o, r->method, r->method_n, r->target, r->target_n, NULL, 0)) {
+    size_t kn, sn;
+    const char *key = header(W->req, r->head_end, "Sec-WebSocket-Key", &kn), *sv;
+    int live = which == MOY_WA_LIVE;
+    int signin = live && key != NULL && !moy_wa_open()
+                 && !moy_http_query(r->target, r->target_n, "s", 1, &sv, &sn);
+    if (!(live && key == NULL) && !signin
+        && !signed_in(o, r->method, r->method_n, r->target, r->target_n, NULL, 0)) {
         return 0;
     }
-    size_t kn;
-    const char *key = header(W->req, r->head_end, "Sec-WebSocket-Key", &kn);
     if (key == NULL) {
         if (which == MOY_WA_TERM) {
             json(o, 200, "{\"term\":1}");
@@ -1829,20 +1908,26 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
         json(o, 400, "{\"error\":\"key\"}");
         return 0;
     }
-    moy_wa_take(which, o->seal);
+    if (!signin) {
+        moy_wa_take(which, o->seal);
+    }
     if (upgrade(o, r, key, kn, which == MOY_WA_TERM ? "moy.sh" : "moy.live") != 0) {
         return 0;
     }
     int took;
-    if (which == MOY_WA_TERM) {
+    if (signin) {
+        took = signin_take(o->fd, W->peer) == 0;
+    } else if (which == MOY_WA_TERM) {
         int cols = query_int(r->target, r->target_n, "cols", 80);
         int rows = query_int(r->target, r->target_n, "rows", 24);
         took = moy_web_term(o->fd, cols, rows, o->seal) == 0;
     } else {
-        took = moy_web_live(o->fd, o->seal) == 0;
+        took = moy_web_live(o->fd, o->seal, NULL, 0) == 0;
     }
     if (took) {
-        moy_wa_stream(which, o->seal);
+        if (!signin) {
+            moy_wa_stream(which, o->seal);
+        }
         return 1;
     }
     // the bridge serves another page, or has no room for one: a close it can read
@@ -2028,7 +2113,7 @@ static int serve_live(void) {
     unprefix(&o, &r.target, &r.target_n);
     const char *qm = memchr(r.target, '?', r.target_n);
     size_t pn = qm ? (size_t)(qm - r.target) : r.target_n;
-    // the sign-in and the sockets are a connection's: a session opens this one
+    // a sealed socket signed in already, and the sockets are a connection's
     if (path_is(r.target, pn, "/auth") || path_is(r.target, pn, "/live")
         || path_is(r.target, pn, "/term")) {
         simple(&o, 404, "text/plain; charset=utf-8", "not found");
@@ -2052,6 +2137,245 @@ static int serve_live(void) {
     W->taken = 0;
     W->parked_at = moy_net_ms();
     return 1;
+}
+
+// -- THE SIGN-IN ON THE LIVE SOCKET (moy_live.c's header has the wire) --------------
+//
+// A page with no session opens its live socket naming none, and signs in on
+// it: until then the socket is the webhost's, served here in the poll on the
+// console's task as the sign-in always is, and carries the sign-in alone. Its
+// 'r' requests to POST /auth go to moy_wa_auth with the socket's source, so
+// the backoff counts a client as over a connection, and a PAKE is answered
+// at a later poll; any other request is answered 401 {"error":"session"},
+// its echoes are answered, and every other channel is dropped. The answer to
+// a credential that made a session is the last plaintext down; the page's
+// 'c' 'S' is its last one up, and the socket goes to the bridge sealed under
+// that session, another session's page's socket taken (moy_wa_take).
+// SIGNINS are held at once: a new one takes a free place, else its own
+// source's, else that of the other source's heard from least recently that
+// has made no session. One silent for SIGNIN_IDLE_MS, or one the bridge has
+// not taken SIGNIN_HAND_MS after its 'c' 'S', is closed.
+
+static void signin_free(int i) {
+    signin_t *s = &W->si[i];
+    moy_net_free(s->in);
+    moy_seal_wipe(s, sizeof *s);
+    s->fd = -1;
+    if (W->asi == i) {
+        W->asi = -1;                // the PAKE's answer goes nowhere
+    }
+}
+
+static void signin_drop(int i, int code, const char *why) {
+    if (W->si[i].fd < 0) {
+        return;
+    }
+    moy_ws_close(W->si[i].fd, code, why);
+    moy_http_close(W->si[i].fd);
+    signin_free(i);
+}
+
+static int signin_take(int fd, uint32_t peer) {
+    int pick = -1;
+    for (int i = 0; i < SIGNINS && pick < 0; i++) {
+        if (W->si[i].fd < 0) {
+            pick = i;
+        }
+    }
+    for (int i = 0; i < SIGNINS && pick < 0; i++) {
+        if (W->si[i].peer == peer && W->si[i].state != SI_HANDING) {
+            pick = i;
+        }
+    }
+    int other = -1;
+    for (int i = 0; i < SIGNINS && pick < 0; i++) {
+        signin_t *c = &W->si[i];
+        if (c->state == SI_AUTH
+            && (other < 0 || (int32_t)(c->heard - W->si[other].heard) < 0)) {
+            other = i;
+        }
+    }
+    pick = pick < 0 ? other : pick;
+    if (pick < 0) {
+        return -1;
+    }
+    signin_drop(pick, 1013, "busy");
+    signin_t *s = &W->si[pick];
+    if ((s->in = moy_net_alloc(SIGNIN_IN)) == NULL) {
+        return -1;
+    }
+    s->fd = fd;
+    s->peer = peer;
+    s->state = SI_AUTH;
+    s->heard = s->at = moy_net_ms();
+    return 0;
+}
+
+// One plaintext down, unsealed: `p` with MOY_WS_HEAD bytes free before it.
+static int signin_say(signin_t *s, char *p, size_t n) {
+    return moy_ws_out(s->fd, MOY_WS_BINARY, p, n, p - MOY_WS_HEAD);
+}
+
+// Request `id`'s answer, whole in one 'W' (moy_live.c's THE REQUESTS): its
+// status, its type (JSON) and the document.
+static void signin_answer(signin_t *s, uint16_t id, int status, const char *doc) {
+    static const char ct[] = "application/json";
+    char b[MOY_WS_HEAD + 7 + sizeof ct + DOC_MAX];
+    char *p = b + MOY_WS_HEAD;
+    size_t dn = strlen(doc);
+    p[0] = 'r';
+    p[1] = 'W';
+    p[2] = (char)id;
+    p[3] = (char)(id >> 8);
+    p[4] = (char)status;
+    p[5] = (char)(status >> 8);
+    p[6] = (char)(sizeof ct - 1);
+    memcpy(p + 7, ct, sizeof ct - 1);
+    memcpy(p + 7 + sizeof ct - 1, doc, dn);
+    signin_say(s, p, 7 + sizeof ct - 1 + dn);
+}
+
+// A request, p[0, n) past its channel's byte: one whole piece, POST /auth.
+static void signin_request(int i, const uint8_t *p, size_t n) {
+    static const char AUTH[] = "POST /auth\n";
+    const size_t an = sizeof AUTH - 1;
+    signin_t *s = &W->si[i];
+    if (n < 7 || p[0] != 'Q') {
+        return;
+    }
+    uint16_t id = (uint16_t)(p[1] | p[2] << 8);
+    uint32_t len = (uint32_t)p[3] | (uint32_t)p[4] << 8 | (uint32_t)p[5] << 16
+                   | (uint32_t)p[6] << 24;
+    const char *q = (const char *)p + 7;
+    n -= 7;
+    char doc[DOC_MAX];
+    if (len != n) {
+        signin_answer(s, id, 400, "{\"error\":\"request\"}");
+        return;
+    }
+    if (n < an || memcmp(q, AUTH, an) != 0) {
+        signin_answer(s, id, 401, "{\"error\":\"session\"}");
+        return;
+    }
+    if (W->closing) {
+        snprintf(doc, sizeof doc, "{\"error\":\"closing\",\"why\":\"%s\"}", W->why);
+        signin_answer(s, id, 503, doc);
+        return;
+    }
+    int st = moy_wa_auth(s->peer, q + an, n - an, doc, sizeof doc);
+    if (st == 0) {
+        close_conn(&W->afd);
+        W->asi = (int8_t)i;
+        W->aid = id;
+        return;
+    }
+    moy_wa_seal_t made;
+    int sealing = st == 200 && moy_wa_fresh(&made);
+    signin_answer(s, id, st, doc);
+    if (sealing) {
+        s->seal = made;
+        s->state = SI_SEALING;
+        s->at = moy_net_ms();
+    }
+    moy_seal_wipe(&made, sizeof made);
+}
+
+// One plaintext from the page.
+static void signin_message(int i, uint8_t *p, size_t n) {
+    signin_t *s = &W->si[i];
+    if (n < 2) {
+        return;
+    }
+    if (p[0] == 'c' && p[1] == 'S') {
+        if (s->state != SI_SEALING) {
+            signin_drop(i, 1008, "seal");
+            return;
+        }
+        s->state = SI_HANDING;
+        s->at = moy_net_ms();
+        moy_wa_take(MOY_WA_LIVE, &s->seal);
+        return;
+    }
+    if (s->state != SI_AUTH) {
+        return;                     // nothing goes down after the session's answer
+    }
+    if (p[0] == 'c' && p[1] == 'e' && n <= 64) {
+        char b[MOY_WS_HEAD + 64];
+        memcpy(b + MOY_WS_HEAD, p, n);
+        b[MOY_WS_HEAD + 1] = 'E';
+        signin_say(s, b + MOY_WS_HEAD, n);
+    } else if (p[0] == 'r') {
+        signin_request(i, p + 1, n - 1);
+    }
+}
+
+// What the page sent since the last poll: 1 when it sent anything.
+static int signin_read(int i) {
+    signin_t *s = &W->si[i];
+    ssize_t k = recv(s->fd, s->in + s->n, SIGNIN_IN - s->n, MSG_DONTWAIT);
+    if (k == 0 || (k < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)) {
+        moy_http_close(s->fd);      // the page went
+        signin_free(i);
+        return 1;
+    }
+    if (k < 0) {
+        return 0;
+    }
+    s->n += (size_t)k;
+    s->heard = moy_net_ms();
+    size_t at = 0;
+    moy_ws_frame_t f;
+    while (s->state != SI_HANDING) {
+        int r = moy_ws_next(s->in, s->n, &at, SIGNIN_IN, &f);
+        if (r < 0) {
+            signin_drop(i, 1009, "big");
+            return 1;
+        }
+        if (r == 0) {
+            break;
+        }
+        if (f.op == MOY_WS_CLOSE) {
+            signin_drop(i, 1000, "");
+            return 1;
+        }
+        if (f.op == MOY_WS_BINARY) {
+            signin_message(i, f.p, f.n);
+            if (s->fd < 0) {
+                return 1;
+            }
+        }
+    }
+    memmove(s->in, s->in + at, s->n - at);  // after a 'c' 'S': the first sealed frames
+    s->n -= at;
+    return 1;
+}
+
+static int signin_poll(void) {
+    int did = 0;
+    for (int i = 0; i < SIGNINS; i++) {
+        signin_t *s = &W->si[i];
+        if (s->fd < 0) {
+            continue;
+        }
+        uint32_t now = moy_net_ms();
+        if (s->state == SI_HANDING) {
+            if (moy_web_live(s->fd, &s->seal, s->in, s->n) == 0) {
+                moy_wa_stream(MOY_WA_LIVE, &s->seal);
+                signin_free(i);
+                did = 1;
+            } else if (now - s->at > SIGNIN_HAND_MS) {
+                signin_drop(i, 1013, "busy");
+            }
+            continue;
+        }
+        did |= signin_read(i);
+        now = moy_net_ms();
+        if (s->fd >= 0 && (now - s->heard > SIGNIN_IDLE_MS
+                           || (s->state == SI_SEALING && now - s->at > SIGNIN_IDLE_MS))) {
+            signin_drop(i, 1001, "idle");
+        }
+    }
+    return did;
 }
 
 // -- the poll -------------------------------------------------------------------------
@@ -2132,6 +2456,7 @@ static void serve(int fd) {
         req_done();
         close_conn(&W->afd);
         W->afd = fd;
+        W->asi = -1;
         return;
     }
     W->pfd = fd;                    // parked: its spans and body stay in W->req until it ends
@@ -2142,6 +2467,50 @@ static void serve(int fd) {
     W->parked_at = moy_net_ms();
 }
 
+// -- the door's browsers (moy_net.h) ----------------------------------------------
+//
+// The door's task names a port and the webhost's takes it: a slot's address
+// is written before its port, and read after it.
+
+static struct {
+    uint32_t port, ip;
+} VIA[MOY_WEB_VIA_MAX];
+
+void moy_web_via(uint16_t port, uint32_t ip) {
+    int free_at = -1;
+    for (int i = 0; i < MOY_WEB_VIA_MAX; i++) {
+        uint32_t p = __atomic_load_n(&VIA[i].port, __ATOMIC_ACQUIRE);
+        if (p == port) {
+            if (ip == 0) {
+                __atomic_store_n(&VIA[i].port, 0u, __ATOMIC_RELEASE);
+                return;
+            }
+            __atomic_store_n(&VIA[i].ip, ip, __ATOMIC_RELEASE);
+            return;
+        }
+        free_at = p == 0 && free_at < 0 ? i : free_at;
+    }
+    if (ip != 0 && port != 0 && free_at >= 0) {
+        __atomic_store_n(&VIA[free_at].ip, ip, __ATOMIC_RELEASE);
+        __atomic_store_n(&VIA[free_at].port, (uint32_t)port, __ATOMIC_RELEASE);
+    }
+}
+
+// The browser behind a connection from 127.0.0.1, where the door named one.
+static void via_take(int fd) {
+    if (((const uint8_t *)&W->peer)[0] != 127) {
+        return;
+    }
+    uint32_t port = moy_http_peer_port(fd);
+    for (int i = 0; port != 0 && i < MOY_WEB_VIA_MAX; i++) {
+        if (__atomic_load_n(&VIA[i].port, __ATOMIC_ACQUIRE) == port) {
+            W->peer = __atomic_load_n(&VIA[i].ip, __ATOMIC_ACQUIRE);
+            __atomic_store_n(&VIA[i].port, 0u, __ATOMIC_RELEASE);
+            return;
+        }
+    }
+}
+
 // The PAKE's answer, once its worker is done, to the connection held for it.
 static void later(void) {
     char doc[DOC_MAX];
@@ -2150,6 +2519,9 @@ static void later(void) {
         out_t o = {.fd = W->afd};
         json(&o, st, doc);
         close_conn(&W->afd);
+    } else if (st != 0 && W->asi >= 0) {
+        signin_answer(&W->si[W->asi], W->aid, st, doc);
+        W->asi = -1;
     }
 }
 
@@ -2183,6 +2555,7 @@ int moy_web_poll(void) {
     if (W->lfd < 0) {
         return 0;
     }
+    int did = signin_poll();
     if (parked()) {
         if ((uint32_t)(moy_net_ms() - W->parked_at) < MOY_WEB_DEFER_MS) {
             return 0;               // the request buffer is the parked one's
@@ -2197,13 +2570,14 @@ int moy_web_poll(void) {
         req_done();
         W->taken = 0;
     }
-    int did = serve_live();
+    did |= serve_live();
     for (int i = 0; i < MOY_WEB_POLL_MAX && !parked(); i++) {
         int fd = moy_http_accept(W->lfd, &W->peer);
         if (fd < 0) {
             break;
         }
         did = 1;
+        via_take(fd);
         serve(fd);
     }
     return did;

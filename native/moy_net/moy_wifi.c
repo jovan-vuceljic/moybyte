@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include "esp_attr.h"
+#include "esp_crypto_lock.h"
 #include "esp_event.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
@@ -299,6 +300,26 @@ static void on_wifi(void *arg, esp_event_base_t base, int32_t id, void *data) {
     }
 }
 
+// THE CRYPTO ENGINES' LOCKS. ESP-IDF makes each lock of the chip's crypto
+// engines (a mutex) at its first use and keeps it for good, so the first TLS
+// handshake (the secure door's, an https fetch's) would make it wherever the
+// heap stood then, in the middle of a session's free run. Taken once here,
+// with the station's lasting blocks, each lock is made beside them.
+static void crypto_locks(void) {
+    #ifdef SOC_MPI_SUPPORTED
+    esp_crypto_mpi_lock_acquire();
+    esp_crypto_mpi_lock_release();
+    #endif
+    #if defined(SOC_SHA_SUPPORTED) || defined(SOC_AES_SUPPORTED)
+    esp_crypto_sha_aes_lock_acquire();
+    esp_crypto_sha_aes_lock_release();
+    #endif
+    #ifdef SOC_ECC_SUPPORTED
+    esp_crypto_ecc_lock_acquire();
+    esp_crypto_ecc_lock_release();
+    #endif
+}
+
 // The station's interface, its handlers and its retry timer are made once a
 // boot; the driver under them is initialised at each first start after a
 // stop that ended it (driver_end).
@@ -308,6 +329,7 @@ static int driver(void) {
     }
     esp_err_t e;
     if (s_netif == NULL) {
+        crypto_locks();
         e = esp_netif_init();
         if (e != ESP_OK && e != ESP_ERR_INVALID_STATE) {
             return e;

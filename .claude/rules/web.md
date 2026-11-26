@@ -250,8 +250,9 @@ nor those docs will warn you about:
   byte-identical to what it always was.
 - **THE SIGN-IN GATES EVERYTHING** (owner call), reversing the earlier
   read-half-open design: handing any device on the WiFi a child's whole cart
-  store for the asking was the thing being fixed. Only the boot assets and `GET
-  /sync` are open, by necessity. Since 2026-11-07 the gate is a paired
+  store for the asking was the thing being fixed. Only the boot assets, `GET
+  /sync` and, on a board with the live socket, its probe and upgrade are
+  open, by necessity. Since 2026-11-07 the gate is a paired
   browser's device key and a sealed session (`docs/os_2026-11/system.md` §3,
   the protocol `native/moy_net/moy_seal.h`): a request names its session and
   sequence number on the query, so the request parser (`moy_http_parse`) keeps
@@ -492,19 +493,23 @@ nor those docs will warn you about:
   deleted on 2026-10-27 (`docs/surface_model_v1.md` §16).
 - **The live socket is a Zero's page's, and the worker's to move** (#256,
   `native/moy_net/moy_live.h`): one sealed WebSocket to `GET /live` (seal
-  slot 1), multiplexed by its frames' first byte, served
+  slot 1; seq 0 on a socket that signed in on itself), multiplexed by its frames' first byte, served
   on the board's own task. Its terminal channel ('t') is the page's
   Terminal (`native/moy_tty/moy_tty_live.c`): a Zero serves no `GET /term`,
   which the consoles' pages keep (seal slot 0). Its request channel
   (`moy_live.c`, THE REQUESTS) carries the page's sealed requests, the
   pulls, syncs, songs and probes, to the webhost's own routes and answers
-  them there: each request is sealed as over HTTP inside the socket's seal,
-  so the board serves the page ONE connection (an https page holds one TLS
-  connection's RAM, the reason: owner, 2026-11-26). `worker.js`'s
-  `boardFetch` is the one wrapper: HTTP where the socket is shut or the
-  board names no `req` in its probe, and for the sign-in, the marker, the
-  bundle and the sockets' own probes; the webhost still answers every
-  route over HTTP too. Its control channel's hints
+  them there: each request is sealed as a sealed route's inside the
+  socket's seal, so the board serves the page ONE connection (an https page
+  holds one TLS connection's RAM, the reason: owner, 2026-11-26). The
+  sign-in rides it too (`moy_live.c`, THE SIGN-IN): a page with no session
+  opens the socket in the clear, signs in on it, and seals it under the
+  session that made, and nothing else is served before. Such a board
+  refuses `POST /auth` and every sealed route over HTTP (410); its HTTP is
+  the bundle, the marker, the open probe and the upgrade, and the setup
+  form's host. `worker.js`'s `boardFetch` and `authPost` are the one
+  wrapper: the socket where the probe names `req`, HTTP on a board without
+  the socket (the consoles). Its control channel's hints
   (`moy_live.c`, THE HINTS) say when what the page reads from those routes
   changed (the store, `/wifi`, `/update`, `/official`), and while the socket
   is open the worker asks them on a hint, never on its clocks. Its first channel relays the board's ESP-NOW, so

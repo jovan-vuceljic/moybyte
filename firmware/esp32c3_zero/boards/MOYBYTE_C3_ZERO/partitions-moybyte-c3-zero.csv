@@ -6,19 +6,21 @@
 # the store to its first boot's carts and the seed's reserve. The
 # factory slot is sized to the image without it, with room to grow -- the
 # build's #168 guard prints the headroom -- and everything after it is the
-# store.
+# store. It grew by 64 KB for the secure door (owner, 2026-11-26: the slot
+# may grow at the store's expense; native/moy_net/moy_tls_srv.c), which a
+# cable flash moves the store for (tools/board_flash.py, THE STORE FOLLOWS
+# THE TABLE).
 #
 #   0x000000  bootloader      (the C3's sits at 0x0)
 #   0x008000  partition table
 #   0x009000  nvs              24 KB   WiFi credentials, the kernel's crash record
 #   0x00F000  phy_init          4 KB
-#   0x010000  factory      1.8125 MB   the app image
-#   0x1E0000  vfs           2.125 MB   the store: /moy/carts (the add-on among
-#                                      them) and the files tree
+#   0x010000  factory       1.875 MB   the app image
+#   0x1F0000  vfs          2.0625 MB   the store: /moy/carts and the files tree
 #   0x400000  end of flash
 #
 # Name,   Type, SubType, Offset,   Size,     Flags
 nvs,      data, nvs,     0x9000,   0x6000,
 phy_init, data, phy,     0xF000,   0x1000,
-factory,  app,  factory, 0x10000,  0x1D0000,
-vfs,      data, fat,     0x1E0000, 0x220000,
+factory,  app,  factory, 0x10000,  0x1E0000,
+vfs,      data, fat,     0x1F0000, 0x210000,

@@ -30,8 +30,14 @@ extern const moy_tty_shell_t moy_tty_moy_sh;
 // without the live socket links none of this channel's callers.
 uint8_t *moy_live_out(size_t *cap);
 int moy_live_say(size_t n);
+int moy_live_behind_door(void);
 #pragma weak moy_live_out
 #pragma weak moy_live_say
+#pragma weak moy_live_behind_door
+// ...and the secure door's (native/moy_net/moy_tls_srv.c), where the image
+// takes one: a face behind it opens only while the heap has room for it.
+int moy_tls_low(void);
+#pragma weak moy_tls_low
 
 static struct {
     int sfd;                            // the face's end, or -1
@@ -82,8 +88,17 @@ static void face_end(void) {
     T.stats.live = 0;
 }
 
+// 'B' why: 0 another transport holds the face, 1 none could start, 2 the
+// heap is too short for one behind the secure door (moy_net.h,
+// MOY_TLS_TERM_FREE).
 static int face_open(int cols, int rows) {
     face_end();
+    if (moy_tls_low != NULL && moy_live_behind_door != NULL && moy_live_behind_door()
+        && moy_tls_low()) {
+        T.stats.refused++;
+        uint8_t why = 2;
+        return say('B', &why, 1);
+    }
     if (!T.held) {
         if (moy_tty_hold(MOY_TTY_WEB, 1) != 0) {
             uint8_t why = 1;
