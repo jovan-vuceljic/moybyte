@@ -721,14 +721,16 @@ def _scan():
             for ssid, rssi, auth in moy_net.wifi_scan()]
 
 
-def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv=None):
+def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv=None,
+        turn=None):
     """Host the setup AP and serve the form until it is filled in: a good POST
     resets the board into STA. The access point is the kernel's WiFi
     driver's provisioning mode, the station beside it up for the form's scans.
     `improv` (zero_improv.Improv) answers the cable meanwhile; a network it
     joins ends the access point and returns the station's IP, the board
     serving from there without a reset, so the client waiting on the cable
-    hears its answer (zero_improv's module docstring)."""
+    hears its answer (zero_improv's module docstring). `turn`, where the
+    board runs apps' services (zero_svc), is their loop's turn, each pass."""
     import machine
     import time
 
@@ -748,6 +750,8 @@ def run(wifi_store, zero_store, system_dir, port=SETUP_PORT, sleep_ms=10, improv
     while True:
         srv.poll()
         dns.poll()
+        if turn is not None:
+            turn()
         if improv is not None:
             improv.poll()
             if improv.joined is not None:

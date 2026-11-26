@@ -101,3 +101,71 @@ def test_the_page_starts_no_service_of_an_app_its_board_runs():
         assert S.SCHED.start(cart) is None
     finally:
         S.on_board(())
+
+
+def test_the_restart_rule_is_the_console_s():
+    assert (zero_svc.RESTART_BACKOFF_MS, zero_svc.RESTART_HEAL_MS, zero_svc.RESTART_CAP,
+            zero_svc.RESTART_KEY, zero_svc.POLICIES) == (
+        S.MOY_RESTART_BACKOFF_MS, S.MOY_RESTART_HEAL_MS, S.RESTART_CAP, S.RESTART_KEY,
+        S.POLICIES)
+
+
+def _crash(host, app_id="moymesh"):
+    """The running service ended as a crash would leave it, then reaped."""
+    s = host.running[app_id]
+    host.svc.svc_stop(s.h)
+    for _ in range(50):
+        host.turn()
+        if app_id not in host.running:
+            return
+    raise AssertionError("the service did not end")
+
+
+def test_an_unasked_end_restarts_by_its_policy_backs_off_and_gives_up(carts, monkeypatch):
+    _install(carts)
+    host = zero_svc.Services(carts)
+    now = [0]
+    monkeypatch.setattr(zero_svc, "_ticks", lambda: now[0])
+    host.boot()
+    _crash(host)
+    assert host.pending == {}, "never (the default) leaves it down"
+    host.set_policy("moymesh", zero_svc.ALWAYS)
+    assert host.policy("moymesh") == zero_svc.ALWAYS
+    host.start_by_hand("moymesh")
+    for n in range(1, zero_svc.RESTART_CAP):
+        _crash(host)
+        due = host.pending["moymesh"][0]
+        assert due == now[0] + (zero_svc.RESTART_BACKOFF_MS << (n - 1)), "the back-off doubles"
+        host.turn()
+        assert "moymesh" not in host.running, "it waits its back-off"
+        now[0] = due
+        host.turn()
+        assert "moymesh" in host.running, "then it starts again"
+    _crash(host)
+    assert host.pending == {}, "the cap's end leaves it down"
+    assert host.start_by_hand("moymesh") is not None and host.down == {}, \
+        "a start by hand forgets the ends in a row"
+
+
+def test_an_asked_stop_does_not_restart(carts):
+    _install(carts)
+    host = zero_svc.Services(carts)
+    host.set_policy("moymesh", zero_svc.ALWAYS)
+    host.boot()
+    host.stop("moymesh")
+    for _ in range(50):
+        host.turn()
+    assert "moymesh" not in host.running and host.pending == {}
+
+
+def test_the_page_says_where_a_service_too_big_for_its_board_runs():
+    m = {"moybyte": {"entries": {"service": "service.lua"}, "service_kib": 160}}
+    assert S.service_need(m) == 160
+    assert S.service_need({"moybyte": {"entries": {"service": "s.lua"}}}) == 40
+    assert S.service_need({"moybyte": {}}) is None
+    assert S.board_reason(m, (1024, 900)) is None
+    assert S.board_reason(m, (128, 128)) == (
+        "Its service runs in the page on this board: it needs 160 KB and this board "
+        "gives its services 128 KB.")
+    assert S.board_reason(m, (1024, 100)).endswith("gives its services 1024 KB, 100 KB of it free.")
+    assert S.board_reason(m, None) is None

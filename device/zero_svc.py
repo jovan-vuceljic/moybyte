@@ -33,7 +33,18 @@ THE ROWS. The app's prefs are the kernel's settings rows (moy_app.kernel),
 read from the store's `system/settings` at the start and written back as a
 service changes them (`turn`); the webhost's system root reads and writes
 the same rows (device/moy_webhost.py's StoreSystem), so a page's batch and a
-service's prefs have one writer.
+service's prefs have one writer. A served app's rows cross to the page's
+rows over the live socket and back (native/moy_net/moy_svc_prefs.c), so its
+window reads what its service wrote.
+
+RESTARTS. The console's rule (runtime/system/scheduler.py's RESTART
+POLICIES): a service's policy, the settings' `service_restart` {app id:
+never | on-crash | always} (`never` where none is set; the board's shell
+`service policy` sets one), says what follows an end nobody asked for; the
+restart waits RESTART_BACKOFF_MS doubled for each end in a row, the
+RESTART_CAP'th end in a row leaves it down, and a run of RESTART_HEAL_MS
+before its end, or a start by hand, starts the count afresh. Every start,
+end, restart and the cap are lines of the OS log.
 
 THE CALLS. What a service asks the console (moycore_svc.h, CONSOLE CALLS)
 waits on the VM's queue, which `turn` serves on the store host's loop: the
@@ -57,6 +68,16 @@ LUA_SVC_NEED = 40 << 10         # runtime/system/sched_lua.py's: a service at it
 SVC_EXITED = 4                  # moycore_svc.h's MOYCORE_SVC_EXITED
 INFO, ERR = 6, 3
 CALLS_MAX = 16                  # console calls answered a turn
+# The console's restart rule (runtime/system/scheduler.py: MOY_RESTART_*,
+# RESTART_CAP, RESTART_KEY, POLICIES), which tests/test_zero_svc.py holds
+# these to.
+RESTART_BACKOFF_MS = 1000
+RESTART_HEAL_MS = 10000
+RESTART_CAP = 3
+RESTART_KEY = "service_restart"
+NEVER, ON_CRASH, ALWAYS = "never", "on-crash", "always"
+POLICIES = (NEVER, ON_CRASH, ALWAYS)
+WARNING = 4
 
 
 def runtime():
@@ -66,6 +87,18 @@ def runtime():
     except ImportError:
         return None
     return moycore if hasattr(moycore, "svc_start") else None
+
+
+def _ticks():
+    return time.ticks_ms() if hasattr(time, "ticks_ms") else int(time.time() * 1000)
+
+
+def _ticks_diff(a, b):
+    return time.ticks_diff(a, b) if hasattr(time, "ticks_diff") else a - b
+
+
+def _ticks_add(a, ms):
+    return time.ticks_add(a, ms) if hasattr(time, "ticks_add") else a + ms
 
 
 def _log(level, pid, text):
@@ -124,6 +157,8 @@ class Service:
         self.h = 0              # its moycore handle while it lives
         self.grant = None
         self.why = ""           # why it ended or was refused
+        self.started = 0        # time.ticks_ms() at its start
+        self.asked = False      # its end was asked for (`stop`)
 
 
 class Services:
@@ -143,6 +178,8 @@ class Services:
         # host's own over the same rows (runtime/shell/console.py's _app_abi).
         self.app = kernel(True) if kernel is not None else moy_app.App(self.rows)
         self.running = {}       # app id -> Service
+        self.down = {}          # app id -> its ends in a row (RESTARTS)
+        self.pending = {}       # app id -> (ticks_ms due, folder, manifest)
 
     def _save(self, text):
         import moy_carts
@@ -232,6 +269,7 @@ class Services:
             _log(ERR, pid, "%s: %s" % (app_id, s.why))
             self._end(s)
             return None
+        s.started = _ticks()
         self.running[app_id] = s
         self._serve(app_id, True)
         _log(INFO, pid, "%s: started on this board" % app_id)
@@ -239,10 +277,81 @@ class Services:
 
     def stop(self, app_id):
         """App `app_id`'s service told to stop (its `moy_stop`); its end is
-        the next turns'."""
+        the next turns', and asked for: no restart follows."""
+        self.pending.pop(app_id, None)
         s = self.running.get(app_id)
         if s is not None and s.h:
+            s.asked = True
             self.svc.svc_stop(s.h)
+
+    def start_by_hand(self, app_id):
+        """App `app_id`'s service started by hand (the shell's `service
+        start`): its ends in a row forgotten (RESTARTS). Its pid, or None
+        with the reason logged."""
+        self.down.pop(app_id, None)
+        self.pending.pop(app_id, None)
+        for got, folder, m in self.installed():
+            if got == app_id:
+                return self.start(app_id, folder, m)
+        return None
+
+    def restart_by_hand(self, app_id):
+        """App `app_id`'s service started again by hand once its asked end
+        is reaped (`turn`)."""
+        self.down.pop(app_id, None)
+        for got, folder, m in self.installed():
+            if got == app_id:
+                self.pending[app_id] = (_ticks(), folder, m)
+
+    # -- restarts --------------------------------------------------------------
+
+    def policy(self, app_id):
+        """App `app_id`'s service's restart policy: NEVER where none is set."""
+        rows = self.rows.get(RESTART_KEY, None)
+        got = rows.get(app_id) if isinstance(rows, dict) else None
+        return got if got in POLICIES else NEVER
+
+    def set_policy(self, app_id, policy):
+        """App `app_id`'s service's restart policy set in the settings."""
+        if policy not in POLICIES:
+            raise ValueError("no restart policy %r" % (policy,))
+        rows = self.rows.get(RESTART_KEY, None)
+        rows = dict(rows) if isinstance(rows, dict) else {}
+        if policy == NEVER:
+            rows.pop(app_id, None)
+        else:
+            rows[app_id] = policy
+        self.rows.set(RESTART_KEY, rows)
+
+    def _unasked(self, s, code):
+        """What follows service `s`'s end nobody asked for: True where a
+        restart waits its back-off."""
+        pol = self.policy(s.app_id)
+        if pol == NEVER or (pol == ON_CRASH and code == 0):
+            return False
+        n = self.down.get(s.app_id, 0)
+        if _ticks_diff(_ticks(), s.started) >= RESTART_HEAL_MS:
+            n = 0
+        n += 1
+        self.down[s.app_id] = n
+        if n >= RESTART_CAP:
+            _log(ERR, s.pid, "%s: %s: %d ends in a row, it stays down" % (s.app_id, pol, n))
+            return False
+        ms = RESTART_BACKOFF_MS << (n - 1)
+        _log(WARNING, s.pid, "%s: %s: restart in %d ms (end %d of %d)"
+             % (s.app_id, pol, ms, n, RESTART_CAP))
+        for got, folder, m in self.installed():
+            if got == s.app_id:
+                self.pending[s.app_id] = (_ticks_add(_ticks(), ms), folder, m)
+                return True
+        return False
+
+    def _restarts(self):
+        for app_id in list(self.pending):
+            due, folder, m = self.pending[app_id]
+            if app_id not in self.running and _ticks_diff(_ticks(), due) >= 0:
+                del self.pending[app_id]
+                self.start(app_id, folder, m)
 
     def _serve(self, app_id, on):
         import moy_net
@@ -285,15 +394,20 @@ class Services:
             got = self.svc.svc_info(s.h)
             if got is not None and got[0] != SVC_EXITED:
                 continue
+            code = got[1] if got is not None else 0
             if got is not None:
-                s.why = got[5] or "exited %d" % got[1]
+                s.why = got[5] or "exited %d" % code
                 self.svc.svc_reap(s.h)
             s.h = 0
             del self.running[app_id]
             self._serve(app_id, False)
             self._end(s)
-            _log(INFO if not got or not got[1] else ERR, s.pid,
+            _log(INFO if not code else ERR, s.pid,
                  "%s: ended on this board: %s" % (app_id, s.why))
+            if not s.asked:
+                self._unasked(s, code)
+        if self.pending:
+            self._restarts()
 
     def _answer(self):
         for _ in range(CALLS_MAX):

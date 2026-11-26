@@ -1430,7 +1430,15 @@ is held once. The board starts one at boot where its app asks for
 (board.toml's `[services] ram_kib`, every service's state summed): what
 the app needs is its manifest's `service_kib`, else a service's start
 (40 KB). One that does not fit is refused with the reason and runs in the
-page while a window has it open, as on a board that runs none.
+page while a window has it open, as on a board that runs none; the page
+says so where it is the budget (`scheduler.board_reason`, at Get Carts'
+install and at the service's start). The app's prefs rows cross between the
+board's rows and the page's both ways (`native/moy_net/moy_svc_prefs.c`),
+each row ahead of the messages sent after it, so a window reads what its
+service wrote; at a session's start the board's rows win. A service that
+ends unasked restarts by the console's restart policy (`device/zero_svc.py`,
+RESTARTS; the board's shell `service policy` sets it), and the board runs
+its services in the setup access point too.
 
 From any process of the app, on every tier (the call table, §10):
 
