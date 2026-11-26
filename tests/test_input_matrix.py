@@ -890,8 +890,11 @@ def test_a_stacked_fields_cancel_gives_each_field_its_own_text(tmp_path):
 def test_a_popover_first_shows_at_its_settled_box(tmp_path):
     """A popover with no size kept shows on the frame that opens it, at the
     box it rests at: every frame after the one that opens it draws the
-    same."""
+    same. The badge banner its open raised is taken down first: its shine
+    moves with the clock."""
+    from ws_helpers import quiesce
     st = _Stack(tmp_path)
+    quiesce(st.ws)
     base = bytes(st.drv.rgb888())
     st.tree.act("show", 1)
     shots = []

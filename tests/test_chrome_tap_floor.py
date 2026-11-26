@@ -422,8 +422,10 @@ def test_a_desk_lays_out_at_its_unit_and_steps_its_size(tmp_path):
 def test_switching_chrome_size_matches_booting_at_it(tmp_path):
     """The relayout contract on the browser's desk (1024x600, no declared
     glass): CHROME SIZE 2x changed from the Appearance window renders
-    exactly what a desk that boots with 2x stored renders."""
+    exactly what a desk that boots with 2x stored renders. Every badge is
+    found first: a banner's shine moves with the clock."""
     from runtime.host_app import ConsoleDriver
+    from ws_helpers import no_unlock_banner
 
     def settle(ws, drv):
         for _ in range(30):
@@ -431,7 +433,7 @@ def test_switching_chrome_size_matches_booting_at_it(tmp_path):
             drv.frame(1 / 30)
 
     _desk(tmp_path / "boot").system.set("chrome_scale", 2)
-    ref = _desk(tmp_path / "boot")
+    ref = no_unlock_banner(_desk(tmp_path / "boot"))
     ref.bar_layer.clock_text = lambda: "10:30"
     drv = ConsoleDriver(ref)
     _appearance(ref)
@@ -439,7 +441,7 @@ def test_switching_chrome_size_matches_booting_at_it(tmp_path):
     settle(ref, drv)
     reference = bytes(ref.sys_canvas._buf)
 
-    ws = _desk(tmp_path / "live")
+    ws = no_unlock_banner(_desk(tmp_path / "live"))
     ws.bar_layer.clock_text = lambda: "10:30"
     drv = ConsoleDriver(ws)
     _appearance(ws)

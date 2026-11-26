@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_wm_windowed import _moy_desk  # noqa: E402
+from ws_helpers import no_unlock_banner  # noqa: E402
 
 import ui_draw  # noqa: E402
 
@@ -24,7 +25,7 @@ def _desk_frames(tmp_path, own, monkeypatch):
             return ui_draw.ui_frame(ui_draw.ui_context(), cv, th, rect=rect, desk=desk,
                                     elsewhere=True)
         monkeypatch.setattr(ui_draw, "passive_frame", fresh)
-    ws = _moy_desk(tmp_path)
+    ws = no_unlock_banner(_moy_desk(tmp_path))     # (a badge's banner shines with the clock)
     ws.spine.open_app(ws.app("calc"))
     ws.notices.notice("Saved", "to My Art")
     out = []
