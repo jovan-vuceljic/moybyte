@@ -430,12 +430,10 @@ class DeviceWifi:
                 self._store.forget_wifi(ssid, self._root)
             except Exception as exc:  # noqa: BLE001
                 print("Moybyte wifi forget failed:", exc)
-        # If we're on that network, drop it.
-        try:
-            if self.wlan is not None and self.wlan.isconnected():
-                self.disconnect()
-        except Exception:  # noqa: BLE001
-            pass
+        # If we're on that network, drop it; any other link stays up.
+        connected, on, _ip = self.status()
+        if connected and on == ssid:
+            self.disconnect()
         return True
 
     def known(self):

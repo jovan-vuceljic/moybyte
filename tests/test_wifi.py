@@ -880,6 +880,38 @@ def _device_wifi(tmp_path, station):
     return dev, carts
 
 
+def test_forgetting_a_network_leaves_the_link_on_another_up(tmp_path):
+    """forget drops the link only when it is on the network forgotten (as the
+    host's FakeWifi does): forgetting a saved network the console is not on,
+    from Settings or the shell's `wifi forget`, leaves its link alone."""
+    from runtime import moy_carts
+
+    class _On(_Station):
+        def __init__(self, essid):
+            super().__init__()
+            self.up, self.essid, self.dropped = True, essid, 0
+
+        def ifconfig(self):
+            return ("10.0.0.20", "255.255.255.0", "10.0.0.1", "10.0.0.1")
+
+        def config(self, key=None, **kw):
+            return self.essid
+
+        def disconnect(self):
+            self.dropped += 1
+            self.up = False
+
+    st = _On("Home")
+    dev, carts = _device_wifi(tmp_path, st)
+    for ssid in ("Home", "Work"):
+        moy_carts.remember_wifi(ssid, "pw", carts)
+    assert dev.forget("Work") is True
+    assert st.dropped == 0 and dev.status()[:2] == (True, "Home")
+    assert [n["ssid"] for n in moy_carts.load_wifi(carts)] == ["Home"]
+    assert dev.forget("Home") is True
+    assert st.dropped == 1 and moy_carts.load_wifi(carts) == []
+
+
 def test_a_join_returns_at_once_and_settles_when_the_link_comes(tmp_path, monkeypatch):
     from runtime import moy_carts
     clock = _Clock()
