@@ -40,7 +40,7 @@ BOARDS = {
     "guition_p4": ("guition_jc8012p4a1c", 0xD50000, (16 << 20) - 0xD50000),
     "elecrow_p4": ("elecrow_crowpanel_p4_10_1", 0xD50000, (16 << 20) - 0xD50000),
     "xiao_zero": ("seeed_xiao_esp32s3_zero", 0x420000, 0x3E0000),
-    "c3_zero": ("esp32c3_zero", 0x1E0000, 0x220000),
+    "c3_zero": ("esp32c3_zero", 0x1F0000, 0x210000),
 }
 SIZES = {1: 0, 2: 1, 4: 2, 8: 3, 16: 4, 32: 5}
 TYPES = {"app": 0, "data": 1}
@@ -161,7 +161,7 @@ def test_a_board_whose_console_is_online_gets_no_add_on(tmp_path):
     assert blocks - both >= store_image.seed_reserve() // store_image.BLOCK
     text = io.StringIO()
     assert "esp32c3_zero" not in store_image.check(_wasm_pack(size + 4096), text)
-    assert "esp32c3_zero                 store  544 blocks, no add-on: its console is online" in text.getvalue()
+    assert "esp32c3_zero                 store  528 blocks, no add-on: its console is online" in text.getvalue()
 
 
 def test_the_c3_s_install_holds_its_roster_s_carts_and_no_pin_light():
