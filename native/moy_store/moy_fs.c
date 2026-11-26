@@ -411,6 +411,9 @@ int moy_fs_write_bytes(const char *path, const void *data, size_t n) {
     if (rc == 0) {
         rc = rename2(tmp, path, 1);
     }
+    if (rc != 0) {
+        moy_fs_remove(tmp);         // no staging file outlives a refused write
+    }
     moy_store_free(tmp, tn);
     return rc;
 }
@@ -796,7 +799,15 @@ int moy_fs_publish_from(const char *path, moy_fs_src_t *src) {
     src_stamp(src, &chars, &crc);
     mark_publish(path, strlen(path), chars, crc);
     int rc = publish_bak(path, src, chars, crc);
-    return rc != 0 ? rc : write_src(path, NULL, 0, src);
+    if (rc == 0) {
+        rc = write_src(path, NULL, 0, src);
+    }
+    if (rc != 0 && !was) {
+        moy_fs_remove(path);
+        moy_fs_forget_bak(path);
+        moy_fs_unmark(path);
+    }
+    return rc;
 }
 
 int moy_fs_publish(const char *path, const char *data, size_t n) {
@@ -806,9 +817,14 @@ int moy_fs_publish(const char *path, const char *data, size_t n) {
 
 static void heal(const char *path, const moy_buf_t *b) {
     moy_fs_write(path, b->p, b->n);     // best effort
+// A save that fails on a file that was not there (a full volume's refusal)
+// leaves none of it: not the file cut short, not its backup, not the marker
+// that names it. One that fails over an older text keeps the scheme's own
+// state, whose backup a read heals from.
 }
 
 int moy_fs_read(const char *path, const char *at, moy_buf_t *out) {
+    int was = moy_fs_exists(path);
     return moy_fs_read_in(path, NULL, at, out);
 }
 

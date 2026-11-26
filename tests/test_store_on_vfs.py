@@ -380,6 +380,80 @@ def test_kvfs_answers_every_verb_as_vfslfs2_does(tmp_path):
     assert "('mtime', True)" in lines["KV"]
 
 
+FULL = '''
+import os, json, binascii, vfs, moy_store, moy_net
+moy_store.kvol_load(None)
+vfs.mount(moy_store.KVfs(), "/kv")
+ROOT = "/kv/moy/carts"
+for d in ("/kv/moy", ROOT, ROOT + "/old.moy"):
+    os.mkdir(d)
+moy_store.publish(ROOT + "/old.moy/main.py", "x = 1\\n")
+
+
+def free():
+    return os.statvfs("/kv")[3]
+
+
+def tree(d=ROOT):
+    out = []
+    for n in sorted(os.listdir(d)):
+        p = d + "/" + n
+        out += tree(p) if os.stat(p)[0] & 0x4000 else [(p, os.stat(p)[6])]
+    return out
+
+
+f = open("/kv/fill.bin", "wb")
+b = bytes(4096)
+for _ in range(free() - @SLACK@):
+    f.write(b)
+f.close()
+print("FREE", free())
+before = tree()
+ops = [{"p": "new.moy/manifest.json", "t": json.dumps({"title": "New"})},
+       {"p": "new.moy/main.py", "t": "def _draw():\\n    cls(1)\\n" * 40},
+       {"p": "new.moy/cover.png", "b": binascii.b2a_base64(bytes(range(200))).decode().strip()}]
+print("BATCH", repr(moy_net.sync_apply(ROOT, None, None, "carts", json.dumps(ops), True)))
+print("LEFT", tree() == before)
+for name, fn in (
+        ("BYTES", lambda: moy_store.write_bytes(ROOT + "/old.moy/big.bin", bytes(40000))),
+        ("TEXT", lambda: moy_store.publish(ROOT + "/old.moy/big.py", "y = 2\\n" * 6000))):
+    try:
+        fn()
+        print(name, 0)
+    except OSError as e:
+        print(name, e.errno)
+print("LEFT", tree() == before)
+print("REMOVAL", repr(moy_net.sync_apply(ROOT, None, None, "carts",
+                                         json.dumps([{"p": "old.moy", "dc": True}]), True)))
+print("GONE", tree() == [])
+'''
+
+
+def test_a_full_volume_refuses_a_batch_whole_and_keeps_no_piece_of_a_write(tmp_path):
+    """A littlefs volume filled to a few blocks (the kernel's, a Zero's
+    store): its free count never goes below none, though littlefs's own
+    count of used blocks passes the volume's size; a batch it has no room for
+    is refused whole with ENOSPC before a folder is made; a write and a
+    save too large for it are refused with no staging file, no file cut
+    short and no backup left; and a removal still applies."""
+    exe = require_unix_mp("moy_store", "moy_net", board_model=True,
+                          why="a full store's refusal on the kernel's littlefs")
+    script = tmp_path / "full.py"
+    script.write_text(FULL.replace("@SLACK@", "4"))
+    out = subprocess.run([exe, "-X", "heapsize=4m", str(script)],
+                         capture_output=True, text=True, timeout=300)
+    assert out.returncode == 0, out.stdout + out.stderr
+    said = [ln.split(" ", 1) for ln in out.stdout.splitlines()]
+    got = dict((k, v) for k, v in said if k not in ("LEFT",))
+    assert int(got["FREE"]) >= 0, got
+    refusal = "'OSError: [Errno 28]'"
+    assert got["BATCH"] == "(0, [(0, %s), (1, %s), (2, %s)], False, 3)" % ((refusal,) * 3), got
+    assert [v for k, v in said if k == "LEFT"] == ["True", "True"], out.stdout
+    assert (got["BYTES"], got["TEXT"]) == ("28", "28"), got
+    assert got["REMOVAL"].startswith("(1, [], True"), got
+    assert got["GONE"] == "True", got
+
+
 LISTING = '''
 import os, time, vfs, moy_store, moy_ufiles
 FS = "@FS@"

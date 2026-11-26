@@ -750,7 +750,10 @@ static mp_obj_t kvfs_statvfs(mp_obj_t self_in, mp_obj_t path_in) {
     t->items[0] = MP_OBJ_NEW_SMALL_INT(self->lfs->cfg->block_size);
     t->items[1] = t->items[0];
     t->items[2] = MP_OBJ_NEW_SMALL_INT(self->lfs->cfg->block_count);
-    t->items[3] = MP_OBJ_NEW_SMALL_INT(self->lfs->cfg->block_count - used);
+    // littlefs counts a block every structure that names it does, so a full
+    // volume's count can pass its size: none free, never fewer.
+    uint32_t count = self->lfs->cfg->block_count;
+    t->items[3] = MP_OBJ_NEW_SMALL_INT(used < count ? count - used : 0);
     t->items[4] = t->items[3];
     for (int i = 5; i < 9; i++) {
         t->items[i] = MP_OBJ_NEW_SMALL_INT(0);

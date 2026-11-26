@@ -2734,7 +2734,7 @@ function syncPump() {
                          + "Scan the code on its WEB CONSOLE screen to pair again.");
                 return;
             }
-            if (ok) { syncOk(now); outstanding = false; }
+            if (ok) { syncOk(now); outstanding = false; storeFullSaid(r.text); }
             else if (r.status === 503) { closingSaid(r.text); }
             else syncFailed(now);
             try { syncAck(ok ? 1 : 0); } catch (e) { }
@@ -2745,6 +2745,21 @@ function syncPump() {
             try { syncAck(0); } catch (e) { }
         })
         .finally(() => { syncBusy = false; });
+}
+
+// THE CONSOLE'S STORE IS FULL. A batch its store has no room for is answered
+// 200 with each write refused "OSError: [Errno 28]" (moy_sync_apply.c), and
+// the batch is acked like any other refusal, so nothing replays: the person
+// is told, once per batch, that what they made is in this tab alone.
+function storeFullSaid(text) {
+    let err;
+    try { err = (JSON.parse(text || "{}").err) || []; } catch (e) { return; }
+    const full = err.filter((e) => /\[Errno 28\]/.test(String(e && e[1]))).length;
+    if (!full) return;
+    console.log("[moy] sync: the console's storage is full, " + full + " write(s) refused");
+    self.postMessage({ t: "imported", ok: false,
+        s: "The console's storage is full: " + full + (full === 1 ? " file was" : " files were")
+           + " not saved on it. Remove a cart there and save again." });
 }
 
 // WHAT AN IDLE PAGE ASKS. With nothing to push there is no POST, and with no
