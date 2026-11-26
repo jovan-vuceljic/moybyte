@@ -937,6 +937,8 @@ typedef struct {
                                     // there (the current pick)
     int16_t two;                    // pics: its label on a line of its own over the tiles
                                     // (moy_ui_pics_two), the row a line taller
+    moy_ui_span_t icons;            // seg: each option's icon before its word, by name,
+                                    // NUL-separated as value's (n 0: none; an empty name none)
 } moy_ui_vrow_t;
 enum { MOY_UI_VROW_PLAIN = 0, MOY_UI_VROW_DANGER = 1 };
 int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,

@@ -496,7 +496,7 @@ def test_every_row_answers_a_tap(tmp_path, kw):
     use_theme(ws, "night", "dark", store=True)
     app = _open(ws)
     look = ws.look
-    _tap(ws, app, "Mode", dx=_box(app, "Mode")[2] - 60)    # the Light option
+    _tap(ws, app, "Mode", dx=_box(app, "Mode")[2] - 90)    # the Day option
     assert look.theme_variant == "light"
     _tap(ws, app, "Accent", dx=_box(app, "Accent")[2] - 12)   # the last dot
     assert look.custom_look()["accent"] == _accent(page.OFFERED[-1])

@@ -3928,6 +3928,9 @@ int32_t moy_ui_api_choice(moy_ui_ctx_t *c, const moy_ui_sink_t *s, int kind, moy
         r.value.p = opts;
         r.value.n = (uint16_t)(len > 0xffff ? 0xffff : len);
     }
+    if (kind == MOY_UI_V_SEG) {
+        r.icons = o->icons;             // each option's icon before its word (o.icons)
+    }
     if (n > 0) {
         int step = (st & MOY_UI_ST_FOCUS) ? c->step_x : 0;
         if (kind == MOY_UI_V_TABS && c->tab_step && o->disabled != 1) {

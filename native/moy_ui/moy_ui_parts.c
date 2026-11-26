@@ -653,13 +653,34 @@ static void geo(const pd_t *d, moy_ui_box_t b, const moy_ui_vrow_t *r, int kind,
 }
 
 // Option i's box of a seg: x from the right, `ph` tall.
+// A seg's option i's icon (r->icons, by name): its slot, else its glyph into *glyph; -1 both
+// where it has none.
+static int opt_icon(const moy_ui_vrow_t *r, int i, int *glyph) {
+    *glyph = -1;
+    if (r->icons.n == 0) {
+        return -1;
+    }
+    moy_ui_span_t n = option(r->icons, i);
+    if (n.n == 0) {
+        return -1;
+    }
+    *glyph = moy_ui_icon_glyph(n.p, n.n);
+    return moy_ui_icon_slot(n.p, n.n);
+}
+
+// The room option i's icon takes before its word: the icon and a gap, 0 with none.
+static int opt_icon_w(const pd_t *d, const moy_ui_vrow_t *r, int i) {
+    int g;
+    return opt_icon(r, i, &g) >= 0 || g >= 0 ? 18 * d->fs : 0;
+}
+
 static moy_ui_box_t seg_box(const pd_t *d, const pf_t *f, moy_ui_box_t b, const moy_ui_vrow_t *r,
                             const vgeo_t *g, int i, int scale) {
     int x = g->right - g->gap / 2;
     int ph = b.h - (d->desk ? 8 : 4) * d->fs;
     for (int j = r->n - 1; j >= 0; j--) {
         moy_ui_span_t o = option(r->value, j);
-        int ow = tw(f, o.p, o.n, scale);
+        int ow = tw(f, o.p, o.n, scale) + opt_icon_w(d, r, j);
         x -= ow;
         if (j == i) {
             return (moy_ui_box_t){(int16_t)(x - g->gap / 2), (int16_t)(b.y + (b.h - ph) / 2),
@@ -1067,7 +1088,15 @@ int moy_ui_vrow(const moy_ui_sink_t *s, moy_ui_box_t b, int kind, int flags,
                 } else if (i == r->cur) {
                     c = current(s, &d, o, (d.desk ? 6 : 4) * d.fs, ink, MOY_UI_ITEM_CELL, 0);
                 }
-                text(&d, &fv, t.p, t.n, o.x + g.gap / 2, b.y, b.h, pal(&d, c), sc);
+                int glyph, slot = opt_icon(r, i, &glyph), tx = o.x + g.gap / 2;
+                if (slot >= 0 || glyph >= 0) {
+                    // its icon before its word, a 16 px box at the scale, centred on the row
+                    int side = 16 * d.fs;
+                    icon_d(&d, slot, glyph, (moy_ui_box_t){(int16_t)tx, (int16_t)(b.y + (b.h - side) / 2),
+                                                           (int16_t)side, (int16_t)side}, c);
+                    tx += 18 * d.fs;
+                }
+                text(&d, &fv, t.p, t.n, tx, b.y, b.h, pal(&d, c), sc);
                 right = o.x;
             }
             break;
@@ -1301,7 +1330,7 @@ int moy_ui_vrow_w(const moy_ui_sink_t *s, int kind, const moy_ui_vrow_t *r) {
         w += r->label.n ? tw(&fl, r->label.p, r->label.n, sc) : -gap;
         for (int j = 0; j < r->n; j++) {
             moy_ui_span_t o = option(r->value, j);
-            w += tw(&fv, o.p, o.n, sc) + g.gap + (j ? (d.desk ? 4 : 2) * d.fs : 0);
+            w += tw(&fv, o.p, o.n, sc) + opt_icon_w(&d, r, j) + g.gap + (j ? (d.desk ? 4 : 2) * d.fs : 0);
         }
         return w;
     }

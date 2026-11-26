@@ -667,6 +667,20 @@ static uint32_t seg_items(uit_t *e, const uit_node_t *N, uint32_t *len, int *cou
     return start;
 }
 
+// The icons of a seg over a row_of at the scratch's end, NUL-separated as seg_items' words: each
+// row's icons= template; their length into *len.
+static uint32_t seg_icons(uit_t *e, const uit_node_t *N, uint32_t *len)
+{
+    int m = e->slots[N->slot].model;
+    uint32_t start = e->scratch.n;
+    for (int r = 0; r < e->slots[m].nrows; r++) {
+        uint32_t n;
+        uit_tmpl_render(e, N->t_aux, m, r, &n);
+    }
+    *len = e->scratch.n > start ? e->scratch.n - start - 1 : 0;
+    return start;
+}
+
 // A swatches seg's `count` words (NUL-separated at scratch offset `at`) as colours: four bytes a
 // word, little-endian, appended to the scratch; their offset, their length in *len.
 static uint32_t swatch_words(uit_t *e, uint32_t at, int count, uint32_t *len)
@@ -4466,6 +4480,11 @@ static void draw_node(uit_t *e, moy_ui_ctx_t *c, const moy_ui_sink_t *s, int k, 
             items = swatch_words(e, items, count, &len);
         }
         over_for(e, k, model, row, c, &o, id);
+        if (N->t_aux >= 0 && look == MOY_UI_V_SEG) {
+            // icons=: each row's icon before its word, NUL-separated as the words are
+            uint32_t ilen, icons = seg_icons(e, N, &ilen);
+            moy_ui_over_text(&o, MOY_UI_OV_ICONS, sspan(e, icons, ilen));
+        }
         int got = moy_ui_api_choice(c, s, look, sspan(e, a1, n1),
                                     (const uint8_t *)e->scratch.p + items, len, at, &o);
         if (got >= 0 && got < count && got != at) {

@@ -11,7 +11,7 @@ page the C engine lays out and paints.
 The themes are cards (`ui.cards`), each picture the theme's own ground,
 bar, surface and accent, drawn when the engine asks (`ui.pictures.put`),
 the theme in use wearing the current mark; under them the rows: MODE (a
-seg, where the theme has two modes), ACCENT (eight swatches: the theme's
+seg, where the theme has two modes: Day by the sun, Night by the moon), ACCENT (eight swatches: the theme's
 own and `OFFERED`), TINT, WALLPAPER (a link to the wallpapers' page),
 WINDOW STYLE (where windows are), FONT, CODE FONT (where the image draws
 more than one), CHROME SIZE (where the panel takes more than one), NAME on
@@ -86,7 +86,9 @@ ROWS = {"Mode": "mode", "Accent": "accent", "Tint": "tint", "Wallpaper": "wallpa
 
 # -- the pages ------------------------------------------------------------------------
 
-_PICKS = dict(key="v", v="", word="")
+_PICKS = dict(key="v", v="", word="", icon="")
+# The Mode row's icons, light's and dark's: Day the sun, Night the moon.
+MODE_ICONS = ("sun", "moon")
 s = ui.state(
     status="",                  # the desk band's lead: the theme, its mode, where it comes from
     themes=ui.model(key="id", id="", title="", sub="", pic=ui.IMAGE),
@@ -233,7 +235,7 @@ def build():
             with ui.cards("themes", cur="card", current="theme", w="{@desk?192:66}",
                           h="{@desk?112:50}", flow=True):
                 ui.card("use", label="{.title}", sub="{.sub}", image=".pic")
-            ui.seg("Mode", "mode", text="{.word}", on="mode_set", shown="two_modes")
+            ui.seg("Mode", "mode", text="{.word}", icons="{.icon}", on="mode_set", shown="two_modes")
             ui.seg("Accent", "accent", text="{.rgb}", look="swatches", on="accent_set",
                    shown="has_accents")
             ui.seg("Tint", "tint", text="{.word}", look="cycle", on="tint_set")
@@ -276,9 +278,11 @@ def _set(lay, name, value):
         setattr(s, name, value)
 
 
-def _picks(lay, name, keys, words, cur):
-    """A cycle's rows (`name` + "s") and its value, `cur` (a key of `keys`)."""
-    _set(lay, name + "s", [{"v": k, "word": w} for k, w in zip(keys, words)])
+def _picks(lay, name, keys, words, cur, icons=()):
+    """A cycle's rows (`name` + "s") and its value, `cur` (a key of `keys`);
+    `icons` each row's icon, where its seg shows one."""
+    _set(lay, name + "s", [{"v": k, "word": w, "icon": icons[i] if i < len(icons) else ""}
+                           for i, (k, w) in enumerate(zip(keys, words))])
     _set(lay, name, cur)
 
 
@@ -306,7 +310,7 @@ def fill(lay):
     modes = lay.modes_of(name if name != "custom" else (ch["from"] or name))
     _set(lay, "two_modes", len(modes) > 1)
     if len(modes) > 1:
-        _picks(lay, "mode", ("light", "dark"), modes, variant)
+        _picks(lay, "mode", ("light", "dark"), modes, variant, MODE_ICONS)
     offered = lay.accents_offered(ch)
     _set(lay, "has_accents", offered)
     if offered:

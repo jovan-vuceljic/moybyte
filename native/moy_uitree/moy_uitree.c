@@ -1161,6 +1161,12 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"),
                                   uit_kind_names[kind], name, src, uit_type_name(e->tmpls[t].type));
         return add_prop(e, node, name, src, repr, PK_TMPL, t);
+    } else if (kind == UIT_SEG && !strcmp(name, "icons")) {
+        // a seg over a row_of: each row's icon before its word, a template over its model's rows
+        if (N->lit & NL_FIELD || N->slot < 0 || e->slots[N->slot].type != UIT_ROWOF)
+            return uit_fail(e, UIT_E_ARG, UIT_MSG("seg icons=%s: a seg over a row_of, after it", "seg %s"), src);
+        model = e->slots[N->slot].model;
+        tslot = &N->t_aux;
     } else if ((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text")) {
         // a seg or tabs over a row_of: each row's word, a template over its model's rows; a
         // seg bound to a row's field: its items, one a line, a template over that row
@@ -1259,7 +1265,8 @@ int uit_prop(uit_t *e, int node, const char *name, const char *src, const char *
             if (T->type != UIT_INT && !lit_int)
                 return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not an int", "%s %s %s %s"), uit_kind_names[kind], name, src,
                                       uit_type_name(T->type));
-        } else if (!((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text"))) {      // row words: any type
+        } else if (!((kind == UIT_SEG || kind == UIT_TABS) && !strcmp(name, "text")) &&
+                   !(kind == UIT_SEG && !strcmp(name, "icons"))) {      // row words: any type
             if (T->type == UIT_BOOL || T->type == UIT_MODEL)
                 return uit_check_fail(e, "T03", UIT_MSG("%s %s=%s is a %s, not a text", "%s %s %s %s"), uit_kind_names[kind], name, src,
                                       uit_type_name(T->type));

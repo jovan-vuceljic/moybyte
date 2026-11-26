@@ -2046,7 +2046,8 @@ SCHEMA = {
     "field": dict(_C, label="text", max="lit", on="action0", secret="lit", focus="cond",
                   changed="action0", hint="text", commit="lit", when="cond", off="lit", grow="lit",
                   edit="lit", keys="lit"),
-    "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text"),
+    "seg": dict(_C, label="text", on="action0", focus="cond", look="lit", labels="lit", text="text",
+                icons="text"),
     "rows": dict(_C, cur="lit", current="lit", empty="text", filter="lit", changed="action1", group="lit",
                  dir="lit", by="lit", check="lit"),
     "table": dict(_C, cur="lit", cols="lit", changed="action1", on="action1", empty="text", hint="text", focus="cond",
@@ -2519,7 +2520,7 @@ def field(label, name, max=32, commit=False, edit="stop", keys="text", **p):
     return n
 
 
-def seg(label, name, labels=None, text=None, look="seg", **p):
+def seg(label, name, labels=None, text=None, look="seg", icons=None, **p):
     """One of several values, left and right its own while focused: over an
     enum, each value's word from label table `labels=` (every value named);
     over a `row_of`, its model's rows in order, each word the row template
@@ -2529,11 +2530,17 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     number in any base); `look="pictures"` shows every value as a picture
     in a tile at the row's right, each word an image's text (`own:KEY`,
     `store:KIND/NAME`), the current one's tile the selection's, left and
-    right wrapping and activation taking the next. Bound to `.FIELD`, an int field of its list's row,
+    right wrapping and activation taking the next. Over a `row_of`,
+    `icons=` (a template over its rows like `text=`) names each row's icon,
+    drawn before its word in the seg look. Bound to `.FIELD`, an int field of its list's row,
     the field is the index of its item and `text=`, a template over the
     row, renders its items one a line; `on=` is handed the row."""
     where = _caller()
     _checked("seg", "look", look, where)
+    if icons is not None and (look != "seg" or isinstance(name, str) and name.startswith(".")
+                              or not isinstance(_st()._t.get(name), RowOf)):
+        raise UIError("N01", "ui.seg(%r) icons= names a row_of's rows' icons in the seg look" % (name,),
+                      where=where, fix='a row_of seg with text="{.FIELD}", icons="{.ICON}"')
     if isinstance(name, str) and name.startswith("."):
         f = _row_field("seg", name, INT, where)
         if labels is not None or text is None:
@@ -2579,6 +2586,12 @@ def seg(label, name, labels=None, text=None, look="seg", **p):
     else:
         n.l["text"] = tmpl(text, Ctx(_st()._t[t.model]), where, "text").g
     n.src["text"] = text
+    if icons is not None:
+        if _NOW.app.direct:
+            _direct_src("seg", "icons", icons, "text", where)
+        else:
+            n.l["icons"] = tmpl(icons, Ctx(_st()._t[t.model]), where, "icons").g
+        n.src["icons"] = icons
     return n
 
 
