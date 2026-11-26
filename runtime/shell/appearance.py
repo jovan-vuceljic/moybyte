@@ -101,6 +101,7 @@ from theme_custom import (Custom, CUSTOM, DROP, MANIFEST, PETME128,
                           manifest, minified, name_ok, named, overlay,
                           read_look, sheet_files, wall_keys)
 from moy_store_base import cart_path
+from moy_fs import _exists
 from binascii import crc32 as _crc32
 import ui_draw as _ui_draw
 import fontset as _fontset
@@ -196,6 +197,14 @@ def role_fonts(name, variant, desk=False, own=(), tap=False):
 # seed's file: one table for the process, as the loader's slots are.
 _FONTS = {}
 _FULL = [False]         # a load found the slots full and reset them
+
+
+def _style_of(f):
+    """A `frame` value's style: classic for one that names none, None for
+    no `frame` at all (DROP)."""
+    if f is DROP:
+        return None
+    return f.get("style", "classic") if type(f) is dict else "classic"
 
 
 def _keep_splash(th):
@@ -354,7 +363,7 @@ class Appearance:
         # Config save: its buffer, with no edits, reloads on it.
         self.file_gen = 0
         self._sheet_epoch = 0           # moves with every write of a package's sheet
-        self._styles = {}               # (source, store gen) -> frame style
+        self._styles = {}               # (source, store gen) -> its own frame style
 
     # -- wallpaper discovery -------------------------------------------------
 
@@ -716,7 +725,9 @@ class Appearance:
         `variant`; `store`, the active theme is an installed package;
         `from`, custom's source (None off custom, or once the file as saved
         is the source); `accent` an accent's A and `tint` a tint's name,
-        each None for the theme's own; `frame`, the style its windows draw;
+        each None for the theme's own; `frame`, the FRAMES style its windows
+        draw, None for the theme's own frame (one that names none: its look's),
+        and `own_frame`, the source's own the same way;
         `font`, the FONTS preset its `ui` font is, None for a font of its
         own; `code_font`, the CODE_FONTS preset its `mono` font is, the same
         way, and `code_fonts`, the presets this image draws; `wallpaper`, the wallpaper shown; `picture`, for the theme's
@@ -734,6 +745,7 @@ class Appearance:
                 "store": name not in THEME_NAMES and name != CUSTOM,
                 "from": lk.get("from"), "accent": lk.get("accent"),
                 "tint": lk.get("tint"), "frame": self._frame_style(c, lk),
+                "own_frame": self._own_frame(c, lk),
                 "font": self._font_preset(), "code_font": self._code_font_preset(),
                 "code_fonts": self.code_fonts(), "wallpaper": self.wallpaper_id,
                 "picture": pic, "chrome": self.chrome_size(),
@@ -741,22 +753,26 @@ class Appearance:
 
     def _frame_style(self, c, lk):
         """The `style` of the active theme's `frame`: custom's own where a
-        change set it, else its source's, read once per source."""
-        if c is not None:
-            f = c.over.get("frame", DROP)
-            if f is DROP and "from" not in lk:
-                f = keys_of(c.theme)["frame"]
-            if f is not DROP:
-                return f.get("style", "classic") if type(f) is dict else "classic"
+        change set it, else its source's (`_own_frame`)."""
+        if c is not None and "frame" in c.over:
+            return _style_of(c.over["frame"])
+        return self._own_frame(c, lk)
+
+    def _own_frame(self, c, lk):
+        """The `style` of the source's own `frame` (custom's file as saved
+        where it has no `from`), a seed's or a package's read once per
+        source; None where it names none, so its windows draw its look's
+        frame (every seed's) and no style is in force."""
+        if c is not None and "from" not in lk:
+            return _style_of(keys_of(c.src if c.src is not None else c.theme)["frame"])
         src = lk.get("from") or self.theme_name
         key = (src, self._pkg_gen)
-        got = self._styles.get(key)
-        if got is None:
+        got = self._styles.get(key, DROP)
+        if got is DROP:
             b = self._source(src)
             if b is not None and src in THEME_NAMES:
                 b = _ui_draw.theme_custom(b, None, None)[1]
-            f = keys_of(b)["frame"] if b is not None else DROP
-            got = f.get("style", "classic") if type(f) is dict else "classic"
+            got = _style_of(keys_of(b)["frame"] if b is not None else DROP)
             self._styles = {key: got}
         return got
 
@@ -972,7 +988,9 @@ class Appearance:
         """Why `name` cannot be custom's name, else None: "grammar" (not the
         loader's name, §3), "seed", "custom", "cart" (a cart's folder has
         the stem), "taken" (an installed theme has it: NAME… replaces it
-        only when asked)."""
+        only when asked), "folder" (the store holds a folder of the stem
+        the roster lists no cart in, which the rename cannot take the place
+        of: one with no manifest, as a sync a board cut short leaves)."""
         if not name_ok(name):
             return "grammar"
         if name in THEME_NAMES:
@@ -984,6 +1002,15 @@ class Appearance:
             path = str(cart.get("path") or "").replace("\\", "/")
             if path.rsplit("/", 1)[-1] == folder:
                 return "taken" if cart.get("type") == "theme" else "cart"
+        ws = self.ws
+        store = getattr(ws, "store", None)
+        if store is not None and store.ready():
+            dest = cart_path(ws.carts_root, folder)
+            try:
+                if store.call(lambda: _exists(dest)):
+                    return "folder"
+            except Exception:  # noqa: BLE001 -- unreadable: the rename answers
+                pass
         return None
 
     def name_custom(self, name, replace=False):

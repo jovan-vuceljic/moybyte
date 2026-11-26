@@ -67,6 +67,7 @@ NAME_WHY = {"grammar": "a-z 0-9 _ - only, a letter or digit first",
             "seed": "A built-in theme has that name",
             "custom": "Custom is the one being changed",
             "cart": "A cart has that name",
+            "folder": "A folder has that name",
             "store": "Can't save here",
             "none": "Only custom is named"}
 NAME_HINT = "a-z 0-9 _ -, up to 24"
@@ -156,10 +157,8 @@ def tint_set():
 
 def _preset(kind, name):
     def changed():
-        v = getattr(s, name)
         lay = _lay()
-        if v:                   # the theme's own: nothing to change to
-            lay.change(kind, v)
+        lay.change(kind, getattr(s, name) or None)      # "": the source's own
     return changed
 
 
@@ -282,12 +281,13 @@ def _picks(lay, name, keys, words, cur):
     _set(lay, name, cur)
 
 
-def _own_or(keys, words, cur):
+def _own_or(keys, words, cur, own):
     """A preset row's keys, words and value: the presets, the theme's own
-    ("", `OWN`) before them where it uses none of them."""
-    if cur in keys:
+    ("", `OWN`) before them where it uses none of them -- `own`, the
+    source's, so a pick on custom keeps the way back to it."""
+    if cur in keys and own in keys:
         return keys, words, cur
-    return ("",) + tuple(keys), (OWN,) + tuple(words), ""
+    return ("",) + tuple(keys), (OWN,) + tuple(words), cur if cur in keys else ""
 
 
 def fill(lay):
@@ -325,12 +325,13 @@ def fill(lay):
     pics, carts = lay.wall_rows(ch)        # (the titles wall_title reads)
     tab, key = lay.wall_now()
     _set(lay, "wall_title", lay.walls[key][1] if key in lay.walls else "")
-    _picks(lay, "frame", *_own_or(FRAMES, FRAME_NAMES, ch["frame"]))
-    _picks(lay, "font", *_own_or(FONTS, FONT_NAMES, ch["font"]))
+    _picks(lay, "frame", *_own_or(FRAMES, FRAME_NAMES, ch["frame"], ch["own_frame"]))
+    _picks(lay, "font", *_own_or(FONTS, FONT_NAMES, ch["font"], ch["font"]))
     codes = ch["code_fonts"]
     _set(lay, "has_codes", len(codes) > 1)
     if len(codes) > 1:
-        _picks(lay, "code", *_own_or(codes, [CODE_FONT_NAMES[k] for k in codes], ch["code_font"]))
+        _picks(lay, "code", *_own_or(codes, [CODE_FONT_NAMES[k] for k in codes], ch["code_font"],
+                                     ch["code_font"]))
     chromes = ch["chromes"]
     _set(lay, "has_chromes", len(chromes) > 1)
     if len(chromes) > 1:
