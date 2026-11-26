@@ -1856,55 +1856,68 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
 // A request the page asked on its live socket is served here, in the poll,
 // as one off a connection is: the same route, its sign-in check and its
 // park for the VM. Its answer goes through the same writer into `lout`,
-// which sends it on the socket as it is written: the head as one 'A' (its
-// status and Content-Type), the body as 'D's of at most LIVE_PIECE bytes (a
-// chunked answer's framing left out) and 'Z' at its end.
+// which sends it on the socket as it is written, in frames of at most
+// LIVE_PIECE bytes after their kind and id: 'A' the head (its status and
+// Content-Type) with the body's first bytes, 'D's the body's next, 'Z' its
+// last and the end, or one 'W' for an answer whose whole fits (a chunked
+// answer's framing left out). Each segment the socket sends holds a whole
+// MSS of the heap until the page acks it (lwIP's LWIP_NETIF_TX_SINGLE_PBUF),
+// so a frame is a full segment where the answer has the bytes, and a small
+// answer is one frame, never three.
 
-#define LIVE_PIECE 2048
-#define LIVE_AT (MOY_WS_HEAD + 4)       // a frame's channel, kind and id go before its bytes
+#define LIVE_MSS 1440                   // the boards' CONFIG_LWIP_TCP_MSS
+#define LIVE_PIECE (LIVE_MSS - MOY_WS_HEAD - 4 - MOY_SEAL_TAG)
 #define LIVE_CTYPE 64
+#define LIVE_HEAD (3 + LIVE_CTYPE)      // an 'A's or a 'W's status, type length and type
+#define LIVE_AT (MOY_WS_HEAD + 4 + LIVE_HEAD)   // where the body's bytes are staged
 
 typedef struct lout {
     uint32_t gen;
     uint16_t id;
-    uint8_t body;                       // the head is past
+    uint8_t head;                       // the HTTP head is read: status and ctype hold it
+    uint8_t said;                       // the 'A' went
+    uint16_t status;
+    uint8_t cn;
+    char ctype[LIVE_CTYPE];
     size_t n;                           // bytes at buf + LIVE_AT
     uint8_t *buf;                       // LIVE_AT + LIVE_PIECE + MOY_SEAL_TAG, NULL: no memory
 } lout_t;
 
-// One frame of kind `k`, its `n` bytes at p + 4 (MOY_WS_HEAD bytes free
-// before p, MOY_SEAL_TAG after its bytes).
-static int lout_say(lout_t *lv, uint8_t *p, char k, size_t n) {
+// The staged bytes as one frame of kind `k` ('A' and 'W' with the head
+// before them).
+static int lout_say(lout_t *lv, char k) {
+    uint8_t *p = lv->buf + LIVE_AT;
+    size_t n = lv->n;
+    if (k == 'A' || k == 'W') {
+        p -= 3 + lv->cn;
+        p[0] = (uint8_t)lv->status;
+        p[1] = (uint8_t)(lv->status >> 8);
+        p[2] = lv->cn;
+        memcpy(p + 3, lv->ctype, lv->cn);
+        n += 3 + lv->cn;
+        lv->said = 1;
+    }
+    p -= 4;
     p[0] = 'r';
     p[1] = (uint8_t)k;
     p[2] = (uint8_t)lv->id;
     p[3] = (uint8_t)(lv->id >> 8);
+    lv->n = 0;
     return moy_live_req_say(lv->gen, p, 4 + n);
 }
 
-// The head's 'A': its status and Content-Type, the type cut at LIVE_CTYPE.
-static int lout_head(lout_t *lv, int status, const char *ctype, size_t cn) {
-    uint8_t a[LIVE_AT + 2 + LIVE_CTYPE + MOY_SEAL_TAG];
-    uint8_t *p = a + MOY_WS_HEAD;
-    cn = cn < LIVE_CTYPE ? cn : LIVE_CTYPE;
-    p[4] = (uint8_t)status;
-    p[5] = (uint8_t)(status >> 8);
-    memcpy(p + 6, ctype, cn);
-    lv->body = 1;
-    return lout_say(lv, p, 'A', 2 + cn);
+// The body bytes the next frame holds: a whole piece, less the head's
+// bytes where it is the 'A'.
+static size_t lout_room(const lout_t *lv) {
+    return LIVE_PIECE - (lv->said ? 0 : 3u + lv->cn);
 }
 
 static void lout_open(lout_t *lv) {
     lv->buf = moy_net_alloc(LIVE_AT + LIVE_PIECE + MOY_SEAL_TAG);
 }
 
-static int lout_flush(lout_t *lv) {
-    int r = lv->n ? lout_say(lv, lv->buf + MOY_WS_HEAD, 'D', lv->n) : 0;
-    lv->n = 0;
-    return r;
-}
-
-// The staged head, once whole: its 'A', and the bytes after it are body.
+// The staged head, once whole: its status and type kept, and the bytes
+// after it are body.
 static int lout_ended_head(out_t *o) {
     lout_t *lv = o->lv;
     char *h = (char *)lv->buf + LIVE_AT;
@@ -1917,12 +1930,12 @@ static int lout_ended_head(out_t *o) {
     if (!e) {
         return 0;
     }
-    int status = e > 12 && memcmp(h, "HTTP/1.", 7) == 0 ? atoi(h + 9) : 500;
+    lv->status = (uint16_t)(e > 12 && memcmp(h, "HTTP/1.", 7) == 0 ? atoi(h + 9) : 500);
     size_t cn = 0;
     const char *ct = header(h, e, "Content-Type", &cn);
-    if (lout_head(lv, status, ct != NULL ? ct : "", ct != NULL ? cn : 0) < 0) {
-        o->err = 1;
-    }
+    lv->cn = (uint8_t)(ct == NULL ? 0 : cn < LIVE_CTYPE ? cn : LIVE_CTYPE);
+    memcpy(lv->ctype, ct != NULL ? ct : "", lv->cn);
+    lv->head = 1;
     memmove(h, h + e, lv->n - e);
     lv->n -= e;
     return 1;
@@ -1935,35 +1948,52 @@ static void lout_raw(out_t *o, const char *p, size_t n) {
         return;
     }
     while (n > 0 && !o->err) {
-        size_t take = LIVE_PIECE - lv->n;
+        size_t room = lv->head ? lout_room(lv) : LIVE_PIECE;
+        if (lv->n == room) {
+            if (!lv->head || lout_say(lv, lv->said ? 'D' : 'A') < 0) {
+                o->err = 1;             // no head is this long, or the socket failed
+            }
+            continue;
+        }
+        size_t take = room - lv->n;
         take = take < n ? take : n;
         memcpy(lv->buf + LIVE_AT + lv->n, p, take);
         lv->n += take;
         p += take;
         n -= take;
-        if (!lv->body && !lout_ended_head(o)) {
-            if (lv->n == LIVE_PIECE) {
-                o->err = 1;             // no head is this long
-            }
-            continue;
-        }
-        if (lv->n == LIVE_PIECE && lout_flush(lv) < 0) {
-            o->err = 1;
+        if (!lv->head) {
+            lout_ended_head(o);
         }
     }
 }
 
-// The answer's end: what is staged, then 'Z'. An answer with no head (no
-// memory for its pieces) is a 503.
+// The answer's end: what is staged as its last frame ('Z', or the whole
+// answer's 'W'). An answer with no head (no memory for its pieces, or a
+// head that never ended) is a 503.
 static void lout_end(out_t *o) {
     lout_t *lv = o->lv;
-    if (!lv->body) {
-        lout_head(lv, 503, "", 0);
-    } else if (!o->err) {
-        lout_flush(lv);
+    if (lv->buf == NULL) {
+        uint8_t w[MOY_WS_HEAD + 4 + 3 + MOY_SEAL_TAG];
+        uint8_t *p = w + MOY_WS_HEAD;
+        p[0] = 'r';
+        p[1] = 'W';
+        p[2] = (uint8_t)lv->id;
+        p[3] = (uint8_t)(lv->id >> 8);
+        p[4] = 503 & 0xff;
+        p[5] = 503 >> 8;
+        p[6] = 0;
+        moy_live_req_say(lv->gen, p, 7);
+        return;
     }
-    uint8_t z[LIVE_AT + MOY_SEAL_TAG];
-    lout_say(lv, z + MOY_WS_HEAD, 'Z', 0);
+    if (!lv->head) {
+        lv->status = 503;
+        lv->cn = 0;
+        lv->n = 0;
+    } else if (o->err && !lv->said) {
+        lv->status = 503;
+        lv->n = 0;
+    }
+    lout_say(lv, lv->said ? 'Z' : 'W');
     moy_net_free(lv->buf);
     lv->buf = NULL;
 }

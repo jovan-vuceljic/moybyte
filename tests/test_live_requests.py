@@ -69,6 +69,7 @@ class Asker:
     def __init__(self, page, piece):
         self.page, self.piece = page, piece
         self.id = 0
+        self.frames = []            # (kind, plaintext length) of each answer frame, in order
 
     def pieces(self, req):
         self.id += 1
@@ -87,12 +88,17 @@ class Asker:
             for m in got:
                 kind, mid = m[1:2], struct.unpack("<H", m[2:4])[0]
                 assert mid == self.id, (mid, self.id)
-                if kind == b"A":
-                    status, ctype = struct.unpack("<H", m[4:6])[0], m[6:]
-                elif kind == b"D":
+                self.frames.append((kind, len(m)))
+                at = 4
+                if kind in (b"A", b"W"):
+                    assert status is None, "a second head"
+                    status, at = struct.unpack("<H", m[4:6])[0], 7 + m[6]
+                    ctype = m[7:at]
+                else:
+                    assert kind in (b"D", b"Z"), kind
                     assert status is not None, "a body before its head"
-                    body += m[4:]
-                elif kind == b"Z":
+                body += m[at:]
+                if kind in (b"Z", b"W"):
                     return status, ctype, body
             time.sleep(0.005)
         raise AssertionError("no answer to request %d" % self.id)
@@ -160,6 +166,30 @@ def test_a_long_request_and_a_long_answer_cross_in_pieces(board, page_so, tmp_pa
     assert status == 200 and len(plain) > 30 * 2048
     assert all(json.loads(plain)[p] == t for p, t in texts.items())
     assert plain == board.page.call("GET", "/carts.json")[1]
+
+
+# A frame down is at most a segment: the MSS less the frame's head and tag.
+FULL = 1440 - 4 - 16
+
+
+def test_an_answer_goes_in_whole_segments_and_a_small_one_in_one(board, page_so, tmp_path):
+    """Each segment the board sends holds a whole MSS of its heap until the
+    page acks it (lwIP's single-pbuf send), so an answer's frames are full
+    segments but its last, and a small answer is one 'W'."""
+    page, asker = _open(board, page_so, tmp_path)
+    live = seal_client.Browser(asker.send)
+    texts = {"long.moy/f%d.py" % k: "".join("line %d of file %d\n" % (i, k) for i in range(400))
+             for k in range(4)}
+    body = json.dumps({"v": 1, "ops": [{"p": p, "t": t} for p, t in texts.items()]}).encode()
+    del asker.frames[:]
+    assert live.call("POST", "/sync", body)[0] == 200
+    assert [k for k, _n in asker.frames] == [b"W"]
+    del asker.frames[:]
+    status, plain = live.call("GET", "/carts.json")
+    assert status == 200 and len(plain) > 10 * FULL
+    kinds = [k for k, _n in asker.frames]
+    assert kinds[0] == b"A" and kinds[-1] == b"Z" and set(kinds[1:-1]) == {b"D"}, kinds
+    assert all(n == FULL for _k, n in asker.frames[:-1]), asker.frames
 
 
 def test_a_request_whose_seal_does_not_check_is_refused_as_over_http(board, page_so,

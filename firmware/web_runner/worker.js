@@ -2342,7 +2342,8 @@ function liveSend(ws, pl) {
 // sealed request (`sealed`) goes on it, sealed as over HTTP, the socket's
 // seal around it: 'r' 'Q' id len and the request's first piece, 'B' id and
 // the rest, "METHOD TARGET\n" and the body; its answer comes back 'A' (the
-// status, the type), 'D's (the body) and 'Z', made into the Response a
+// status, the type, the body's first bytes), 'D's (the body's next) and 'Z'
+// (its last), or one 'W' (the head and the whole body), made into the Response a
 // fetch would have given. One request is on the socket at a time, as the
 // board serves one connection at a time. Anywhere else -- the socket shut,
 // or still opening after LIVE_REQ_WAIT_MS, a board without the channel, the
@@ -2383,11 +2384,16 @@ function liveAnswer(u8) {
     const r = reqNow;
     if (!r || u8.length < 4 || (u8[2] | (u8[3] << 8)) !== r.id) return;
     reqTimer(r);
-    if (u8[1] === 0x41 && u8.length >= 6) {
+    const k = u8[1];
+    let at = 4;
+    if (k === 0x41 || k === 0x57) {             // 'A' or 'W': the head, then bytes
+        if (u8.length < 7 || u8.length < 7 + u8[6]) return;
         r.status = u8[4] | (u8[5] << 8);
-        r.ctype = utf8d.decode(u8.subarray(6));
-    } else if (u8[1] === 0x44) r.parts.push(u8.slice(4));
-    else if (u8[1] === 0x5a) reqEnd(null);
+        r.ctype = utf8d.decode(u8.subarray(7, 7 + u8[6]));
+        at = 7 + u8[6];
+    } else if (k !== 0x44 && k !== 0x5a) return;
+    if (u8.length > at) r.parts.push(u8.slice(at));
+    if (k === 0x5a || k === 0x57) reqEnd(null);
 }
 function liveRequest(method, target, body) {
     const run = () => new Promise((ok, no) => {

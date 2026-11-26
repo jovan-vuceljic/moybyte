@@ -87,17 +87,21 @@
 //   'B' id(2) bytes           its next pieces, in order
 //
 // and down to it, from the webhost's poll (moy_webhost.c), whose answer
-// goes on the socket as it is written, never whole in either heap:
+// goes on the socket as it is written, never whole in either heap, each
+// frame a full segment where the answer has the bytes:
 //
-//   'A' id(2) status(2) ctype   the answer's head: its status, its type
-//   'D' id(2) bytes             its body, in order (a chunked answer's
-//                               chunks without their framing)
-//   'Z' id(2)                   its end
+//   'A' id(2) status(2) n(1) ctype(n) bytes   the answer's head (its
+//                                     status, its type) and its body's
+//                                     first bytes
+//   'D' id(2) bytes                   its body's next, in order (a chunked
+//                                     answer's chunks without their framing)
+//   'Z' id(2) bytes                   its body's last, and its end
+//   'W' id(2) status(2) n(1) ctype(n) bytes   a whole answer in one frame
 //
 // One request is asked at a time: the page sends the next once the last's
 // 'Z' came. A request whose pieces do not add up, that is longer than
 // MOY_HTTP_REQ_MAX, that finds one still waiting for the webhost or no
-// memory is answered 'A' 503 and 'Z' at once. A request still waiting when
+// memory is answered 'W' 503 at once. A request still waiting when
 // the socket ends goes with it, and the answer to one the webhost took
 // goes nowhere (moy_live_req_say: the socket of its session is gone).
 //
@@ -241,10 +245,27 @@ int moy_web_live_link(uint8_t mac[6]) {
     return 1;
 }
 
+// Whether the socket's send buffer has room for a whole frame, waiting for
+// it as a send would: each segment lwIP sends holds a whole MSS of the heap
+// until the page acks it (LWIP_NETIF_TX_SINGLE_PBUF), and a frame written
+// into what one ack freed goes as several near-empty segments, so a frame
+// is written only once select() says the socket is writable (lwIP's
+// TCP_SNDLOWAT: more than two MSS free).
+static int room(int ws) {
+    fd_set w;
+    FD_ZERO(&w);
+    FD_SET(ws, &w);
+    struct timeval tv = {MOY_LIVE_SEND_MS / 1000, (MOY_LIVE_SEND_MS % 1000) * 1000};
+    return select(ws + 1, NULL, &w, NULL, &tv) > 0 ? 0 : -1;
+}
+
 // The plaintext at `d`, `n` bytes (MOY_WS_HEAD free before it, MOY_SEAL_TAG
 // after), sealed and sent on `ws` under the send lock, which the caller
 // holds: 0, or -1 when the socket failed.
 static int send_locked(int ws, uint8_t *d, size_t n) {
+    if (room(ws) < 0) {
+        return -1;
+    }
     if (L->seal.on) {
         if (moy_seal_ws(1, L->seal.kb, MOY_SEAL_DOWN, L->down_i++, L->seal.seq, d, n, d + n)
             != MOY_SEAL_OK) {
@@ -348,20 +369,14 @@ static int refuse(int ws, const uint8_t id[2]) {
     static const char ctype[] = "application/json";
     uint8_t *o = (uint8_t *)L->b->out + MOY_WS_HEAD;
     o[0] = 'r';
-    o[1] = 'A';
+    o[1] = 'W';
     o[2] = id[0];
     o[3] = id[1];
     o[4] = 503 & 0xff;
     o[5] = 503 >> 8;
-    memcpy(o + 6, ctype, sizeof ctype - 1);
-    if (say(ws, 6 + sizeof ctype - 1) < 0) {
-        return -1;
-    }
-    o[0] = 'r';                         // the send moved and sealed what was here
-    o[1] = 'Z';
-    o[2] = id[0];
-    o[3] = id[1];
-    return say(ws, 4);
+    o[6] = sizeof ctype - 1;
+    memcpy(o + 7, ctype, sizeof ctype - 1);
+    return say(ws, 7 + sizeof ctype - 1);
 }
 
 static void rq_drop(void) {
