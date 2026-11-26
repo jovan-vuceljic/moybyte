@@ -45,8 +45,10 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <unistd.h>
+#ifndef MOY_ON_BOARD
+#include <sys/statvfs.h>            // a board's libc has none
+#endif
 #endif
 
 // -- the store's lock (moy_vol.h, THE STORE'S LOCK) ------------------------------
@@ -1331,7 +1333,7 @@ int moy_vol_room(const moy_vol_t *v, const char *dir, uint64_t *bytes) {
             break;
         }
         #endif
-        #if MOY_VOL_POSIX
+        #if MOY_VOL_POSIX && !defined(MOY_ON_BOARD)
         case MOY_VOL_KIND_POSIX: {
             struct statvfs sv;
             errno = 0;
