@@ -86,9 +86,11 @@
 #define MOY_SHARES_BOARD                    "cores3"
 
 // The Gamepad3 has A, B, a d-pad, Select and Start: Select is the shift for
-// the tabs and the more menu (native/moy_input/moy_pad3.c), and the hints say so.
+// the tabs, a card's verbs and the more menu (native/moy_input/moy_pad3.c),
+// and the hints say so.
 #define MOY_UI_PAD_TABS                     "Select dpad_lr"
 #define MOY_UI_PAD_MORE                     "Select B"
+#define MOY_UI_PAD_OPTIONS                  "Select A"
 #define MOY_GLASS_BANDED                    (1)
 #define MICROPY_PY_ESPNOW                   (0)
 #define MOY_NET_LINK                        (1)

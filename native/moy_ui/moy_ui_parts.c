@@ -3022,7 +3022,8 @@ int moy_ui_hint_input(void) {
 // Each action's name.
 static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", "tabs", "menu",
                                                    "cancel", "flip", "rotate", "shift", "clear",
-                                                   "copy", "more", "search", "move", "scroll"};
+                                                   "copy", "more", "search", "move", "scroll",
+                                                   "options"};
 
 // The keys each input does each action with. The T-Deck's are its keyboard's
 // (native/moy_input/moy_kbd.c): Enter is `run`, K is `b` (back, as the bar's
@@ -3040,11 +3041,11 @@ static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", 
 // the slash a keyboard types: on the T-Deck the Sym+G chord (moy_kbd.c's
 // symbol layer).
 //
-// A board whose pad has no shoulders or no Y names its chords for those two
+// A board whose pad has no shoulders or no X and Y names its chords for those
 // (the CoreS3's Gamepad3: Select is the shift, native/moy_input/moy_pad3.c),
 // in its mpconfigboard.h.
-#if defined(ESP_PLATFORM) && defined(__has_include)
-#if __has_include("py/mpconfig.h")
+#if defined(__has_include)
+#if __has_include("sdkconfig.h") && __has_include("py/mpconfig.h")
 #include "py/mpconfig.h"
 #endif
 #endif
@@ -3054,14 +3055,17 @@ static const char *const ACT_NAMES[MOY_UI_ACTS] = {"confirm", "back", "change", 
 #ifndef MOY_UI_PAD_MORE
 #define MOY_UI_PAD_MORE "Y"
 #endif
+#ifndef MOY_UI_PAD_OPTIONS
+#define MOY_UI_PAD_OPTIONS "X"
+#endif
 static const char *const ACT_KEYS[MOY_UI_INPUTS][MOY_UI_ACTS] = {
     {"enter", "Esc", "left right", "Q E", "Super", "Esc", "F V", "R", "left right up down",
-     "Del", "Ctrl C", "M", "/", "up down left right", "up down"},
+     "Del", "Ctrl C", "M", "/", "up down left right", "up down", ""},
     {"enter", "K", "A D ball_lr", "Q E", "Mic", "Mic", "F V", "R", "", "Del", "", "M", "Sym G",
-     "WASD", "W S"},
+     "WASD", "W S", ""},
     {"A", "B", "dpad_lr", MOY_UI_PAD_TABS, "Start", "B", "", "", "", "", "", MOY_UI_PAD_MORE, "",
-     "up down left right", "up down"},
-    {"", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
+     "up down left right", "up down", MOY_UI_PAD_OPTIONS},
+    {"", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""},
 };
 
 static int span_is(moy_ui_span_t k, const char *s) {
