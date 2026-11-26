@@ -271,7 +271,7 @@ def test_the_board_serves_its_web_console(board):
     joined: the page answers a GET from this machine, then the service goes
     off again as the console was found."""
     import urllib.request
-    if board.pyval("__import__('moy_net').page_state()", strict=True) != 0:
+    if board.pyval("__import__('moy_net').page_state()", strict=True) != 3:   # MOY_PAGE_READY
         pytest.skip("no browser console add-on that fits this image on the board")
     line = board.cmd("web", wait_for="WEB ", timeout=60)
     assert line is not None and "http" in line, line
