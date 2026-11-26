@@ -69,8 +69,9 @@ int moy_term_nearest(uint32_t rgb);
 // base colour `base` (0-15) as an ink's or (`ground`) a ground's SGR, its RGB
 // (38;2 / 48;2; 38;5;N in a build that links no palette), into `o`, which
 // holds MOY_TERM_SGR_BYTES. The accent is what the shell marks with: the
-// typed line, a text app's title and selection: a reset, then its ink, into
-// `o` (MOY_TERM_ACCENT_BYTES), which it returns.
+// typed line, a text app's title and mode, top's selected row (vi's
+// selection is reverse video): a reset, then its ink, into `o`
+// (MOY_TERM_ACCENT_BYTES), which it returns.
 #define MOY_TERM_SGR_BYTES 24u
 #define MOY_TERM_ACCENT_BYTES (MOY_TERM_SGR_BYTES + 4u)
 #define MOY_TERM_ACCENT 12              // the palette's blue

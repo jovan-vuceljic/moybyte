@@ -640,8 +640,18 @@ def _vi_session(text, rows):
     return keys, "".join(ls)
 
 
+def _vi_visual_session(text, rows, kind):
+    """vi's VISUAL (`kind` v or V) over the whole file: selected and yanked
+    (a register as big as the file), put and undone; selected and deleted
+    (an undo step and a register each as big as the file) and put back,
+    saved and closed; and the file it leaves, the one it opened."""
+    sel = "vG$" if kind == "v" else "VG"
+    keys = ["1G", sel, "y", "G", "p", "u", "1G", sel, "d", "P", ":w^M", "%meter", ":q^M"]
+    return keys, text
+
+
 @pytest.mark.parametrize("size", (4096, 8192, 16384))
-@pytest.mark.parametrize("app", ("edit", "vi"))
+@pytest.mark.parametrize("app", ("edit", "vi", "vi-v", "vi-V"))
 def test_the_editor_asks_for_no_text_bigger_than_a_block(harness, tmp_path, app, size):
     """#276: a board without PSRAM has its free memory in pieces, so `edit`
     and `vi` hold their text in blocks and no request they make for it, at
@@ -650,15 +660,18 @@ def test_the_editor_asks_for_no_text_bigger_than_a_block(harness, tmp_path, app,
     largest free piece is a block refuses it; the app's own record and
     screen (moy_sh_app_new's, made before the file is read) are not text.
     A file of 4 to 16 KB opens, grows past a block, saves and reads back
-    as written, and the store holds no copy of it on the way."""
+    as written, and the store holds no copy of it on the way; vi's VISUAL
+    (vi-v, vi-V) yanks and deletes the whole file in blocks too."""
     rows = 12
     root = tmp_path / "root"
     root.mkdir()
     text = _lines(size)
     (root / "f.txt").write_text(text)
-    keys, want = (_edit_session if app == "edit" else _vi_session)(text, rows)
+    cmd, _, kind = app.partition("-")
+    keys, want = (_edit_session(text, rows) if cmd == "edit" else _vi_session(text, rows)
+                  if not kind else _vi_visual_session(text, rows, kind))
     script = tmp_path / "keys"
-    script.write_text("\n".join(["%%size 40 %d" % rows, "%s /f.txt" % app] + keys) + "\n")
+    script.write_text("\n".join(["%%size 40 %d" % rows, "%s /f.txt" % cmd] + keys) + "\n")
     r = subprocess.run([harness["app_main"], str(root), str(script)], stdout=subprocess.PIPE,
                        stderr=subprocess.STDOUT, timeout=60,
                        env=dict(os.environ, TZ="UTC", MOY_SH_APP_ALLOC_MAX=str(EDIT_BLOCK)))

@@ -723,6 +723,61 @@ def test_vi_s_key_row_leaves_insert_saves_and_quits_on_the_tdeck(term, tmp_path)
         ui_draw.hint_kind(kinds[1])
 
 
+def _reversed(row):
+    """A screen row's text, and under it `^` for each reversed cell."""
+    import re
+    text, mask, rev = [], [], False
+    for m in re.finditer("\x1b\\[([0-9;]*)m|([^\x1b])", row):
+        if m.group(2) is not None:
+            text.append(m.group(2))
+            mask.append("^" if rev else " ")
+            continue
+        for p in m.group(1).split(";"):
+            rev = True if p == "7" else False if p in ("", "0", "27") else rev
+    return "".join(text), "".join(mask).rstrip()
+
+
+def test_vi_s_visual_selection_is_drawn_in_reverse_video(term):
+    """vi's VISUAL draws its selection in reverse video, which the grid
+    keeps (SGR 7, then 27 or a reset): as far as each line shows, a long
+    line's sideways cut and its `$` marks included, a selected line break
+    as one cell; the status line names the mode, and Esc leaves it."""
+    ws, app = term
+    words = " ".join("w%02d" % i for i in range(1, 31))
+    run(app, "mkdir -p /sd/moybyte")
+    run(app, "printf 'one two\\n\\n%s\\nend\\n' > /sd/moybyte/v.txt" % words)
+    run(app, "vi /sd/moybyte/v.txt")
+    _frame(ws)
+    cols = app.face.size()[0]
+    assert len(words) > cols
+
+    def screen():
+        app.face.take()
+        return [_reversed(ln) for ln in app.face.lines()]
+    _keys(app, b"wv")
+    assert app.face.lines()[0] == "one \x1b[7mt\x1b[27mwo"
+    assert plain(app)[-1].startswith("-- VISUAL --")
+    _keys(app, b"jj")                       # down to the long line's fifth column
+    shown = screen()
+    assert shown[0] == ("one two ", "    ^^^^")
+    assert shown[1] == (" ", "^")
+    assert shown[2] == (words[:cols - 1] + "$", "^" * 5)
+    _keys(app, b"$")                        # its end: the view scrolls sideways
+    left = len(words) - cols // 2
+    assert screen()[2] == ("$" + words[left:] + " ", " " + "^" * (len(words) - left + 1))
+    _keys(app, b"o")                        # the other end: the line cut at the right
+    assert screen()[2] == (words[:cols - 1] + "$", "^" * (cols - 1))
+    _keys(app, b"V")
+    assert screen()[:4] == [("one two ", "^" * 8), (" ", "^"), (words[:cols - 1] + "$", "^" * (cols - 1)),
+                            ("end", "")]
+    assert plain(app)[-1].startswith("-- VISUAL LINE --")
+    _keys(app, b"\x1b")
+    assert all(mask == "" for _text, mask in screen())
+    assert not plain(app)[-1].startswith("--")
+    _keys(app, b":q\r")
+    assert app.face.app() is None
+
+
 def test_python_runs_a_file_by_the_sessions_path(term):
     """`python FILE [ARG...]`: the file named by the session's path, read
     from the store's, `sys.argv` its name as typed and its ARGs, its exit
