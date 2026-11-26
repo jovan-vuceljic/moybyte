@@ -3,7 +3,7 @@
 // time as the dev channel's `sh` word feeds it; every line the face says is
 // printed, as the channel would carry it.
 //
-//   board_main [-vm] [-screen] SCRIPT      MOY_SH_ROOT names the files tree
+//   board_main [-vm | -zero] [-screen] SCRIPT      MOY_SH_ROOT names the files tree
 //
 // With -screen the same lines go through the screen face (moy_sh_screen.c)
 // instead, a grid of SCREEN_COLS columns (the serial face's line, so the two
@@ -15,6 +15,8 @@
 // stand-in console: `ps` answers two rows, `role` echoes its argv through the
 // running session's stdout, `lookup`/`spawn` know `hello`, `kill` refuses
 // pid 1, `read /proc/7/status` and `list /proc` answer, the rest is ABSENT.
+// With -zero the door is the Zero's (device/zero_shell.py): the VM runs, a
+// role command and an installed one are ABSENT, the rest NEEDS_VM.
 //
 // A `%stop` line is the stopped run's (native/moy_play/moy_play_stop.c), on
 // the serial face: what its idle session holds, released, and made again in
@@ -35,6 +37,7 @@
 #include "moy_sh_screen.h"
 
 static int vm = 0;
+static int zero = 0;
 
 int moy_vol_mounts(int (*fn)(void *arg, const char *name), void *arg) {
     return fn(arg, "sd");
@@ -136,6 +139,9 @@ int32_t moy_loop_role(uint32_t grant, uint32_t row, const uint8_t *arg, size_t n
     for (size_t i = 0; i <= n && k < 16; k++) {
         f[k] = buf + i;
         i += strlen(buf + i) + 1;
+    }
+    if (zero) {
+        return !strcmp(f[0], "role") || !strcmp(f[0], "spawn") ? -8 : MOY_LOOP_ROLE_NEEDS_VM;
     }
     if (!strcmp(f[0], "ps")) {
         return text(ans, cap, "1 0 shell running 0 - console\n7 1 service background 2048 15 achievements\n");
@@ -259,6 +265,8 @@ int main(int argc, char **argv) {
     for (;;) {
         if (argc > 1 && !strcmp(argv[1], "-vm")) {
             vm = 1;
+        } else if (argc > 1 && !strcmp(argv[1], "-zero")) {
+            vm = zero = 1;
         } else if (argc > 1 && !strcmp(argv[1], "-screen")) {
             screen = 1;
         } else {
@@ -268,7 +276,7 @@ int main(int argc, char **argv) {
         argv++;
     }
     if (argc != 2) {
-        fprintf(stderr, "usage: board_main [-vm] [-screen] SCRIPT\n");
+        fprintf(stderr, "usage: board_main [-vm | -zero] [-screen] SCRIPT\n");
         return 2;
     }
     moy_log_init(8192);

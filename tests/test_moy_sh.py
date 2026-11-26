@@ -509,20 +509,27 @@ SERIAL = os.path.join(SCRIPTS, "serial")
 SERIAL_NAMES = sorted(os.path.basename(p)[:-3] for p in glob.glob(os.path.join(SERIAL, "*.sh")))
 
 
+def _door(name):
+    """board_main's door for a serial script: a `vm_` script's the stand-in
+    console, a `zero_` script's the Zero's, the others the VM stopped."""
+    return ["-vm"] if name.startswith("vm_") else ["-zero"] if name.startswith("zero_") else []
+
+
 @pytest.mark.parametrize("name", SERIAL_NAMES)
 def test_the_serial_face_answers_as_its_transcript_says(harness, tmp_path, name):
     """The board's host table (moy_sh_board.c) and the serial face, each
     script line fed as the dev channel's `sh` word feeds it, each line the
     face says printed as the channel carries it. A `vm_` script runs with a
-    stand-in console behind the ROLE door; the others with the VM stopped,
-    where `ps`, `kill` and `log` answer from the kernel and the console's
-    commands say "needs the console"."""
+    stand-in console behind the ROLE door, a `zero_` script with the Zero's
+    door, whose role commands but the store's say "not served here"; the
+    others with the VM stopped, where `ps`, `kill` and `log` answer from the
+    kernel and the console's commands say "needs the console"."""
     script = os.path.join(SERIAL, name + ".sh")
     golden = os.path.join(SERIAL, name + ".out")
     root = tmp_path / "root"
     root.mkdir()
     _seed_home(root, name)
-    args = [harness["board_main"]] + (["-vm"] if name.startswith("vm_") else []) + [script]
+    args = [harness["board_main"]] + _door(name) + [script]
     r = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60,
                        env=dict(os.environ, TZ="UTC", MOY_SH_ROOT=str(root)))
     got = r.stdout.decode("utf-8", "replace") + "[exit %d]\n" % r.returncode
@@ -550,7 +557,7 @@ def _seed_home(root, name):
 
 def _face(harness, path, root, screen):
     name = os.path.basename(path)
-    args = ([harness["board_main"]] + (["-vm"] if name.startswith("vm_") else [])
+    args = ([harness["board_main"]] + _door(name)
             + (["-screen"] if screen else []) + [path])
     r = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60,
                        env=dict(os.environ, TZ="UTC", MOY_SH_ROOT=str(root)))

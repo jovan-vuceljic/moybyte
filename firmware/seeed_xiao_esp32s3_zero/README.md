@@ -474,10 +474,10 @@ scp file moybyte-zero.local:/moy/ # scp -s before OpenSSH 9.0
 - **The C built-ins only**: a WASI command needs the wasm engine, which
   this board denies (board.toml says why). `zero_shell.py` is the
   door into Python: `passwd` (its `-l` and `-r` over this board's webhost),
-  `df`, `mem` and `ps`. What only a console answers (its processes, `/proc`'s
-  and `/dev`'s rows, the other role commands, `python`) says "needs the
-  console", as a console's shell does with its VM stopped; `settings` and
-  `pkg list` are the store's C.
+  `df`, `mem` and `ps`. The other role commands (`python` among them) say
+  "not served here", `settings` and `pkg list` being the store's C; what
+  only a console answers (its processes, `/proc`'s and `/dev`'s rows)
+  answers as a console's shell does with its VM stopped.
 - **No WiFi lease**: the station and the `moybyte-zero.local` name are up
   while the board serves, so the server rides them
   (`runtime/system/ssh_service.py`).

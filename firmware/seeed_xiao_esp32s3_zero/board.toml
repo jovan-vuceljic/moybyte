@@ -633,10 +633,10 @@ is a bare REPL), so its faces are the network's (docs/os_2026-11/system.md
 section 3): the browser console's Terminal on the page this board serves,
 and `ssh` from a laptop, the C built-ins until WASI commands arrive. A
 session's arena is PSRAM, made when a face opens. What crosses the door into
-Python is `zero_shell.py`'s: `passwd`, `df`, `mem`, `ps`; the console's
-processes, /proc's and /dev's rows and the other role commands are the
-console's, which this board has not got, so they answer as on a console with
-its VM stopped."""
+Python is `zero_shell.py`'s: `passwd`, `df`, `mem`, `ps`; the other role
+commands are not served here, and the console's processes, /proc's and
+/dev's rows, which this board has not got, answer as on a console with its
+VM stopped."""
 
 [[native.shared.take]]
 module = "moy_tty"

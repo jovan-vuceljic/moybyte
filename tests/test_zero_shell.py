@@ -1,7 +1,8 @@
 """The Zero's terminal (device/zero_shell.py)
 on the host: its door answers the shell's crossings it can (`passwd`, `df`,
-`mem`, `ps`) and hands every other back as a console with its VM stopped
-does, and ssh_service serves on it without a WiFi lease."""
+`mem`, `ps`), says the other role commands and the installed ones are not
+served on this board, hands every other back as a console with its VM
+stopped does, and ssh_service serves on it without a WiFi lease."""
 
 import sys
 from pathlib import Path
@@ -87,11 +88,23 @@ def test_passwd_crosses_the_door_and_serves_without_a_lease(zero):
     assert not (tmp / "password").exists() and server.calls[-1] == ("stop",)
 
 
-def test_what_only_a_console_answers_is_handed_back(zero):
+def test_a_role_command_or_an_installed_one_is_not_served_here(zero):
+    """ABSENT, which the shell says as "<cmd>: not served here" (an
+    installed one's "not found"), the store's C serving `settings` and `pkg
+    list` in its place (native/moy_sh/moy_sh_board.c, b_role): never
+    NEEDS_VM, whose "needs the console" sends the user looking for one."""
     door, io, _, _ = zero
     for fields in (("role", "j1", "settings", "list"), ("role", "j1", "python"),
-                   ("lookup", "hello"), ("kill", "1", "15"), ("read", "/proc/kernel"),
-                   ("list", "/dev"), ("spawn", "0", "hello")):
+                   ("role", "j1", "cron", "list"), ("role", "j1", "pkg", "install", "x"),
+                   ("role", "j1"), ("spawn", "0:j1", "hello"), ("spawn", "1", "hello")):
+        assert cross(door, *fields) == zero_shell.ABSENT, fields
+    assert io.out == {1: b"", 2: b""}
+
+
+def test_what_only_a_console_answers_is_handed_back(zero):
+    door, io, _, _ = zero
+    for fields in (("lookup", "hello"), ("kill", "1", "15"), ("read", "/proc/kernel"),
+                   ("list", "/dev"), ("status", "7"), ("step", "j1")):
         assert cross(door, *fields) == zero_shell.NEEDS_VM, fields
     assert door(0, 3, b"") == zero_shell.ABSENT
 

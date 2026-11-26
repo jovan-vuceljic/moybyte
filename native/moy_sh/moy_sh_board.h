@@ -8,7 +8,9 @@
 // its /proc and /dev (runtime/system/devfs.py), the installed commands, the
 // role commands, df and the Python heap. While no VM runs the door answers
 // NEEDS_VM: a role command or an installed one says "needs the console", and
-// `ps` shows the console stopped.
+// `ps` shows the console stopped. A role command the door answers ABSENT
+// says "not served here": on the Zero, whose door (device/zero_shell.py)
+// serves no role command but `passwd`, every other one.
 //
 // THE DOOR'S ROW carries `verb NUL arg NUL arg ...` and answers an int, or
 // text into the answer buffer (runtime/shell/sh_door.py is its other half):
@@ -32,14 +34,15 @@
 // A spawned program and a role command write and read their streams through
 // the session that is running (moy_sh_running: the module's read and write).
 //
-// WITH NO VM the store's commands are served in C (moy_sh_store.c), over the
-// same C the console calls: `settings` (list, get, set, unset) reads and
-// writes system/settings through the settings rows' file reader and writer
+// WITH NO VM, and where the door answers them ABSENT (the Zero's), the
+// store's commands are served in C (moy_sh_store.c), over the same C the
+// console calls: `settings` (list, get, set, unset) reads and writes
+// system/settings through the settings rows' file reader and writer
 // (native/moy_spine/moy_settings.h) and the store's crash-safe write; `pkg
 // list` and `pkg remove` read and change the shelf's record through
 // native/moy_store/moy_shelf.h, the removal forgetting the cart's consent in
 // the settings rows. Every other role command, `settings reload` and the
-// other `pkg` verbs need the console.
+// other `pkg` verbs need the console, or behind ABSENT are not served here.
 //
 // THE SERIAL FACE is the dev channel's `sh` word (moy_devch.c): `sh LINE`
 // runs LINE in the boot's serial session, made the first time and parked
@@ -110,10 +113,11 @@ void moy_sh_board_host(moy_sh_host_t *h, void *ctx,
 #define MOY_SH_DOOR_NEEDS_VM (-9)
 int32_t moy_sh_board_door(moy_sh_t *s, const char *verb, int argc, char *const *argv);
 
-// The store's commands with no VM (above): an exit status, or
-// MOY_SH_NOT_FOUND when `argv` names none of them. `root` is the store folder
-// as the C library names it (the files tree's root, then moy_sh_board_store).
-int moy_sh_store_role(moy_sh_t *s, const char *root, int argc, char **argv);
+// The store's commands with no VM, or (`absent`) behind a door that answered
+// them ABSENT (above): an exit status, or MOY_SH_NOT_FOUND when `argv` names
+// none of them. `root` is the store folder as the C library names it (the
+// files tree's root, then moy_sh_board_store).
+int moy_sh_store_role(moy_sh_t *s, const char *root, int absent, int argc, char **argv);
 
 // A long run's yield: the task sleeps a tick, so a task below it runs.
 void moy_sh_board_yield(void);

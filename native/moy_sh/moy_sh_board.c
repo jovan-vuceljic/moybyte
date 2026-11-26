@@ -354,6 +354,7 @@ static const char *files_root(void) {
 
 typedef struct {
     moy_sh_t *s;
+    int absent;
     int argc;
     char **argv;
     int r;
@@ -363,7 +364,7 @@ static void store_role_here(void *arg) {
     store_role_t *c = arg;
     char store[MOY_SH_STORE_PATH];
     snprintf(store, sizeof store, "%s%s", files_root(), moy_sh_board_store(c->s));
-    c->r = moy_sh_store_role(c->s, store, c->argc, c->argv);
+    c->r = moy_sh_store_role(c->s, store, c->absent, c->argc, c->argv);
 }
 
 // -- the role commands served in C ------------------------------------------------
@@ -741,8 +742,11 @@ static int b_role(void *ctx, moy_sh_t *s, int argc, char **argv) {
     }
     int32_t r = door_int("role", n, all);
     b_free(NULL, all);
-    if (r == DOOR_NEEDS_VM) {
-        store_role_t c = { s, argc, argv, MOY_SH_NOT_FOUND };
+    if (r == DOOR_NEEDS_VM || r == DOOR_ABSENT) {
+        // the store's commands in C (moy_sh_board.h, WITH NO VM): with the
+        // VM stopped, or where the door does not serve the command (ABSENT:
+        // on the Zero every one but passwd, device/zero_shell.py)
+        store_role_t c = { s, r == DOOR_ABSENT, argc, argv, MOY_SH_NOT_FOUND };
         moy_sh_hop(s, store_role_here, &c);
         return c.r != MOY_SH_NOT_FOUND ? c.r : code_of(r);
     }
