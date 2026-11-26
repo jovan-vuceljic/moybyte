@@ -318,7 +318,7 @@ def test_the_zeros_boot_retires_the_folders_a_console_retires(tmp_path, monkeypa
     os.makedirs(root + "/moybyte.moy_night.moy")
     assert zero_host.sweep_carts(root) == 0, "once per generation"
     import inspect
-    boot = inspect.getsource(zero_host.serve)
+    boot = inspect.getsource(zero_host.start)
     assert boot.index("sweep_carts(") < boot.index("seed_carts(")
 
 
