@@ -1570,11 +1570,14 @@ reaches a bar. The pointer shows the resize a zone starts (`cursor_shape`);
 elsewhere the page under it says its shape (`Workstation.pointer_shape`,
 `moy_ui_api_cursor`): a hand on what a press acts on, a text beam on a text
 field, else the arrow. The console draws it where it draws the pointer, in
-a pointer FAMILY (`runtime/toolkit/pointers.py`): pixel, default, coast,
-luna and playful, each drawing the arrow, the hand, the text beam, the four
-resizes, move and busy in its icon set's style, with an exact hotspot, at
-16, 32 and 48 px. A theme wears its look's `pointer` (Blocks: playful), else
-its icon set's family; Appearance's POINTER row picks another and POINTER
+a pointer FAMILY (`runtime/toolkit/pointers.py`): pixel, moy, coast, luna
+and blocks, each drawing the arrow, the hand, the text beam, the four
+resizes, move and busy (an hourglass, shown on the frame that shows the
+LOADING pill) in its own style, with its hotspot on the outline's apex, at
+16 px as 1-bit art and at 32 and 48 px smooth. A family is named after the
+theme it is the default of (owner, 2026-11-26): Moy and Contrast wear moy,
+Blocks blocks, through their looks' `pointer`; a look that names none wears
+its icon set's family. Appearance's POINTER row picks another and POINTER
 SIZE takes Large, both persisted beside the chrome size. The browser's mouse
 is the page's own, so the page sets its CSS cursor to the shape
 (`web_boot._pointer_shape`), drawn from the family's own pixels

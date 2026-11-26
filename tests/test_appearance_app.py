@@ -560,18 +560,18 @@ def test_pointer_steps_through_the_families_live_and_persists(tmp_path):
     change to the theme."""
     ws = _ws(tmp_path)
     app = _open(ws)
-    assert _state(app, "pointer") == "" and ws.look.pointer_at(1) == ("default", 16)
+    assert _state(app, "pointer") == "" and ws.look.pointer_at(1) == ("moy", 16)
     _focus(ws, app, "Pointer")
     _press(ws, app, "right")
     assert ws.look.pointer_pick == "pixel" and ws.system.get("pointer") == "pixel"
     _press(ws, app, "right", "right", "right", "right")
-    assert ws.look.pointer_at(1) == ("playful", 16)
+    assert ws.look.pointer_at(1) == ("blocks", 16)
     _focus(ws, app, "Pointer size")
     _press(ws, app, "right")
-    assert ws.look.pointer_at(1) == ("playful", 32) and ws.system.get("pointer_large") is True
+    assert ws.look.pointer_at(1) == ("blocks", 32) and ws.system.get("pointer_large") is True
     assert ws.look.theme_name == "moy" and _custom(tmp_path) is None
     again = _ws(tmp_path)
-    assert again.look.pointer_at(1) == ("playful", 32)
+    assert again.look.pointer_at(1) == ("blocks", 32)
 
 
 def test_the_page_is_idle_once_drawn(tmp_path):

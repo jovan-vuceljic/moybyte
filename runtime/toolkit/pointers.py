@@ -6,7 +6,8 @@ tools/make_icons.py): shape s's layers -- the outline, the fill, the
 accent -- are the glyphs at byte FIRST + 3 s and the two after it, each with
 its pen at the shape's hotspot, drawn by `moy_ui.icon_mask` in its family's
 colour. A smooth family's soft shadow is its outline glyph again, drawn
-translucent in black a pixel of its size down and right.
+translucent in its ink a pixel per 16 px down and right (none at 16 px or
+on a text beam).
 
 The family a theme wears is its look's `pointer` where it names one, else
 its icon set's (`iconsets.spec`: a pixel set's the pixel family, a smooth
@@ -31,24 +32,26 @@ import fontset as _fontset
 import iconsets as _iconsets
 import ui_draw as _ui_draw
 
-FAMILIES = ("pixel", "default", "coast", "luna", "playful")
-NAMES = ("Pixel", "Default", "Coast", "Luna", "Playful")
+FAMILIES = ("pixel", "moy", "coast", "luna", "blocks")
+NAMES = ("Pixel", "Moy", "Coast", "Luna", "Blocks")
+# Ids a saved pick may still name, and the family each became (2026-11-26).
+RENAMED = {"default": "moy", "playful": "blocks"}
 SHAPES = ("arrow", "hand", "text", "ew", "ns", "nwse", "nesw", "move", "busy")
 SIZES = (16, 32, 48)
 FIRST = 0x21
 _LAYERS = 3
 _AT = {k: _LAYERS * i for i, k in enumerate(SHAPES)}
 # Each family's outline, fill and accent (the nearest MOY64 each draws in),
-# and its shadow's alpha (0..256; 0: none).
+# and its shadow's ink and alpha (0..256; 0: none).
 COLOURS = {
-    "pixel": ("#000000", "#fff1e8", "#000000", 0),
-    "default": ("#fff1e8", "#292929", "#29adff", 96),
-    "coast": ("#1d2b53", "#fff1e8", "#2de0e0", 88),
-    "luna": ("#000000", "#fff1e8", "#7da7ea", 104),
-    "playful": ("#1d2b53", "#ffec27", "#fff1e8", 112),
+    "pixel": ("#000000", "#fff1e8", "#000000", "#000000", 0),
+    "moy": ("#000000", "#fff1e8", "#000000", "#000000", 48),
+    "coast": ("#1d2b53", "#fff1e8", "#2de0e0", "#1d2b53", 68),
+    "luna": ("#000000", "#fff1e8", "#b7a1e6", "#000000", 80),
+    "blocks": ("#1d2b53", "#ffec27", "#fff1e8", "#1d2b53", 68),
 }
 # The family a smooth icon set without one of its own wears.
-_SET_DEFAULT = "default"
+_SET_DEFAULT = "moy"
 
 _IDX = {}                     # family -> (outline, fill, accent, alpha), indices
 _FONT = [None, 0, None]       # the one file loaded: (family, size), its font id, its bytes
@@ -97,8 +100,17 @@ def _colours(family):
     if got is None:
         c = COLOURS[family]
         got = _IDX[family] = tuple(
-            _ui_draw._C.theme_rgb(0x1000000 | int(v[1:], 16))[2] for v in c[:3]) + (c[3],)
+            _ui_draw._C.theme_rgb(0x1000000 | int(v[1:], 16))[2] for v in c[:4]) + (c[4],)
     return got
+
+
+def _shadow(family, shape, px):
+    """How far down and right `shape`'s shadow falls at `px`: a pixel per 16
+    px, none at 16 px (its 1-bit art), on a text beam, or in a family
+    without one."""
+    if px <= 16 or shape == "text" or not COLOURS[family][4]:
+        return 0
+    return px // 16
 
 
 def _font(family, px):
@@ -127,22 +139,23 @@ def draw(cv, family, shape, x, y, px):
     if not fid:
         return False
     try:
-        _layers(cv, fid, family, FIRST + _AT[shape], x, y, px)
+        _layers(cv, fid, family, shape, x, y, px)
     except ValueError:
         _FONT[1] = 0
         fid = _font(family, px)
         if not fid:
             return False
-        _layers(cv, fid, family, FIRST + _AT[shape], x, y, px)
+        _layers(cv, fid, family, shape, x, y, px)
     return True
 
 
-def _layers(cv, fid, family, b, x, y, px):
-    line, fill, accent, alpha = _colours(family)
+def _layers(cv, fid, family, shape, x, y, px):
+    line, fill, accent, ink, alpha = _colours(family)
     C = _ui_draw._C
-    if alpha:
-        d = px // 16
-        C.icon_mask(cv, fid, b, x + d, y + d, 0, alpha)
+    b = FIRST + _AT[shape]
+    d = _shadow(family, shape, px)
+    if d:
+        C.icon_mask(cv, fid, b, x + d, y + d, ink, alpha)
     C.icon_mask(cv, fid, b, x, y, line)
     C.icon_mask(cv, fid, b + 1, x, y, fill)
     C.icon_mask(cv, fid, b + 2, x, y, accent)
@@ -161,7 +174,7 @@ def box(family, shape, x, y, px, out=None):
         return None
     x0 = src[r + 5] - 256 if src[r + 5] > 127 else src[r + 5]
     up = src[r + 6] - 256 if src[r + 6] > 127 else src[r + 6]
-    d = px // 16 if _colours(family)[3] else 0
+    d = _shadow(family, shape, px)
     if out is None:
         return (x + x0, y - up, w + d, h + d)
     out[0], out[1], out[2], out[3] = x + x0, y - up, w + d, h + d

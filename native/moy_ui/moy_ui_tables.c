@@ -840,6 +840,7 @@ const char *const moy_theme_seed_src[MOY_THEME_SEEDS] = {
     "                \"on\": { \"mark\": \"tint\", \"c\": \"value\", \"ink\": \"ink_accent\" } } },\012"
     "    \"shadow_back\": 0.3,\012"
     "    \"icons\": { \"kind\": \"smooth\", \"set\": \"default\" },\012"
+    "    \"pointer\": \"moy\",\012"
     "    \"app_buttons\": { \"calc\": { \"normal\": { \"font\": \"key\" }, \"tonal\": { \"font\": \"op\" },\012"
     "                               \"primary\": { \"font\": \"op\" } } },\012"
     "    \"dark\": {\012"
@@ -947,7 +948,7 @@ const char *const moy_theme_seed_src[MOY_THEME_SEEDS] = {
     "      \"card\": { \"focus\": { \"mark\": \"ring\", \"w\": 3, \"gap\": 2, \"c\": \"accent\" },\012"
     "                \"on\": { \"mark\": \"underline\", \"w\": 3, \"gap\": 2, \"c\": \"value\" } } },\012"
     "    \"icons\": { \"kind\": \"smooth\", \"set\": \"default\" },\012"
-    "    \"pointer\": \"playful\",\012"
+    "    \"pointer\": \"blocks\",\012"
     "    \"app_buttons\": { \"calc\": { \"normal\": { \"font\": \"key\" }, \"tonal\": { \"font\": \"op\" },\012"
     "                               \"primary\": { \"font\": \"op\" } } },\012"
     "    \"win_r\": 16, \"card_r\": 14, \"key_r\": 12,\012"
@@ -1033,6 +1034,7 @@ const char *const moy_theme_seed_src[MOY_THEME_SEEDS] = {
     "                \"on\": { \"mark\": \"fill\", \"c\": \"value\", \"ink\": \"value_ink\" } } },\012"
     "    \"accents\": false,\012"
     "    \"icons\": { \"kind\": \"smooth\", \"set\": \"default\" },\012"
+    "    \"pointer\": \"moy\",\012"
     "    \"app_buttons\": { \"calc\": { \"normal\": { \"font\": \"key\" }, \"tonal\": { \"font\": \"op\" },\012"
     "      \"primary\": { \"font\": \"op\" } } },\012"
     "    \"buttons\": { \"toggle\": { \"check\": true } },\012"
@@ -1083,7 +1085,7 @@ const int moy_theme_n_parts = MOY_THEME_PARTS;
 const int moy_theme_n_states = MOY_THEME_STATES;
 const int moy_theme_n_font_roles = MOY_THEME_FONT_ROLES;
 const int moy_theme_n_homes = MOY_THEME_HOMES;
-const uint16_t moy_theme_seed_len[MOY_THEME_SEEDS] = {6072, 4821, 5074};
+const uint16_t moy_theme_seed_len[MOY_THEME_SEEDS] = {6094, 4820, 5096};
 
 // themes/tiny5.fnt
 static const uint8_t font_0[682] = {

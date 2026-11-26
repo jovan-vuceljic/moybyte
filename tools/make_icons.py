@@ -34,7 +34,8 @@ tier's sizes; tools/make_font.py's `module` freezes them beside the fonts.
 The POINTERS are pointer/pointer_art.py's families, one font file a family and
 size: shape s's layer l is the glyph at byte FIRST + 3 s + l, its pen the
 shape's hotspot (the font's ascent 0, so a glyph drawn at (x, y) puts its
-hotspot there), 1 bpp for the pixel family and 4 bpp for the smooth ones.
+hotspot there), 1 bpp for 1-bit art (every 16 px file, every size of the
+pixel family) and 4 bpp for the smooth ones (`pointer_art.bpp`).
 A tier takes every family, at its POINTER_SIZES: a pointer drawn at a scale
 takes the size nearest it (runtime/toolkit/pointers.py).
 
@@ -195,7 +196,7 @@ def build_pointer_font(family, size):
     """A version 2 font file: every shape of pointer family `family` at `size`
     px, each layer a glyph whose pen is the shape's hotspot."""
     pt = _pointers()
-    bpp = 1 if family == "pixel" else 4
+    bpp = pt.bpp(family, size)
     index = [0] * 256
     recs = [struct.pack("<I", 0)[:3] + struct.pack("<BBbbB", 0, 0, 0, 0, size)]
     cov = bytearray()

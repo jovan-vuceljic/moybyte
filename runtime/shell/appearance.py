@@ -1469,8 +1469,10 @@ class Appearance:
         return self._ptr
 
     def set_pointer(self, family, persist=True):
-        """Appearance -> POINTER: `family` one of `pointers.FAMILIES`, or ""
-        (anything else) for the theme's own; persisted by default."""
+        """Appearance -> POINTER: `family` one of `pointers.FAMILIES` (a
+        renamed family's old id read as its new one, `pointers.RENAMED`), or
+        "" (anything else) for the theme's own; persisted by default."""
+        family = _pointers.RENAMED.get(family, family)
         self.pointer_pick = family if family in _pointers.FAMILIES else ""
         self._ptr_key[0] = -1
         if persist:
