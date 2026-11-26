@@ -617,6 +617,19 @@ Settings, and join My consoles when you type that address.
   window is a top-level navigation, and phase 2's test checks it opens
   without a prompt on the Chrome current then.
 - **Private windows** keep IndexedDB in memory, so every visit fetches.
+- **iOS runs a page from a plain-http address with no JIT** (measured on
+  the owner's iPhone, 2026-11-26, Safari and Chrome alike; a window it opens
+  and Add to Home Screen inherit it), so the loader on `http://` is slow
+  there whatever the pack. A board whose image takes the secure door
+  (`MOY_NET_HTTPS`; the C3 Zero) offers its page over https on demand: the
+  loader's "Open the fast console" (iOS, or `?fast`) asks `POST /tls` and
+  goes to `https://<host>/`, where a self-signed certificate costs one
+  warning per board (`native/moy_net/moy_net.h`, HTTPS on demand; the C3
+  README says what differs). That origin is a third one: its pack cache
+  and its pairing are its own, its loader fetches from https mirrors only
+  (os.moybyte.com; a dev image needs an https mirror), and when the door
+  closes the page says "The fast console closed" and links back to
+  `http://<host>/`.
 
 ## 10. Two web modes, still
 

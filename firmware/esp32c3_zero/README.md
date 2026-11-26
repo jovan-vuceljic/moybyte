@@ -45,7 +45,9 @@ chip changes.
   goes on by cable. The store is the space after the slot. The website's
   card offers the install, the merged image and an empty store
   (`tools/store_image.py`), and, as the C3's only update, the merged image
-  as it is, which keeps the store.
+  as it is, which keeps the store while the table stays. The slot grew by
+  64 KB for the fast console (below; owner, 2026-11-26, at the store's
+  expense), and the flash that brings that table formats the store once.
 - **The browser console is not in its install** (owner, 2026-11-23): the
   add-on cart outgrew this store, so board.toml declares the console online
   (`[web] console = "online"`): the website's install lays down an empty
@@ -60,6 +62,34 @@ chip changes.
   `serve.py` first), so a page load costs the board the loader and `/sync`,
   not the pack. The board asks its release for no add-on
   (`zero_host.make_addon` is None where `moy_web.online()`).
+- **The fast console: its page over https, on demand.** iOS runs a page
+  that came from a plain-http address with no JIT, in every browser there,
+  and a window or a home-screen app opened from it inherits that. So the
+  loader offers an iPhone or iPad (and any browser with `?fast` in the
+  address) "Open the fast console": it asks `POST /tls`, which opens the
+  board's TLS door on port 443, and goes to `https://<the same host>/`
+  (`native/moy_net/moy_net.h`, HTTPS on demand; `moy_tls_srv.c`). Joining
+  the board stays plain http; the door holds RAM only while it is open, and
+  closes itself two minutes after its last connection ends (a page waiting
+  at the pairing prompt holds none). Behind it is the webhost, over
+  loopback, so every route, the live socket (wss) and the Terminal work as
+  over http, and the sign-in's backoff counts each browser by its own
+  address. The certificate is the board's own, self-signed, made the first
+  time and kept in `system/` (`tls.der`, `tls.key`), so Safari's one
+  warning (Show Details, then visit this website) is once per board. What
+  differs from http:
+  - **Pairing is per origin.** A browser paired on `http://` pairs again on
+    `https://`: its key lives in the origin's storage.
+  - **A mirror must be https.** From the fast console the loader cannot
+    fetch an `http://` mirror (mixed content), so it boots from
+    os.moybyte.com, which holds the published packs, or the browser's cache.
+    A worktree build's `serve.py` mirror is http: a dev image needs an https
+    mirror named in its build (`MOYBYTE_WEB_MIRRORS`) for a phone.
+  - **When the door closes** (a phone locked past the grace, a reboot), the
+    page cannot fall back to http: it says "The fast console closed" and
+    links `http://<host>/`, where the button opens it again.
+  The Zero suite's `test_the_fast_console_runs_through_the_secure_door` runs
+  it on this board and reads its RAM.
 - **The image carries the core carts alone** (owner, 2026-11-17;
   `moy_seed.CORE`, board.toml's `[roster] image`), under the XIAO's seed
   rule (`zero_host.seed_carts`): the app slot has no room for more. The
