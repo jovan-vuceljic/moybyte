@@ -253,8 +253,8 @@ def quiesce(ws):
 
 def no_unlock_banner(ws):
     """Every badge already found, so nothing a test opens raises the unlock
-    banner (achievements_ui), whose card at the top of the glass would cover
-    the pixels it reads."""
+    banner (achievements_ui), whose card at the foot of the glass would
+    cover the pixels it reads, its shine moving with the clock."""
     from runtime import achievements
     settle_badges(ws)
     ws.ach.seed({a["id"]: 0 for a in achievements.SHELL})

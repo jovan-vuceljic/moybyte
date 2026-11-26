@@ -229,7 +229,7 @@ def _lua_carousel(tmp_path, tone, desk=False, label=""):
     answering the glass's bytes."""
     import json
     from runtime import host_app
-    from ws_helpers import open_cart
+    from ws_helpers import no_unlock_banner, open_cart
     carts = tmp_path / "carts"
     cart = carts / "lua_carousel.moy"
     cart.mkdir(parents=True)
@@ -240,6 +240,7 @@ def _lua_carousel(tmp_path, tone, desk=False, label=""):
     (cart / "main.lua").write_text(_LUA_CAROUSEL % dict(tone=tone, label=label,
                                                        w=64 if desk else 32))
     ws = host_app.build_workstation(str(carts), **_DESK if desk else {})
+    no_unlock_banner(ws)                        # (a badge's banner shines with the clock)
     ws.pointer.visible = False
     ws.bar_layer.clock_text = lambda: "10:30"   # (frames of two consoles compare)
     drv = host_app.ConsoleDriver(ws)
@@ -350,7 +351,7 @@ def _lua_tile(tmp_path, look):
     answering the glass's bytes."""
     import json
     from runtime import host_app
-    from ws_helpers import open_cart
+    from ws_helpers import no_unlock_banner, open_cart
     carts = tmp_path / "carts"
     cart = carts / "lua_tile.moy"
     cart.mkdir(parents=True)
