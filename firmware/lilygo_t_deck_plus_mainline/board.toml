@@ -462,8 +462,8 @@ tools/board_config.py stage-native stages the copies and generates the
 .staged/micropython.cmake include list that the board's tracked
 native/micropython.cmake pulls in.
 
-This board denies NOTHING: the T-Deck drives every shared module plus its own
-native/moy_lcd, which lives in the board tree and is not staged. moy_flush is
+This board denies NOTHING: the T-Deck drives every shared module, its panel
+backend native/moy_lcd among them (one body with the CoreS3's). moy_flush is
 the odd one -- it registers no MicroPython module at all; it is the banded-
 flush engine moy_lcd and the Guition's moy_axs share, and it rides this
 declaration because this is where "which C crosses to which board" is written
@@ -653,7 +653,7 @@ resolves to the byte-SWAPPED `PAL565_SW` -- which is exactly what
 wire order (`moy_lcd.BYTE_SWAP`)."""
 
 [[modules.device.group]]
-files = ["moybyte_sd.py"]
+files = ["moybyte_sd.py", "bus_store.py"]
 why = """
 STAGE 4 (SD). The mount lifecycle for a card that SHARES SPI2 with the panel:
 `with_sd_live` attaches through the native `moy_sd` module to the host

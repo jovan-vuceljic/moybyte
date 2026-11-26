@@ -48,6 +48,7 @@ def _device_backend_src():
     loop and its VM-side stages, moy_input's input stage)."""
     return "\n".join((
         runtime_text(ROOT / "modules" / "moy_runtime.py"),
+        (DEVICE / "bus_store.py").read_text(encoding="utf-8"),
         (DEVICE / "device_api.py").read_text(encoding="utf-8"),
         Path("runtime/run/cart_api.py").read_text(encoding="utf-8"),
         _staged()["device_boot.py"].read_text(encoding="utf-8"),
@@ -66,7 +67,7 @@ def _panel_src():
     machine is executed by tests/test_banded_panel.py."""
     return (
         (ROOT / "modules" / "moy_runtime.py").read_text(encoding="utf-8"),
-        (ROOT / "native" / "moy_lcd" / "modmoy_lcd.c").read_text(encoding="utf-8"),
+        ((_REPO / "native" / "moy_lcd" / "modmoy_lcd.c")).read_text(encoding="utf-8"),
     )
 
 
@@ -92,7 +93,7 @@ def test_ota_updater_wired_into_run_desktop_with_rollback_confirm():
     # bracketing the SD bus and staging onto /sd/update would be aimed at a
     # card that is not there.
     assert "ws.updater = moy_ota.OtaUpdater(ws.with_sd, update_dir=update_dir)" in runtime
-    assert "(None if self.on_sd else FLASH_UPDATE_DIR)" in runtime
+    assert "(None if self.on_sd else self._flash_update)" in runtime
     assert "ws.updater.mark_valid()" not in runtime
 
 
@@ -382,7 +383,7 @@ def test_a_stop_that_is_not_acknowledged_frees_nothing():
         "start() must refuse to re-arm over a feeder that never stopped")
     # ...and the two boards' deinit must honour the answer, which is what makes
     # their comments true: the transport may not go away under a live feeder.
-    for mod in (ROOT / "native" / "moy_lcd" / "modmoy_lcd.c",
+    for mod in ((_REPO / "native" / "moy_lcd" / "modmoy_lcd.c"),
                 Path("firmware/guition_jc3248w535/native/moy_axs/modmoy_axs.c")):
         src = mod.read_text(encoding="utf-8")
         assert "if (!moy_flush_stop()) {" in src, (
@@ -502,7 +503,7 @@ def test_sram_bounce_flush_wired():
     assert (PATCHES / "esp_lcd_tx_color_noacquire.patch").exists()
     assert "esp_lcd_tx_color_noacquire.patch" in build
     assert 'grep -q "Moybyte #66"' in build
-    _c = (ROOT / "native" / "moy_lcd" / "modmoy_lcd.c").read_text(encoding="utf-8")
+    _c = ((_REPO / "native" / "moy_lcd" / "modmoy_lcd.c")).read_text(encoding="utf-8")
     assert "MOY_LCD_BOUNCE_SLOTS" in _c
 
 

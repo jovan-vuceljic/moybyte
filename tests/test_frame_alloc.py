@@ -1426,7 +1426,7 @@ def main():
             self.on_sd = True                # the T-Deck's store is its card
             return carts, root, None
 
-        moy_runtime._Storage.load = _load
+        moy_runtime.BusStore.load = _load
         moy_runtime.POWER_SAVE_MS = 0
         @ENTRY@(_Loop(moy_runtime.run_desktop()))
     except BaseException as exc:             # noqa -- say it, then end the run
@@ -2230,7 +2230,7 @@ def main():
             self.on_sd = True
             return carts, root, None
 
-        moy_runtime._Storage.load = _load
+        moy_runtime.BusStore.load = _load
         moy_runtime.POWER_SAVE_MS = 0
         build = moy_runtime.build_desktop
 

@@ -2422,7 +2422,7 @@ def main():
             self.on_sd = True
             return carts, root, None
 
-        moy_runtime._Storage.load = _load
+        moy_runtime.BusStore.load = _load
         moy_runtime.POWER_SAVE_MS = 0
         desk = moy_runtime.run_desktop()
         import moy_loop
