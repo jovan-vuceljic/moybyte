@@ -3223,6 +3223,10 @@ self.onmessage = async (ev) => {
         } else if (m.t === "import") {
             try {
                 const kind = dropped(m.name, m.buf);
+                // A conversion holds this thread for seconds (a phone's,
+                // a minute): the frames that paint the page's "Importing"
+                // notice go first, so the console never looks hung.
+                if (kind === "p8") await new Promise(r => setTimeout(r, 150));
                 if (kind === "song") {
                     const s = await importSong(m.name, m.buf);
                     self.postMessage({ t: "imported", ok: true, s: s });
