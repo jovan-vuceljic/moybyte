@@ -15,7 +15,10 @@ the fill and the accent. A layer a shape lacks is empty.
 At 16 px every family is 1-bit pixel art (`ART16`): `O` cells the outline,
 `F` the fill, `A` the accent, a whole pixel each; `auto` art is fill cells
 whose outline is every clear cell beside one, across or down. PIXEL keeps
-its 16 px art at every size, each cell grown whole.
+its 16 px art at every size, each cell grown whole. The shapes a family does
+not draw its own share one art, recoloured per family (`art16`): LUNA's
+lavender in black, COAST's shafts and sand cyan, MOY's arrow, hand, beam and
+busy ringed in black.
 
 At 32 and 48 px the smooth families are SVG on a 32-unit cell (a unit a
 pixel at 32 px), rasterised by resvg. A shape's parts are its BODY (the
@@ -23,13 +26,18 @@ innermost layer); the family's band (`rim`, MOY's and LUNA's cream) and
 outline (`ow`) are the parts grown outward, a polygon's corners mitred
 (capped, `MITER`) and then rounded by the family's `round` grown with them,
 but for its tip, which stays sharp. `cut` lines part a body (fingers),
-`accent` parts are drawn in the accent, `hole` parts are kept out of it,
-`marks` are drawn with the outline alone.
+`accent` parts are drawn in the accent (shrunk by `accent_d`), `hole` parts
+are kept out of it, `marks` are drawn with the outline alone and `rimmed`
+parts take the band where the body does not; a shape may set its own `rim`,
+`ow` and `round`, and `top`, a thinner keyline over a hand's hotspot.
 
 Each shape's hotspot is exact at every size: an arrow's is the pixel at its
-outline's apex, a hand's the top of its index finger's outline, each placed
-on a whole pixel (the art is shifted by the fraction of a pixel that takes);
-a centred shape's is its middle.
+outline's apex, a hand's the top of its index finger (a pixel or two
+into a thick keyline), each placed
+on a whole pixel (the art is shifted by the fraction of a pixel that takes),
+the fill starting within 2 px below it: an arrow's outline reaches its
+family's `tip` past the body's, tapering to it; a centred shape's is its
+middle.
 
   render(family, shape, size) -> (hx, hy, w, h, {layer: alpha bytes})
   bpp(family, size) -> the bits a coverage takes in the font file
@@ -47,12 +55,13 @@ TIP = 1.6                   # a tip's reach past its body, in widths: its outlin
 
 # How each smooth family draws its parts, in units: the outline outside the
 # band (`ow`), the band between outline and body (`rim`; the body then wears
-# the accent), the body's corner rounding (`round`).
+# the accent), the body's corner rounding (`round`), and how far an arrow's
+# apex reaches past its body's tip (`tip`), the keyline tapering to it.
 STYLES = {
-    "moy": {"ow": 1.25, "rim": 1.75, "round": 0.25},
-    "coast": {"ow": 2, "rim": 0, "round": 0.5},
-    "luna": {"ow": 1.5, "rim": 2.5, "round": 0},
-    "blocks": {"ow": 3, "rim": 0, "round": 1.5},
+    "moy": {"ow": 1, "rim": 2, "round": 0.25, "tip": 1},
+    "coast": {"ow": 1.5, "rim": 0, "round": 0.5, "tip": 1},
+    "luna": {"ow": 1.5, "rim": 2.5, "round": 0, "tip": 1.25},
+    "blocks": {"ow": 3, "rim": 0, "round": 1.5, "tip": 1},
 }
 
 
@@ -76,12 +85,15 @@ def _area(pts):
                for i in range(len(pts))) / 2
 
 
-def _offset(pts, d, tip, rnd):
+def _offset(pts, d, tip, rnd, reach=None):
     """[(x, y, r)]: polygon `pts` grown by d (shrunk where d < 0), a corner
     whose miter passes MITER widths bevelled, each corner's rounding grown
     with it (a convex corner's by d, a concave one's less d); the tip's
     corner stays sharp, reaching at most TIP widths past the body's, so a
-    narrow tip's outline thins toward its point instead of growing a spike."""
+    narrow tip's outline thins toward its point instead of growing a spike.
+    Given `reach`, the tip instead lies on the edge that leaves it, grown,
+    `reach` units past the body's tip: an arrow's vertical edge runs straight
+    up to its apex, which stays `reach` from the fill whatever the outline."""
     n = len(pts)
     s = 1 if _area(pts) > 0 else -1
     normals = []
@@ -90,6 +102,7 @@ def _offset(pts, d, tip, rnd):
         ln = math.hypot(x1 - x0, y1 - y0)
         normals.append((s * (y1 - y0) / ln, -s * (x1 - x0) / ln))
     out = []
+    late = None
     for i in range(n):
         px, py = pts[i]
         a, b = normals[i - 1], normals[i]
@@ -100,15 +113,31 @@ def _offset(pts, d, tip, rnd):
         dot = a[0] * b[0] + a[1] * b[1]
         m = d / (1 + dot) if dot > -0.999 else 1e9
         mx, my = px + m * (a[0] + b[0]), py + m * (a[1] + b[1])
-        reach = math.hypot(mx - px, my - py)
-        if i == tip and reach > TIP * abs(d):
-            out.append((px + (mx - px) * TIP * abs(d) / reach,
-                        py + (my - py) * TIP * abs(d) / reach, r))
-        elif i != tip and d and reach > MITER * abs(d):
+        far = math.hypot(mx - px, my - py)
+        if i == tip and reach is not None and d > 0:
+            nx, ny = pts[(i + 1) % n]
+            ln = math.hypot(px - nx, py - ny)
+            ay = py + d * b[1] + (py - ny) / ln * reach
+            out.append((px + d * b[0] + (px - nx) / ln * reach, ay, r))
+            # The other edge's outline runs whole up to half its width below
+            # the apex, and only then tapers to it.
+            qx, qy = pts[i - 1]
+            lq = math.hypot(qx - px, qy - py)
+            ux, uy = (qx - px) / lq, (qy - py) / lq
+            fx, fy = px + d * a[0], py + d * a[1]
+            t = (ay + d / 2 - fy) / uy if uy > 0 else -1
+            if 0 < t < lq / 2:
+                late = (fx + ux * t, fy + uy * t, 0)
+        elif i == tip and far > TIP * abs(d):
+            out.append((px + (mx - px) * TIP * abs(d) / far,
+                        py + (my - py) * TIP * abs(d) / far, r))
+        elif i != tip and d and far > MITER * abs(d):
             out.append((px + d * a[0], py + d * a[1], r))
             out.append((px + d * b[0], py + d * b[1], r))
         else:
             out.append((mx, my, r))
+    if late is not None:
+        out.append(late)
     return out
 
 
@@ -143,11 +172,12 @@ def _rounded(vs):
     return '<path d="%s Z"/>' % " ".join(d)
 
 
-def _part(p, d, rnd):
-    """The SVG of part `p` grown by d."""
+def _part(p, d, rnd, reach=None):
+    """The SVG of part `p` grown by d (a polygon's tip `reach` past its
+    body's where it is an arrow's, `_offset`)."""
     k = p[0]
     if k == "poly":
-        return _rounded(_offset(p[1], d, p[2], rnd))
+        return _rounded(_offset(p[1], d, p[2], rnd, reach if len(p) > 3 else None))
     if k == "rect":
         x, y, w, h, r = p[1:6]
         rot = p[6] if len(p) > 6 else None
@@ -166,12 +196,12 @@ def _part(p, d, rnd):
     raise ValueError(k)
 
 
-def _apex(p, d, rnd):
+def _apex(p, d, rnd, reach):
     """The point of part `p` grown by d that the hotspot sits on: a polygon's
     tip, a rect's top middle."""
     if p[0] == "poly":
-        for x, y, _r in _offset(p[1], d, p[2], rnd)[p[2]:p[2] + 1]:
-            return x, y
+        x, y, _r = _offset(p[1], d, p[2], rnd, reach)[p[2]]
+        return x, y
     return p[1] + p[3] / 2, p[2] - d
 
 
@@ -204,8 +234,8 @@ def _turned(parts, deg, cx=16, cy=16):
 ARROWS = {
     "moy": [(6, 4), (6, 22.5), (10, 18.8), (12.8, 25.4), (16.4, 23.9), (13.6, 17.4),
                 (18.8, 17.4)],
-    "coast": [(6, 4), (6, 20.6), (10, 17.2), (12, 21.8), (15.8, 20.2), (13.8, 15.6),
-              (20.6, 15.6)],
+    "coast": [(6, 4), (6, 22.6), (10.4, 18.8), (12.6, 23.8), (16.8, 22), (14.6, 17.2),
+              (22, 17.2)],
     "luna": [(6, 4), (6, 23.6), (9, 20.6), (12.4, 28.4), (15.4, 27.1), (12.2, 19.6),
              (16.6, 19.6)],
     "blocks": [(6, 4), (6, 23.5), (10.4, 19.6), (13.4, 27.6), (18.2, 25.6), (15.2, 18.4),
@@ -214,26 +244,27 @@ ARROWS = {
 
 
 def _arrow(fam):
-    got = {"body": [("poly", ARROWS[fam], 0)], "apex": 0, "flat": True}
+    got = {"body": [("poly", ARROWS[fam], 0, "arrow")], "apex": 0, "flat": True}
     if fam == "blocks":            # a gloss stroke down the left edge
         got["accent"] = [("curve", 8.6, 8.4, 8.2, 12.6, 8.9, 16.2, 1.6)]
     return got
 
 
 def _hand(fam):
-    if fam == "blocks":            # a puffy glove on a rolled cuff
+    if fam == "blocks":             # a puffy glove on a rolled cuff, a vinyl rim round it
         index = ("rect", 9, 5, 6, 12, 2)
-        knuckles = [("circle", 17.5, 14, 2.6), ("circle", 22.3, 14, 2.6),
-                    ("circle", 26.8, 14.4, 2.6)]
+        knuckles = [("circle", 17.5, 12.6, 2.6), ("circle", 22.3, 12.6, 2.6),
+                    ("circle", 26.8, 13, 2.6)]
         palm = ("rect", 9, 13.6, 20.4, 12.4, 4.4)
-        thumb = ("rect", 6.5, 18.5, 8, 5, 2.5, (-35, 10.5, 21))
+        thumb = ("rect", 3, 15.5, 9, 5.6, 2.8, (-30, 7.5, 18.3))
         cuff = ("rect", 8.6, 25, 21.2, 6, 3)
         glove = [index, palm, thumb] + knuckles
-        cut = [("cap", 17.5, 16.2, 17.5, 18.4, 1.2), ("cap", 22.3, 16.2, 22.3, 18.4, 1.2),
-               ("cap", 26.8, 16.6, 26.8, 18.8, 1.2), ("cap", 15, 12.6, 15, 16.4, 1.2),
-               ("cap", 9.4, 18.8, 12.6, 16.6, 1.4), ("cap", 10.4, 25, 28, 25, 1.4)]
+        cut = [("cap", 17.5, 15.4, 17.5, 19.4, 2), ("cap", 22.3, 15.4, 22.3, 19.4, 2),
+               ("cap", 26.8, 15.8, 26.8, 19.4, 2), ("cap", 15, 12.6, 15, 17.6, 2),
+               ("cap", 19.9, 11, 19.9, 13.6, 1.6), ("cap", 24.6, 11.2, 24.6, 13.8, 1.6),
+               ("cap", 9.6, 20.4, 12, 19, 2), ("cap", 10.4, 25, 28, 25, 2)]
         return {"body": [index] + knuckles + [palm, thumb, cuff], "apex": 0, "cut": cut,
-                "accent": glove, "hole": [cuff]}
+                "accent": glove, "accent_d": -1.5, "hole": [cuff], "top": 2}
     if fam == "coast":              # round and friendly
         index = ("rect", 9.4, 5, 4.4, 12, 2.2)
         fingers = [("rect", 14.6, 11.2, 4.2, 8, 2.1), ("rect", 19.4, 12, 4, 8, 2),
@@ -244,33 +275,34 @@ def _hand(fam):
         cut = [("cap", 14.2, 13, 14.2, 17.6, 1.2), ("cap", 19, 14, 19, 18.6, 1.2),
                ("cap", 23.6, 15.4, 23.6, 19.6, 1.2)]
         return {"body": [index] + fingers + [palm, thumb, wrist], "apex": 0, "cut": cut}
-    if fam == "luna":               # long fingers, a knuckle line across each
+    # MOY and LUNA: the fingers parted by cream lines, LUNA's index jointed
+    parts = [("cap", 14.2, 14, 14.2, 18.6, 1), ("cap", 18.8, 14.8, 18.8, 19.2, 1),
+             ("cap", 23.4, 16, 23.4, 19.6, 1)]
+    if fam == "luna":
         index = ("rect", 9.6, 6, 3.6, 13, 1)
         fingers = [("rect", 14.6, 12.4, 3.4, 8, 1), ("rect", 19.2, 13.2, 3.4, 8, 1),
                    ("rect", 23.8, 14.6, 3, 7, 1)]
         palm = ("rect", 9.6, 18.4, 17.2, 8, 2)
         thumb = ("rect", 4.4, 19.4, 7.4, 3.4, 1, (-38, 8, 21))
-        cut = [("cap", 9.6, 12.4, 13.2, 12.4, 1), ("cap", 14.6, 16.4, 18, 16.4, 1),
-               ("cap", 19.2, 17.2, 22.6, 17.2, 1), ("cap", 23.8, 18.4, 26.8, 18.4, 1)]
-        return {"body": [index] + fingers + [palm, thumb], "apex": 0, "cut": cut}
-    index = ("rect", 9.8, 6, 3.6, 12, 1.8)              # MOY: a clean hand
+        return {"body": [index] + fingers + [palm, thumb], "apex": 0,
+                "cut": parts + [("cap", 9.6, 12.4, 13.2, 12.4, 1)]}
+    index = ("rect", 9.8, 6, 3.6, 12, 1.8)
     fingers = [("rect", 14.6, 12, 3.4, 8, 1.7), ("rect", 19.2, 12.8, 3.4, 8, 1.7),
                ("rect", 23.8, 14, 3, 7, 1.5)]
     palm = ("rect", 9.8, 16.6, 17, 8.4, 2.6)
     thumb = ("rect", 4.6, 18, 7.6, 3.4, 1.7, (-36, 8.4, 19.7))
-    return {"body": [index] + fingers + [palm, thumb], "apex": 0}
+    return {"body": [index] + fingers + [palm, thumb], "apex": 0, "cut": parts}
 
 
 def _beam(fam):
-    if fam == "blocks":            # a fat I: a round stem, round caps
-        return {"body": [("cap", 16, 6, 16, 26, 2.4), ("cap", 12, 6, 20, 6, 2.4),
-                         ("cap", 12, 26, 20, 26, 2.4)], "ow": 2.5}
-    stem = 2 if fam != "coast" else 2.4
-    cap = {"moy": (11.5, 20.5), "coast": (12, 20), "luna": (11, 21)}[fam]
-    r = 1.2 if fam == "coast" else 0
-    return {"body": [("rect", 16 - stem / 2, 6, stem, 20, 0),
-                     ("rect", cap[0], 5, cap[1] - cap[0], 2.2, r),
-                     ("rect", cap[0], 24.8, cap[1] - cap[0], 2.2, r)]}
+    if fam == "blocks":             # a fat I: a round stem, round caps
+        return {"body": [("cap", 16, 6, 16, 26, 2), ("cap", 12, 6, 20, 6, 2),
+                         ("cap", 12, 26, 20, 26, 2)], "ow": 2}
+    if fam == "coast":
+        return {"body": [("rect", 14.8, 6, 2.4, 20, 0), ("rect", 12, 5, 8, 2.2, 1.2),
+                         ("rect", 12, 24.8, 8, 2.2, 1.2)]}
+    return {"body": [("rect", 15.25, 6, 1.5, 20, 0), ("rect", 12, 5, 8, 1.5, 0),       # MOY, LUNA
+                     ("rect", 12, 25.5, 8, 1.5, 0)], "rim": 1, "ow": 1}
 
 
 # The across resize: (shaft width, head width, head depth, length).
@@ -307,14 +339,15 @@ def _move(fam):
 
 
 def _busy(fam):
-    """An hourglass: caps in the outline, the glass, sand in its lower bulb
-    and a stream down its neck."""
-    if fam == "blocks":
-        glass = ("poly", [(10, 7), (22, 7), (22, 9), (17.2, 16), (22, 23), (22, 25), (10, 25),
-                          (10, 23), (14.8, 16), (10, 9)], None)
-        sand = [("poly", [(16, 18.6), (21, 24.4), (11, 24.4)], None),
-                ("cap", 16, 13.6, 16, 19, 2)]
-        caps = [("rect", 7, 3.4, 18, 4, 2), ("rect", 7, 24.6, 18, 4, 2)]
+    """An hourglass: caps above and below, the glass, sand in its bulbs and a
+    stream down its neck."""
+    if fam == "blocks":             # navy caps, a cream glass, yellow sand
+        glass = ("poly", [(10, 7), (22, 7), (22, 9), (17.6, 16), (22, 23), (22, 25), (10, 25),
+                          (10, 23), (14.4, 16), (10, 9)], None)
+        sand = [("poly", [(16, 17.4), (21.4, 23), (21.4, 24.4), (10.6, 24.4), (10.6, 23)], None),
+                ("poly", [(11.6, 10.4), (20.4, 10.4), (16.8, 15), (15.2, 15)], None),
+                ("cap", 16, 14.6, 16, 18, 2.4)]
+        caps = [("rect", 8, 3.4, 16, 4, 2), ("rect", 8, 24.6, 16, 4, 2)]
         return {"body": [glass], "marks": caps, "accent": [glass], "hole": sand,
                 "core": False, "round": 1.2}
     w = {"moy": 6, "coast": 6.4, "luna": 5.6}[fam]
@@ -325,8 +358,12 @@ def _busy(fam):
     cr = 1.4 if fam == "coast" else 0.4
     caps = [("rect", 16 - w - 2.4, 4, 2 * w + 4.8, 3.2, cr),
             ("rect", 16 - w - 2.4, 24.8, 2 * w + 4.8, 3.2, cr)]
-    return {"body": [glass], "marks": caps, "accent": sand, "core": False,
-            "round": 1 if fam == "coast" else 0.2}
+    if fam == "coast":
+        return {"body": [glass], "marks": caps, "accent": sand, "round": 1}
+    # MOY and LUNA: the caps in the body's colour inside the band, the glass
+    # cream in the outline alone
+    return {"body": [glass], "rimmed": caps, "accent": sand + caps, "core": False,
+            "round": 0.2}
 
 
 def smooth_shape(fam, shape):
@@ -437,11 +474,11 @@ SHARED16 = {
         "..OFFFFFO..",
         "...OFFFO...",
         "....OFO....",
-        "....OOO....",
-        "...OFOFO...",
-        "..OFFOFFO..",
-        ".OFFOOOFFO.",
-        ".OOOOOOOOO.",
+        "....OSO....",
+        "...OFSFO...",
+        "..OFFSFFO..",
+        ".OFFSSSFFO.",
+        ".OSSSSSSSO.",
         "OOOOOOOOOOO",
         "OFFFFFFFFFO",
         "OOOOOOOOOOO")),
@@ -484,25 +521,36 @@ _CLASSIC_HAND = ((5, 0), (
 
 ART16 = {
     "pixel": {"arrow": _CLASSIC_ARROW, "hand": _CLASSIC_HAND},
-    "moy": {
+    "moy": {                        # 14 and 13 rows: its ring makes them 16 and 15
         "arrow": ((0, 0), (
-            "O..........",
-            "OO.........",
-            "OFO........",
-            "OFFO.......",
-            "OFFFO......",
-            "OFFFFO.....",
-            "OFFFFFO....",
-            "OFFFFFFO...",
-            "OFFFFFFFO..",
-            "OFFFFFFFFO.",
-            "OFFFOFOOOO.",
-            "OFFOOFFO...",
-            "OFO..OFFO..",
-            "OO...OFFO..",
-            "......OFFO.",
-            "......OOO..")),
-        "hand": _CLASSIC_HAND},
+            "O.........",
+            "OO........",
+            "OFO.......",
+            "OFFO......",
+            "OFFFO.....",
+            "OFFFFO....",
+            "OFFFFFO...",
+            "OFFFFFFO..",
+            "OFFFFOOO..",
+            "OFFOFFO...",
+            "OFO.OFFO..",
+            "OO..OFFO..",
+            "O....OFFO.",
+            ".....OOO..")),
+        "hand": ((5, 0), (
+            ".....OO.........",
+            "....OFFO........",
+            "....OFFO........",
+            "....OFFOOO......",
+            "....OFFOFFOOO...",
+            "....OFFOFFOFFOO.",
+            ".OO.OFFOFFOFFOFO",
+            "OFFOOFFOFFOFFOFO",
+            "OFFFOFFFFFFFFFFO",
+            ".OFFFFFFFFFFFFFO",
+            "..OFFFFFFFFFFFFO",
+            "...OFFFFFFFFFFO.",
+            "....OOOOOOOOOO.."))},
     "coast": {
         "arrow": ((0, 0), (
             "O..........",
@@ -571,31 +619,66 @@ ART16 = {
             "......OOOO..")),
         "hand": ((5, 0), (
             "....OOO.........",
-            "...OAAAO........",
-            "...OAAAO........",
-            "...OAAAOOO......",
-            "...OAAAOAAOOO...",
-            ".OOOAAAOAAOAAOO.",
-            "OAAOAAAOAAOAAOAO",
-            "OAAAOAAAAAAAAAAO",
-            ".OAAAAAAAAAAAAAO",
-            "..OAAAAAAAAAAAAO",
-            "...OAAAAAAAAAAO.",
+            "...OFFFO........",
+            "...OAAFO........",
+            "...OAAFOOO......",
+            "...OAAFOFFOOO...",
+            ".OOOAAFOAFOFFOO.",
+            "OFFOAAFOAFOAFOFO",
+            "OAAAOAAAAAAAAAFO",
+            ".OAAAAAAAAAAAAFO",
+            "..OAAAAAAAAAAAFO",
+            "...OAAAAAAAAAFO.",
             "..OOOOOOOOOOOOO.",
             "..OFFFFFFFFFFFFO",
             "..OFFFFFFFFFFFFO",
             "...OOOOOOOOOOOO."))},
 }
 
-# What each cell draws at 16 px: (line, fill, accent) cells. MOY's body
-# is its accent, in a cream outline.
-_CELLS = {"moy": ("OFA", "OFA", "F")}
+# What each cell draws at 16 px: (line, fill, accent) cells; `S` is sand,
+# the outline's unless a family's art says otherwise. MOY's body is its
+# accent in a cream outline, ringed in black (`R`, `_ring`) but for the
+# arrows of the resizes and move, whose notches a ring would close.
+_CELLS = {"moy": ("ROFA", "OFA", "F")}
 _PLAIN = ("OFA", "FA", "A")
+_SHAFTS = ("ew", "ns", "nwse", "nesw", "move")
+
+
+def _ring(rows):
+    """Rows with a black ring (`R`) round every cell, across or down, the
+    art moved a cell right and down."""
+    w = max(len(r) for r in rows) + 2
+    g = ["." * w] + ["." + r.ljust(w - 2, ".") + "." for r in rows] + ["." * w]
+    out = [list(r) for r in g]
+    for y in range(len(g)):
+        for x in range(w):
+            if g[y][x] == "." and any(0 <= x + i < w and 0 <= y + j < len(g) and
+                                      g[y + j][x + i] != "."
+                                      for i, j in ((1, 0), (-1, 0), (0, 1), (0, -1))):
+                out[y][x] = "R"
+    return tuple("".join(r) for r in out)
+
+
+def _recolour(rows, f):
+    return tuple("".join(f(x, c) for x, c in enumerate(r)) for r in rows)
 
 
 def art16(family, shape):
-    got = ART16[family].get(shape)
-    return got if got is not None else SHARED16[shape]
+    """(hotspot, rows) of `shape` at 16 px in `family`'s cells."""
+    (hx, hy), rows = ART16[family].get(shape) or SHARED16[shape]
+    sand = "O"
+    if family == "luna":            # lavender in black, the arrow's left column the rim
+        rows = _recolour(rows, lambda x, c: "A" if c == "F" and (shape != "arrow" or x >= 2)
+                         else c)
+    elif family == "coast":         # cyan shafts and sand in navy
+        sand = "A"
+        if shape in _SHAFTS:
+            rows = _recolour(rows, lambda x, c: "A" if c == "F" else c)
+    rows = _recolour(rows, lambda x, c: sand if c == "S" else c)
+    if family == "moy" and shape not in _SHAFTS:      # a ring would close their notches
+        rows = _ring(rows)
+        hx, hy = hx + 1, (hy if shape in ("arrow", "hand") else hy + 1)
+    return (hx, hy), rows
 
 
 def _pixel(family, shape, size):
@@ -611,6 +694,8 @@ def _pixel(family, shape, size):
                 if x // k < len(r) and r[x // k] in on:
                     a[y * w + x] = 255
         layers[layer] = bytes(a)
+    if shape == "hand":             # the fingertip's middle, two cells across
+        return hx * k + k - 1, hy * k, w, h, layers
     return hx * k, hy * k, w, h, layers
 
 
@@ -654,19 +739,30 @@ def render(family, shape, size):
     body = sh["body"]
     rnd = sh.get("round", st["round"])
     core = sh.get("core", True) and st["rim"] > 0
-    rim = st["rim"] if core else 0
-    edge = rim + sh.get("ow", st["ow"])
+    brim = sh.get("rim", st["rim"])
+    rim = brim if core else 0
+    ow = sh.get("ow", st["ow"])
+    edge = rim + ow
     n = (CELL + 2 * PAD) * size // CELL
     k = size / CELL
 
-    # The hotspot: the apex of the outline on a whole pixel's corner (a hand's
-    # in the middle of a pixel across), else the cell's middle.
+    def reach(d):                   # an arrow tip's reach past its body at d
+        return st["tip"] * d / edge if edge else 0
+
+    # The hotspot: an arrow's apex on a whole pixel's corner, its vertical
+    # edge on a pixel's edge; a hand's at the middle of a pixel across, as
+    # far into a thick keyline as puts its fill 2 px below (set once the fill
+    # is drawn); else the cell's middle.
     if "apex" in sh:
-        ax, ay = _apex(body[sh["apex"]], edge, rnd)
+        ap = body[sh["apex"]]
+        ax, ay = _apex(ap, edge, rnd, reach(edge))
+        if "top" in sh:             # a thick keyline thinner over the hotspot
+            ay += edge - rim - sh["top"]
         px, py = (ax + PAD) * k, (ay + PAD) * k
-        tx = math.floor(px) + (0.5 if body[sh["apex"]][0] == "rect" else 0)
-        shift = ((tx - px) / k, (math.ceil(py - 1e-6) - py) / k)
-        hx, hy = int(math.floor(tx)), int(round(py + shift[1] * k))
+        tx = math.floor(px) + 0.5 if ap[0] == "rect" else round(px)
+        ty = math.ceil(py - 1e-6)
+        shift = ((tx - px) / k, (ty - py) / k)
+        hx, hy = int(math.floor(tx)), ty
     else:
         shift = (0, 0)
         hx = hy = int(round((16 + PAD) * k))
@@ -676,21 +772,29 @@ def render(family, shape, size):
             return bytes(n * n)
         svg = []
         for i, p in enumerate(parts):
-            if flat and i == sh.get("apex") and p[0] == "poly":
-                vs = _offset(p[1], d, p[2], rnd)
+            if flat and i == sh.get("apex") and "top" in sh:
+                lift = edge - rim - sh["top"]
+                svg.append(_part(p[:2] + (p[2] + lift, p[3], p[4] - lift) + p[5:], d, rnd))
+            elif flat and i == sh.get("apex") and p[0] == "poly":
+                vs = _offset(p[1], d, p[2], rnd, reach(d))
                 x, y, _ = vs[p[2]]
                 vs.insert(p[2], (x + 1 / k, y, 0))
                 svg.append(_rounded(vs))
             else:
-                svg.append(_part(p, d, rnd))
+                svg.append(_part(p, d, rnd, reach(d)))
         return _alpha(_svg(svg, size, shift))
 
-    line = _max(ras(body, edge, sh.get("flat")), ras(sh.get("marks")))
+    rimmed = sh.get("rimmed")       # parts that keep the band where the body does not
+    line = _max(_max(ras(body, edge, sh.get("flat") or "top" in sh), ras(rimmed, brim + ow)),
+                ras(sh.get("marks")))
     cut = ras(sh.get("cut"))
     if core:                        # the band in the fill, the body in the accent
         fill = ras(body, rim)
         accent = _minus(ras(body), cut)
     else:
-        fill = _minus(ras(body), cut)
-        accent = _minus(_mul(ras(sh.get("accent")), fill), ras(sh.get("hole")))
+        fill = _max(_minus(ras(body), cut), ras(rimmed, brim))
+        accent = _minus(_mul(ras(sh.get("accent"), sh.get("accent_d", 0)), fill),
+                        ras(sh.get("hole")))
+    if "apex" in sh and body[sh["apex"]][0] == "rect":
+        hy = max(hy, next(y for y in range(n) if fill[y * n + hx] >= 128) - 2)
     return hx, hy, n, n, {"line": line, "fill": fill, "accent": accent}

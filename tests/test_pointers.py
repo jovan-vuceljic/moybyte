@@ -55,14 +55,20 @@ def test_every_shape_has_its_hotspot_on_it_at_every_size(family):
 
 @pytest.mark.parametrize("family", pointer_art.FAMILIES)
 def test_an_arrow_and_a_hand_point_with_the_apex_of_their_outline(family):
-    """The hotspot is the outline's apex: a pixel the outline covers whole,
-    with no outline above it, so a press lands at the tip the eye sees."""
+    """The hotspot is the outline's apex, a pixel the outline covers whole,
+    with the fill starting within 2 px below it: an arrow's has no outline
+    above it, a hand's at most the 2 rows a thick keyline puts over it."""
     for shape in ("arrow", "hand"):
         for px in pointers.SIZES:
             hx, hy, w, h, layers = pointer_art.render(family, shape, px)
-            a = layers["line"]
+            a, f = layers["line"], layers["fill"]
             assert a[hy * w + hx] >= 250, (shape, px, a[hy * w + hx])
-            assert not any(a[y * w + x] for y in range(hy) for x in range(w)), (shape, px)
+            top = hy if shape == "arrow" else hy - 2
+            assert not any(a[y * w + x] for y in range(max(0, top)) for x in range(w)), (shape, px)
+            if family == "pixel" and px > 16:
+                continue                # its 16 px art, cells grown whole
+            first = min(y for y in range(h) for x in range(w) if f[y * w + x] >= 128)
+            assert first - hy <= 2, (shape, px, first - hy)
 
 
 @pytest.mark.parametrize("tier", sorted(make_icons.POINTER_SIZES))
