@@ -1350,21 +1350,20 @@ def page(pal, has_player, cards, channel=None, stills=False):
 /* A phone's Expand is the icon alone, a thumb's size. */
 @media (max-width:700px){.exp span{display:none}
   .exp{font-size:22px;min-width:44px;min-height:44px;padding:0 10px}}
+/* Filling the screen, the console sits under a strip of its own that holds
+   Close: the console's OS bar is at its very top, battery and clock in its
+   right corner, so a Close over the console covered them. */
 .stage.big{position:fixed;inset:0;z-index:60;margin:0;border:0;
-  aspect-ratio:auto !important;background:#000}
+  aspect-ratio:auto !important;background:#000;
+  padding:calc(32px + env(safe-area-inset-top,0px)) 0 0}
 body.noscroll{overflow:hidden}
-.shrink{position:absolute;top:8px;right:8px;z-index:2;appearance:none;cursor:pointer;
-  font:13px/1 var(--sans);padding:8px 11px;color:var(--night-ink);
-  background:color-mix(in srgb,var(--night-bg) 72%%,transparent);
-  border:1px solid var(--night-line)}
+.shrink{position:absolute;top:calc(4px + env(safe-area-inset-top,0px));
+  right:calc(8px + env(safe-area-inset-right,0px));z-index:2;appearance:none;
+  cursor:pointer;font:12px/1 var(--sans);padding:5px 10px;color:var(--night-ink);
+  background:var(--night-bg);border:1px solid var(--night-line)}
 .shrink:hover{border-color:var(--night-accent);color:var(--night-accent)}
+.shrink:focus-visible{outline:2px solid var(--night-accent);outline-offset:2px}
 .stage:not(.big) .shrink{display:none}
-/* Landscape phone: the OS bar sits at the very top of the console, so a button
-   in the corner would cover its clock. Nudge it clear of the safe area. */
-@supports (padding:env(safe-area-inset-top)){
-  .stage.big .shrink{top:calc(8px + env(safe-area-inset-top));
-                     right:calc(8px + env(safe-area-inset-right))}
-}
 .hint{display:flex;gap:16px;flex-wrap:wrap;justify-content:space-between;
   color:var(--muted);font-size:13px;margin:10px 0 0}
 /* --- feature tiles: one-colour mask sheets, stepped through by CSS ---------- */
