@@ -52,6 +52,11 @@
 // (THE HEAP'S SHAPE), which tests/test_zero_heap.py holds.
 #define MICROPY_GC_INITIAL_HEAP_SIZE        (64 * 1024)
 
+// The VM's task stack, made at boot and kept: 12 KB where the port's is 16,
+// near twice its high-water mark over the Zero suite's whole run on this
+// board, the console's https fetches and installs included (#276).
+#define MICROPY_TASK_STACK_SIZE             (12 * 1024)
+
 // NEVER GROWN (moybyte_patch_gc_split_reserve): a growth of the split heap
 // leaves this much of the C side's heap outside it, and no heap this chip
 // has is this large. That heap is the only one, shared by WiFi's buffers,
