@@ -412,19 +412,21 @@ MP_DEFINE_CONST_OBJ_TYPE(moy_net_link_type, MP_QSTR_Link, MP_TYPE_FLAG_NONE,
 #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
 #include "moy_live.h"
 // live_stats() -> (sessions, busy, up, down, air_out, air_in, refused,
-// echoes, live, radio): the live socket's figures (moy_live.h), which a
+// echoes, live, radio, devs, dev_calls, dev_writes, dev_pushes): the live
+// socket's figures (moy_live.h), which a
 // Zero's `mem` and its bench read. The name is also what links the bridge
 // into the image: the webhost reaches it weakly.
 static mp_obj_t mod_live_stats(void) {
     moy_live_stats_t l;
     moy_live_stats(&l);
-    uint32_t v[10] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
-                      l.echoes, l.live, l.radio};
-    mp_obj_t t[10];
-    for (int i = 0; i < 10; i++) {
+    uint32_t v[14] = {l.sessions, l.busy, l.up, l.down, l.air_out, l.air_in, l.refused,
+                      l.echoes, l.live, l.radio, l.devs, l.dev_calls, l.dev_writes,
+                      l.dev_pushes};
+    mp_obj_t t[14];
+    for (int i = 0; i < 14; i++) {
         t[i] = mp_obj_new_int_from_uint(v[i]);
     }
-    return mp_obj_new_tuple(10, t);
+    return mp_obj_new_tuple(14, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_stats_obj, mod_live_stats);
 #endif
@@ -470,6 +472,31 @@ static mp_obj_t mod_live_info(void) {
     return mp_obj_new_tuple(12, t);
 }
 static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_info_obj, mod_live_info);
+
+// The device channel's page half (moy_dev_web.c):
+//   live_kinds(spec)              the kinds the /live probe named
+//   live_devs() -> (kinds, rows, opens, up, down, records, events, dropped, timed,
+//                   rtt_min, rtt_max, rtt_sum, rtt_last): rtt in microseconds
+static mp_obj_t mod_live_kinds(mp_obj_t spec) {
+    size_t n;
+    const char *s = mp_obj_str_get_data(spec, &n);
+    moy_dev_web_kinds(s, n);
+    return mp_const_none;
+}
+static MP_DEFINE_CONST_FUN_OBJ_1(mod_live_kinds_obj, mod_live_kinds);
+
+static mp_obj_t mod_live_devs(void) {
+    moy_dev_web_info_t i;
+    moy_dev_web_info(&i);
+    uint32_t v[13] = {i.kinds, i.rows, i.opens, i.up, i.down, i.records, i.events, i.dropped,
+                      i.timed, i.rtt_min, i.rtt_max, i.rtt_sum, i.rtt_last};
+    mp_obj_t t[13];
+    for (int k = 0; k < 13; k++) {
+        t[k] = mp_obj_new_int_from_uint(v[k]);
+    }
+    return mp_obj_new_tuple(13, t);
+}
+static MP_DEFINE_CONST_FUN_OBJ_0(mod_live_devs_obj, mod_live_devs);
 #endif
 
 #endif
@@ -1228,6 +1255,8 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     {MP_ROM_QSTR(MP_QSTR_live_give), MP_ROM_PTR(&mod_live_give_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_open), MP_ROM_PTR(&mod_live_open_obj)},
     {MP_ROM_QSTR(MP_QSTR_live_info), MP_ROM_PTR(&mod_live_info_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_kinds), MP_ROM_PTR(&mod_live_kinds_obj)},
+    {MP_ROM_QSTR(MP_QSTR_live_devs), MP_ROM_PTR(&mod_live_devs_obj)},
     #endif
     #endif
 };

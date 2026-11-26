@@ -1580,7 +1580,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
     const gpioPins = await probeGpio();
     const updateDoc = await probeUpdate();
     const official = mode === "board" && await probeOfficial();
-    const liveLink = mode === "board" ? await probeLive() : null;
+    const live = mode === "board" ? await probeLive() : null;
     const wifiDoc = mode === "board" ? await probeWifi() : null;
     mp.runPython("import web_boot\n"
         // BEFORE boot(): the mode is what decides whether the carts watcher
@@ -1599,6 +1599,9 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // A console that installs carts into its own store when this page
         // asks (it answers /official): BEFORE boot(), which hands Get Carts the asking.
         + (official ? "web_boot.official_enable()\n" : "")
+        // The device kinds the board relays on the live socket, BEFORE
+        // boot(): an install check and the shelves ask for them.
+        + (live && live.kinds ? "web_boot.live_kinds(" + JSON.stringify(live.kinds) + ")\n" : "")
         // The console this page's address asks for: its tier, size and cart
         // (web_boot.page_boot), on the page's pointer and colour scheme
         // (page_tail.js: ?scheme= or prefers-color-scheme).
@@ -1614,7 +1617,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         // The board's radio, a link on the live Workstation: after boot(),
         // which creates it, and before the address's cart starts, whose
         // launch grants "multiplayer" only where the console has a link.
-        + (liveLink ? "web_boot.live_enable(" + JSON.stringify(liveLink) + ")\n" : "")
+        + (live ? "web_boot.live_enable(" + JSON.stringify(live.mac) + ")\n" : "")
         // What the address starts it on (web_boot.page_start).
         + "web_boot.page_start()\n"
         + "from web_boot import assets_json, step_frame_json, apply_events_json, "
@@ -1657,7 +1660,7 @@ async function init(search, coarse, channel, scheme, signin, rate) {
         termFeed = mp.globals.get("term_feed");
         termState = mp.globals.get("term_state");
     }
-    if (liveLink) {
+    if (live) {
         livePump = mp.globals.get("live_pump");
         liveFeed = mp.globals.get("live_feed");
         liveState = mp.globals.get("live_state");
@@ -1740,14 +1743,19 @@ function shipFrame(s) {
 // not served by anything with pins" -- a static host (moybyte.com, an export),
 // a console board that spends its GPIOs on a panel, or a Zero this page is not
 // signed in to. All four are the same answer to a cart: no verbs.
-// The board's address on the air where it relays its radio on the live
-// socket (GET /live without the upgrade, native/moy_net/moy_live.h), else
-// null. A board without the socket 404s it.
+// What the board relays on the live socket (GET /live without the upgrade,
+// native/moy_net/moy_live.h): {mac, kinds}, its address on the air where it
+// relays its radio ("" where not) and the device kinds it relays
+// (moy_dev_relayed's text), or null where it relays neither. A board without
+// the socket 404s it.
 async function probeLive() {
     try {
         const r = await sealed("GET", "/live");
         const d = r.status === 200 ? sealedJson(r) : null;
-        return d && d.live && d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : null;
+        if (!d || !d.live) return null;
+        const mac = d.link && /^[0-9a-f]{12}$/.test(d.mac || "") ? d.mac : "";
+        const kinds = typeof d.kinds === "string" ? d.kinds : "";
+        return mac || kinds ? { mac, kinds } : null;
     } catch (e) {
         return null;
     }
@@ -2099,12 +2107,14 @@ function termPump() {
 }
 
 // THE LIVE SOCKET (#256; native/moy_net/moy_live.h is the wire) on a page
-// whose board relays its radio: one WebSocket to GET /live, sealed as the
-// terminal's is (seal slot 1), its frames' first byte their channel. The
-// worker opens it at boot, keeps it beating, reopens a dropped one after
-// LIVE_RETRY_MS, and moves the link channel ('n') between the socket and
-// the VM between frames (web_boot's live_*), never inside one: the console
-// runs a console's match over it (native/moy_net/moy_link_web.c). Every
+// whose board relays its radio or a device: one WebSocket to GET /live,
+// sealed as the terminal's is (seal slot 1), its frames' first byte their
+// channel. The worker opens it at boot, keeps it beating, reopens a dropped
+// one after LIVE_RETRY_MS, and moves the link channel ('n') and the device
+// channel ('d') between the socket and the VM between frames (web_boot's
+// live_*), never inside one: the console runs a console's match over it
+// (native/moy_net/moy_link_web.c) and its relayed devices' handles
+// (moy_dev_web.c). Every
 // beat is an echo ('c' 'e', answered 'E'), the page's round trip to its
 // board, which a harness reads in `__moyState().live`.
 const LIVE_BEAT_MS = 1000, LIVE_LOST_MS = 3000;
@@ -2180,7 +2190,7 @@ async function liveOpen() {
         }
         liveHeard = performance.now();
         LIVE.down++;
-        if (u8[0] === 0x6e) liveQ.push({ d: u8 });
+        if (u8[0] === 0x6e || u8[0] === 0x64) liveQ.push({ d: u8 });
         else if (u8[0] === 0x63 && u8[1] === 0x45 && u8.length === 10) {
             const t = new Float64Array(u8.slice(2).buffer)[0];
             LIVE.rtt.push(performance.now() - t);

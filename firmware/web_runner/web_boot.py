@@ -1312,7 +1312,8 @@ def state_json():
     chrome scale, top bar thickness in glass pixels and the back-stack's
     floor and depth (`glass`), the desk keyboard's
     typing level (`typing`), and the radio link's stats (`link_stats`, EspNowLink.stats: the match's
-    frame, checkpoints and desync; None with no link), for a harness
+    frame, checkpoints and desync; None with no link), the relayed devices'
+    channel (`devs`, `_live_devs`), for a harness
     driving the page (`window.__moyState()`), and the Wi-Fi panel's
     (`wifi_panel`, `_wifi_panel`)."""
     import dev_channel
@@ -1370,7 +1371,20 @@ def state_json():
     st["pmem"] = list(img)[:32] if img is not None else None
     lk = getattr(_S["ws"], "link", None)
     st["link_stats"] = lk.stats() if lk is not None else None
+    st["devs"] = _live_devs()
     return json.dumps(st)
+
+
+def _live_devs():
+    """The live socket's device channel on this page (moy_dev_web.c's
+    counts), None where its board relays no kind."""
+    import devices
+    if not devices.RELAYED:
+        return None
+    import moy_net
+    v = moy_net.live_devs()
+    return dict(zip(("kinds", "rows", "opens", "up", "down", "records", "events", "dropped",
+                     "timed", "rtt_min_us", "rtt_max_us", "rtt_sum_us", "rtt_last_us"), v))
 
 
 def _apply(events):
@@ -1827,7 +1841,11 @@ def term_state(state, n=0):
     return ""
 
 
-# -- the live socket's radio link ----------------------------------------------------
+# -- the live socket: the radio link and the relayed devices -----------------------
+#
+# A page served by a board that relays a device kind (GET /live's "kinds")
+# holds its handles as remote rows (live_kinds), their calls and the board's
+# pushes moved by the same feed and pump as the link's.
 #
 # A page served by a board that relays its radio (a Zero: GET /live answers
 # {"link":1}, native/moy_net/moy_live.c) has a link as a console board does:
@@ -1867,9 +1885,28 @@ class _LiveWlan:
         return 0
 
 
+def live_kinds(spec):
+    """The board relays device kinds on the live socket (the /live probe's
+    "kinds", native/moy_kernel/moy_dev_kinds.h's THE RELAY): their handles
+    become the kernel table's remote rows here (native/moy_net/
+    moy_dev_web.c), and the console has the device APIs they name
+    (devices.RELAYED), as a console board with the device has."""
+    try:
+        import moy_net
+        import devices
+        if not hasattr(moy_net, "live_kinds"):
+            return ""
+        moy_net.live_kinds(spec)
+        devices.RELAYED = tuple(k.split(":")[0] for k in spec.split(";") if k)
+    except Exception as exc:         # noqa: BLE001 -- never block a boot
+        print("live kinds unavailable:", exc)
+    return ""
+
+
 def live_enable(mac):
-    """The board answered the /live probe with its radio and its address
-    (`mac`, hex): the console gains a link, as a console board wires one
+    """The board answered the /live probe: the socket is this page's. Where
+    it relays its radio, with its address (`mac`, hex; "" where not), the
+    console gains a link, as a console board wires one
     (device/wire_links.py), before the address's cart starts."""
     ws = _S.get("ws")
     if ws is None:
@@ -1879,10 +1916,11 @@ def live_enable(mac):
         import moy_net
         if not hasattr(moy_net, "live_take"):
             return ""
-        from players import EspNowLink, launch_cart
-        ws.link = EspNowLink(board="web", name="Browser", wlan=_LiveWlan(binascii.unhexlify(mac)),
-                             launch=launch_cart)
-        ws.net = ws.link.net
+        if mac:
+            from players import EspNowLink, launch_cart
+            ws.link = EspNowLink(board="web", name="Browser",
+                                 wlan=_LiveWlan(binascii.unhexlify(mac)), launch=launch_cart)
+            ws.net = ws.link.net
         _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False,
                       "check": _S.get("linkcheck", False)}
     except Exception as exc:         # noqa: BLE001 -- never block a boot
