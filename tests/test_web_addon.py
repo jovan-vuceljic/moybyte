@@ -545,6 +545,78 @@ def test_a_store_with_no_room_for_the_add_on_is_not_asked_again(tmp_path, monkey
     assert nb.page_state() == web_addon.STATE_READY
 
 
+class _FullInstall:
+    """An install that runs out of store part way: what a store whose free
+    count said the add-on fits answers once its blocks are gone."""
+
+    def __init__(self, cart, *_a, **_k):
+        self.cart = cart
+        self.done = self.total = 0
+        self.path = None
+        self.finished = False
+        self.error = None
+
+    def step(self, _budget=None):
+        self.finished = True
+        self.error = ci.FULL
+        return False
+
+    def cancel(self):
+        return True
+
+
+def test_an_install_that_fills_the_store_gives_the_add_on_up(tmp_path, monkeypatch, board):
+    """The store's free count says the add-on fits and its install runs out
+    of room part way (the CoreS3): the step lets the radio go at once, asks
+    for nothing again, not a minute later nor at a join, and the screen says
+    why. A store too full for the record keeps it for the boot; the next
+    boot's attempt records it, and the one after starts nothing; the free
+    space growing past what was free lets it install."""
+    pages, routes, root = _absent(tmp_path, monkeypatch, b"new")
+    clock = [0]
+    monkeypatch.setattr(web_addon, "_now", lambda: clock[0])
+    index = BASE + "carts-tdeck.json"
+    net = MemNet(routes)
+    real = ci.Install
+    monkeypatch.setattr(ci, "Install", _FullInstall)
+
+    stamp = web_addon.save_room_stamp
+
+    def unwritable(*_a):
+        raise OSError(28, "ENOSPC")
+    monkeypatch.setattr(web_addon, "save_room_stamp", unwritable)
+    inst = Sized(root, net, room=50 << 20)
+    step = web_addon.AddonStep(inst, index, absent=True)
+    assert step.start()
+    _run(step)
+    assert step.phase is None and step.due is None and inst.held == 0
+    need, free = step.short()
+    assert free == 50 << 20 and need > free
+    assert "needs" in step.short_text()
+    assert not os.path.exists(os.path.join(str(tmp_path), web_addon.ROOM_STAMP))
+    asked = list(net.opened)
+    clock[0] += web_addon.RETRY_MAX_MS
+    assert not step.poll() and not step.start(retry=True) and not step.nudge()
+    assert not step.start(), "a person's press looks at the room again: still short"
+    assert net.opened == asked and inst.held == 0
+
+    monkeypatch.setattr(web_addon, "save_room_stamp", stamp)    # room for the record now
+    boot = web_addon.AddonStep(Sized(root, net, room=50 << 20), index, absent=True)
+    assert boot.start(), "a boot whose store kept no record tries once"
+    _run(boot)
+    assert boot.short() is not None and boot.inst.held == 0
+    asked = list(net.opened)
+    again = web_addon.AddonStep(Sized(root, net, room=50 << 20), index, absent=True)
+    assert not again.start() and again.due is None and net.opened == asked
+
+    monkeypatch.setattr(ci, "Install", real)
+    again.inst.room = again.short()[0]     # a card mounted, carts deleted
+    assert again.start()
+    _run(again)
+    assert again.error is None and again.short() is None
+    assert os.listdir(root) == [web_pack.cart_id(pages[0][1]) + ".moy"]
+
+
 def test_an_online_console_s_own_copy_is_its_owner_s_choice(tmp_path, monkeypatch, board):
     """"Works offline" (device/zero_offline.py over the step, the owner's call
     2026-11-26): off by default, so an online console takes every add-on off

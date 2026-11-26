@@ -53,7 +53,10 @@ A STORE TOO SMALL FOR THE ADD-ON is found out once, and not a failure: the
 index names the pack's size, and where it does not fit the store's free space
 (`inst.free()`, the cart index's `need_bytes` and `room_why`) the step records
 the page digest and the bytes it needs in `system/addon_room`, lets the radio
-go and ends with no back-off. From then on `short` answers it before anything
+go and ends with no back-off. An install that runs out of store part way
+(the free count said it fits) is the same finding, recorded as needing more
+than is free once its files are gone; a store too full for the record keeps
+it for the boot. From then on `short` answers it before anything
 else: a boot's or a join's start holds no radio, fetches no index and waits for
 the free space to reach the record, which a mounted card or deleted carts do
 (`short` reads the space again when the screen opens, on a person's press and
@@ -218,6 +221,7 @@ class AddonStep:
         #                               no add-on for this image, or the store has no room
         self._addon_short = False     # this attempt found the add-on does not fit
         self._room = False            # `short`'s answer (False: unread)
+        self._rec = None              # (page digest, bytes): this boot's record of no room
         self._room_at = 0
         self.phase = None
         self.error = None
@@ -302,6 +306,8 @@ class AddonStep:
             return None
         root = self.inst.root()
         rec = self.inst.op(lambda: room_stamp(root))
+        if rec is None or rec[0] != want:
+            rec = self._rec               # a store too full to hold the record either
         free = self._ask("free")
         if rec is None or rec[0] != want or free is None or free[0] >= rec[1]:
             return None
@@ -550,13 +556,48 @@ class AddonStep:
         need = _ci.need_bytes(_ci.plan(cart, chip, fmt, ranges), free[1])
         if _ci.room_why(need, free[0]) is None:
             return None
-        root, want = self.inst.root(), _ci.page_want()
-        if want:
-            self.inst.op(lambda: save_room_stamp(root, want, need))
-        self._room, self._room_at = (need, free[0]), _now()
+        self._no_room(need, free[0])
+        return need, free[0]
+
+    def _no_room(self, need, free):
+        """The add-on found not to fit: `need` bytes where `free` are free
+        (None where the store cannot say). Nothing asks for it again this
+        boot, and the record (`system/addon_room`, else this boot's own where
+        the store cannot hold even that) keeps every start from fetching it
+        until the free space reaches `need` or the release names another
+        page (`short`)."""
         self._fitless = True
         self._addon_short = True
-        return need, free[0]
+        self._addon = False
+        want = _ci.page_want()
+        if want:
+            self._rec = (want, need)
+            root = self.inst.root()
+            try:
+                self.inst.op(lambda: save_room_stamp(root, want, need))
+            except OSError as exc:
+                _ci._log("release: the add-on's room record was not written: %s" % exc)
+        if free is not None:
+            self._room, self._room_at = (need, free), _now()
+
+    def _full(self, job):
+        """The add-on's install ran out of store part way, though the free
+        space said it fits (a store's free count is not what it can write,
+        or something else wrote meanwhile): the same finding as a short
+        store, its need at least a block more than is free now that the
+        install took its files away. False where the store cannot say what
+        it has free: the attempt then ends on the install's error, and
+        nothing tries again before a boot, a join or a person's press."""
+        free = self._ask("free")
+        chip, fmt = self.inst.chip()
+        ranges = bool(getattr(self.inst.net(), "ranges", False))
+        block = free[1] if free is not None else 1
+        need = _ci.need_bytes(_ci.plan(job.cart, chip, fmt, ranges), block)
+        if free is None:
+            self._no_room(need, None)
+            return False
+        self._no_room(max(need, free[0] + block), free[0])
+        return True
 
     def _next_job(self):
         """The next cart of the queue's install started: False when none is
@@ -576,6 +617,9 @@ class AddonStep:
             return True
         self._job = None
         if not job.path:
+            if (self._addon and job.cart.get("runtime") == "web" and job.error == _ci.FULL
+                    and self._full(job)):
+                return self._next_job()
             return self._end(job.error or "stopped")
         if job.cart.get("runtime") != "web":
             self.inst.rescan(job.path)
@@ -591,7 +635,7 @@ class AddonStep:
                 self.inst.op(lambda: save_official_stamp(root, want))
                 self._stamp = want
         if not self._addon:
-            return self._end(None)
+            return self._end(None, short=self._addon_short)
         old = [f for f in installed(root, self.inst.op) if f != self._keep]
         self._gone = self._removals(root, old)
         self.phase = "clean"
