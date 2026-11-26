@@ -1886,16 +1886,37 @@ def _keys(*keys, wait=700):
     return out
 
 
+# The largest block the Python heap gives (#319): a bytearray's size,
+# halved until one is taken.
+PY_RUN = """
+def _py_run():
+    import gc
+    gc.collect()
+    lo, hi = 0, gc.mem_free()
+    while lo < hi:
+        m = (lo + hi + 1) // 2
+        try:
+            b = bytearray(m)
+            del b
+            lo = m
+        except MemoryError:
+            hi = m - 1
+    return lo
+"""
+
+
 def _carts_heap(r, folder=None):
     """(internal free, internal largest, internal low-water since the boot,
-    Python heap free) bytes after a collect, and whether `folder` is in the
-    store, over the raw REPL `r`."""
+    Python heap free, its largest run) bytes after a collect, and whether
+    `folder` is in the store, over the raw REPL `r`."""
     r.run("import gc\ngc.collect()")
     regions = [h for h in r.eval("__import__('esp32').idf_heap_info(%d)" % Z.INTERNAL_HEAP) if h]
     free, big = Z.internal_heap(regions)
     py = r.eval("__import__('gc').mem_free()")
+    r.run(PY_RUN)
+    run = r.eval("_py_run()")
     there = folder is None or folder in r.eval("__import__('os').listdir(%r)" % CARTS)
-    return free, big, sum(h[3] for h in regions), py, there
+    return free, big, sum(h[3] for h in regions), py, run, there
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -1914,7 +1935,8 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
     with zero.repl(clean=False) as r:
         idle = _carts_heap(r)
         kept = {p: r.read(p) for p, size in r.tree(calc).items() if size >= 0}
-    print("idle: internal %d free, %d largest, %d low-water; Python heap %d free" % idle[:4])
+    print("idle: internal %d free, %d largest, %d low-water; Python heap %d free, "
+          "%d largest run" % idle[:5])
     sessions = [        # (name, folder, keys, whether it lands)
         ("bullet_storm", "moybyte.bullet_storm.moy",
          _keys(*BULLET_STORM) + _keys("Enter", "Enter", wait=1500), True),
@@ -1935,13 +1957,14 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
                                                peek=r"official: install %s " % re.escape(folder))
             print("%s: the board's lines:\n  %s" % (name, "\n  ".join(lines)))
             if page is not None:
-                print("%s, the page open: internal %d free, %d largest, %d low-water"
-                      % ((name,) + page[:3]))
+                print("%s, the page open: internal %d free, %d largest, %d low-water; "
+                      "Python heap %d free, %d largest run" % ((name,) + page[:5]))
+                zero.take("zero python largest run, %s just installed" % name, page[4] / 1024.0)
             done = [ln for ln in lines if "official: install %s " % folder in ln]
             with zero.repl(clean=False) as r:
                 heap = _carts_heap(r, folder)
-            print("%s: internal %d free, %d largest, %d low-water; Python heap %d free; "
-                  "landed %s" % ((name,) + heap))
+            print("%s: internal %d free, %d largest, %d low-water; Python heap %d free, "
+                  "%d largest run; landed %s" % ((name,) + heap))
             zero.take("zero internal free after %s" % name, heap[0] / 1024.0)
             zero.take("zero internal largest after %s" % name, heap[1] / 1024.0)
             refused = bool(done) and done[-1].endswith(" idle") and any(
@@ -1949,12 +1972,12 @@ def test_get_carts_installs_and_reinstalls_on_the_board(zero, mirror, tmp_path):
             if lands:
                 assert done and done[-1].endswith(" done"), \
                     "%s: the board did not install it: %s" % (name, lines[-8:])
-                assert heap[4], "%s: the board said done but its store has no %s" % (
+                assert heap[5], "%s: the board said done but its store has no %s" % (
                     name, folder)
             else:
                 assert refused, \
                     "%s: the board did not stop it at the prompt: %s" % (name, lines[-8:])
-                assert not heap[4], "%s: refused, yet the store has %s" % (name, folder)
+                assert not heap[5], "%s: refused, yet the store has %s" % (name, folder)
             assert page[0] >= PAGE_FREE, \
                 "%s: the board's internal heap is %d bytes free with its page open" % (
                     name, page[0])
