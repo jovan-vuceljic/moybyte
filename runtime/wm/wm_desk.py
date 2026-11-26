@@ -114,6 +114,7 @@ class _BackdropLayer(Layer):
         self._fed_drawn = 0           # the `_fed` the cache's column was painted at
         self._mark = False            # the column could show its focus mark as it drew
         self._bar_owed = False        # the windows' chips moved since the cache's bar
+        self._bar_stop = None         # the desk bar's stop the keys were on as it drew
         self._popped = False          # the column's last paint showed a popover
         self._pop = array("i", [0] * 4)
         self._col_at = None           # the `_icon_rects` `_col` was made of
@@ -181,6 +182,15 @@ class _BackdropLayer(Layer):
                 wm._gesture_hist = []
                 wm._rest = None
                 self._bar_owed = True
+        # The keys walked onto, along or off the desk's bar: its focus mark
+        # is the bar's, which the cache holds as it was, so the bar is drawn
+        # again over it and taken in.
+        bl = self.ws.bar_layer
+        stop = bl.focus if bl.focus_where == "desk" else None
+        if stop != self._bar_stop:
+            self._bar_stop = stop
+            self._bar_owed = True
+            wm._desk_streak = 0
         if wm.full_cover() >= 0:
             # A full-screen window covers the desk, its bar and the shadows
             # cast on it: nothing here shows, so nothing is drawn. Leaving

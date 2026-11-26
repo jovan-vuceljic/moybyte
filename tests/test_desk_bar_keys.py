@@ -13,7 +13,7 @@ import moybyte
 from runtime import moy_input as _mi
 from runtime import moy_log
 from runtime.status_items import ITEMS
-from ws_helpers import build_desktop_ws, make_drv
+from ws_helpers import build_desktop_ws, make_drv, no_unlock_banner
 
 WALK = ["menu", "settings/chip", "files/chip", "wifi", "battery", "clock"]
 WALK_ITEM = WALK[:3] + ["0/item"] + WALK[3:]
@@ -51,7 +51,7 @@ def _with_item(ws, drv):
 
 
 def _desk(tmp_path):
-    ws = build_desktop_ws(tmp_path, panel_diagonal_in=7.0)
+    ws = no_unlock_banner(build_desktop_ws(tmp_path, panel_diagonal_in=7.0))
     drv = make_drv(ws)
     for _ in range(3):
         drv.frame(1 / 30)
