@@ -543,7 +543,7 @@ static uint32_t sgr_at(const uint8_t *p, uint32_t n, uint32_t i, int *tone) {
     }
     if (p[j] == 'm') {
         // the parameters, in order: the last that names an ink wins, and a
-        // ground holds until 49 or a reset
+        // ground holds until 49 or a reset, reverse until 27 or a reset
         int par[16], np = 0, v = 0, any = 0;
         for (uint32_t k = i + 2;; k++) {
             if (k < j && is_digit(p[k])) {
@@ -561,13 +561,16 @@ static uint32_t sgr_at(const uint8_t *p, uint32_t n, uint32_t i, int *tone) {
             }
         }
         int theme = MOY_UI_TONE_OF(*tone), ink = MOY_UI_TONE_INK(*tone);
-        int ground = MOY_UI_TONE_GROUND(*tone);
+        int ground = MOY_UI_TONE_GROUND(*tone), rev = *tone & MOY_UI_TONE_REV;
         for (int q = 0; q < np; q++) {
             int c = par[q];
             if (c == 0 || c == 39 || c == 22) {
                 theme = MOY_UI_TT_TEXT;
                 ink = 0;
                 ground = c == 0 ? 0 : ground;
+                rev = c == 0 ? 0 : rev;
+            } else if (c == 7 || c == 27) {
+                rev = c == 7 ? MOY_UI_TONE_REV : 0;
             } else if (c == 2) {
                 theme = MOY_UI_TT_DIM;
                 ink = 0;
@@ -601,7 +604,7 @@ static uint32_t sgr_at(const uint8_t *p, uint32_t n, uint32_t i, int *tone) {
                 }
             }
         }
-        *tone = theme | (ink << 8) | (ground << 16);
+        *tone = theme | (ink << 8) | (ground << 16) | rev;
     }
     return j + 1;
 }
@@ -1151,8 +1154,13 @@ static void print_run(void *ctx, int tone, uint32_t a, uint32_t b, int col) {
     int x = d->tx0 + (at - left) * cell;
     int ink = MOY_UI_TONE_INK(tone), ground = MOY_UI_TONE_GROUND(tone);
     int ci = ink ? ink - 1 : v[MOY_UI_TV_TONE0 + MOY_UI_TONE_OF(tone)];
-    if (ground) {
-        rect(d, x, d->y, cols_in(p, pa, pb) * cell, lh, ground - 1);
+    int gi = ground - 1;
+    if (tone & MOY_UI_TONE_REV) {       // reversed: the ink fills, the text takes the ground
+        gi = ci;
+        ci = ground ? ground - 1 : v[MOY_UI_TV_BG];
+    }
+    if (gi >= 0) {
+        rect(d, x, d->y, cols_in(p, pa, pb) * cell, lh, gi);
     }
     // the half and whole blocks (U+2580, U+2584, U+2588) are the run's own
     // fills, whole cells and seamless row to row, as pixel art draws them;

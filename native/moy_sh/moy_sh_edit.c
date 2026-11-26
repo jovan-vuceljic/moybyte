@@ -55,6 +55,7 @@
 #define TAB 8
 #define TITLE moy_term_accent((char[MOY_TERM_ACCENT_BYTES]){0})  // the block's own
 #define DIM "\x1b[2m"
+#define REV "\x1b[7m"
 #define PLAIN "\x1b[0m"
 #define CTRL(c) ((c) & 0x1F)
 
@@ -91,6 +92,9 @@ typedef struct {
     // vi: the same record, with its modes, register and undo
     int vi;                             // 0 edit, 1 vi, 2 read-only (view, less, more)
     int mode;                           // VI_NORMAL, VI_INSERT, VI_LINE
+    int vis;                            // VISUAL (in NORMAL): 'v' charwise, 'V' linewise, 0 not
+    int eol;                            // VISUAL's `$`: the cursor on its line's break
+    size_t anchor;                      // VISUAL: the selection's other end
     int count, opcount;                 // the counts typed before a command, before its motion
     int op;                             // the operator or prefix waiting for its next key
     char line[MSG_CAP];                 // the `:`, `/` or `?` line being typed
@@ -669,7 +673,20 @@ static void ed_close(moy_sh_app_t *a, void *st) {
 
 // -- the screen ---------------------------------------------------------------------
 
-static void put_line(moy_sh_app_t *a, const ed_t *e, size_t from, int left, int cols) {
+// The cells written from here reversed (`want`) or not, where that is not
+// what they are (`on`): what they are then.
+static int rev_to(moy_sh_app_t *a, int on, int want) {
+    if (on != want) {
+        moy_sh_app_write(a, want ? REV : PLAIN);
+    }
+    return want;
+}
+
+// The line at `from` from column `left`, `cols` wide, `$` marking a cut;
+// the selection [s0, s1) of the text in reverse video as far as the line
+// shows, and its line break, where selected, one reversed cell after it.
+static void put_line(moy_sh_app_t *a, const ed_t *e, size_t from, int left, int cols,
+                     size_t s0, size_t s1) {
     size_t end = line_end(e, from);
     int width = col_of(e, from, end);
     int cut = width - left > cols - (left > 0);
@@ -677,7 +694,7 @@ static void put_line(moy_sh_app_t *a, const ed_t *e, size_t from, int left, int 
     if (left > 0) {
         moy_sh_app_write(a, DIM "$" PLAIN);
     }
-    int col = 0, shown = 0, kept = 0;
+    int col = 0, shown = 0, kept = 0, rev = 0;
     for (size_t i = from; i < end; i++) {
         char c = at(e, i);
         if (cont(c)) {
@@ -686,22 +703,29 @@ static void put_line(moy_sh_app_t *a, const ed_t *e, size_t from, int left, int 
             }
             continue;
         }
-        int nx = advance(col, c);
+        int nx = advance(col, c), sel = i >= s0 && i < s1;
         kept = 0;
         if (c == '\t') {
             for (int k = col; k < nx; k++) {
                 if (k >= left && shown < room) {
+                    rev = rev_to(a, rev, sel);
                     moy_sh_app_write(a, " ");
                     shown++;
                 }
             }
         } else if (col >= left && shown < room) {
+            rev = rev_to(a, rev, sel);
             moy_sh_app_writen(a, &c, 1);
             shown++;
             kept = 1;
         }
         col = nx;
     }
+    if (end >= s0 && end < s1 && col >= left && shown < room) {
+        rev = rev_to(a, rev, 1);
+        moy_sh_app_write(a, " ");
+    }
+    rev_to(a, rev, 0);
     if (cut) {
         moy_sh_app_write(a, DIM "$" PLAIN);
     }
@@ -731,7 +755,7 @@ static void ed_draw(moy_sh_app_t *a, void *st) {
     for (int r = 0; r < h && (p < n || r == 0 || at(e, p - 1) == '\n'); r++) {
         snprintf(b, sizeof b, "\x1b[%d;1H", r + 2);
         moy_sh_app_write(a, b);
-        put_line(a, e, p, p == cur ? left : 0, cols);
+        put_line(a, e, p, p == cur ? left : 0, cols, 0, 0);
         p = line_end(e, p);
         if (p >= n) {
             break;
@@ -874,13 +898,26 @@ const moy_sh_app_ops_t moy_sh_edit_app = {
 //
 //   NORMAL  counts; h j k l and the arrows, w b e, 0 ^ $, gg G NG, Ctrl-F Ctrl-B
 //           Ctrl-D Ctrl-U; x X D dd dw de db d$ d0, yy Y yw y$, cc cw c$ C s S;
-//           p P J r ~; i a I A o O; u and Ctrl-R; .; / ? n N; ZZ ZQ
+//           p P J r ~; i a I A o O; u and Ctrl-R; .; / ? n N; ZZ ZQ; v V
+//   VISUAL  v charwise, V linewise: NORMAL's motions and counts, / ? n N, move
+//           the cursor, the selection's free end; o O the other end; d x, y,
+//           c s, J, ~ u U over the selection, D X, Y, C S R over its lines;
+//           v V to leave or change kind, Esc and : leave
 //   INSERT  the text; Enter, Backspace, Tab, the arrows; Esc back
 //   :       w [FILE], q, q!, wq, x, e[!] FILE, N, $, set nu, set nonu
 //
 // One undo step (the text before the last change, swapped back and forth by u
 // and Ctrl-R) and one register, each a block list as the text is: what a heap
 // without PSRAM holds beside the text.
+//
+// A VISUAL selection runs from where v or V was typed to the cursor, the
+// character at its later end included (V: their lines, the last one's break
+// included; `$` puts the cursor on its line's break, as vim's does). It draws
+// in reverse video (SGR 7) as far as each line shows, a selected line break
+// as one cell. An operator over it is one change, one undo step, and puts
+// the selection in the register (V's as lines, put as dd's are); `.`
+// repeats no VISUAL change. view, less and more have no VISUAL: their
+// register is put nowhere.
 
 enum { VI_NORMAL, VI_INSERT, VI_LINE };
 
@@ -907,8 +944,9 @@ static void vi_goto(ed_t *e, int ln) {
     move_to(e, vi_nonblank(e, start_of_line(e, ln)));
 }
 
-// In NORMAL the cursor sits on a character, never past a line's last, and
-// never on the line after a final newline.
+// In NORMAL the cursor sits on a character, never past a line's last (but
+// after VISUAL's `$`, on its break), and never on the line after a final
+// newline.
 static void vi_clamp(ed_t *e) {
     if (e->mode != VI_NORMAL) {
         return;
@@ -917,7 +955,7 @@ static void vi_clamp(ed_t *e) {
         move_to(e, start_of_line(e, vi_last(e)));
     }
     size_t s = line_start(e, e->cur), t = line_end(e, e->cur);
-    if (e->cur >= t && t > s) {
+    if (e->cur >= t && t > s && !e->eol) {
         size_t q = t - 1;
         while (q > s && cont(at(e, q))) {
             q--;
@@ -1289,6 +1327,75 @@ static void vi_join(moy_sh_app_t *a, ed_t *e, int count) {
     }
 }
 
+// The letters of [from, to) in place: `how` 'u' lower, 'U' upper, '~' each
+// the other way.
+static void vi_case(ed_t *e, size_t from, size_t to, int how) {
+    while (from < to) {
+        size_t off;
+        blk_t *b = seek(&e->t, from, &off);
+        for (; off < b->n && from < to; off++, from++) {
+            int c = (unsigned char)b->d[off];
+            int d = how == 'u' || (how == '~' && isupper(c)) ? tolower(c) : toupper(c);
+            if (d != c) {
+                b->d[off] = (char)d;
+                e->changed = 1;
+            }
+        }
+    }
+}
+
+// The VISUAL selection: [*from, *to) of the text, from its earlier end to
+// past the character at its later one (V: their lines, with the last one's
+// break).
+static void vi_sel(const ed_t *e, size_t *from, size_t *to) {
+    size_t n = len(e), lo = e->anchor, hi = e->cur;
+    if (hi < lo) {
+        lo = e->cur;
+        hi = e->anchor;
+    }
+    if (e->vis == 'V') {
+        lo = line_start(e, lo);
+        hi = line_end(e, hi);
+    }
+    if (hi < n) {
+        hi++;
+        while (hi < n && cont(at(e, hi))) {
+            hi++;
+        }
+    }
+    *from = lo;
+    *to = hi;
+}
+
+// VISUAL's operator `k` over the selection, which ends: d x delete, y yanks,
+// c s change, J joins its lines, ~ u U turn its letters; D X, Y and C S R
+// do so to its whole lines. A change is one undo step and no `.`.
+static void vi_vop(moy_sh_app_t *a, ed_t *e, int k) {
+    int whole = e->vis == 'V' || strchr("DXYCSR", k) != NULL;
+    int op = strchr("xXD", k) != NULL ? 'd' : k == 'Y' ? 'y' : strchr("sCSR", k) != NULL ? 'c' : k;
+    size_t from, to, lo = e->anchor < e->cur ? e->anchor : e->cur;
+    e->vis = whole ? 'V' : 'v';
+    vi_sel(e, &from, &to);
+    e->vis = e->eol = e->count = 0;
+    if (op != 'y') {
+        vi_snap(a, e);
+        e->dot_n = 0;
+    }
+    if (op == 'J') {
+        int n = to > from ? line_of(e, to - 1) - line_of(e, from) + 1 : 1;
+        move_to(e, from);
+        vi_join(a, e, n < 2 ? 2 : n);
+    } else if (op == '~' || op == 'u' || op == 'U') {
+        vi_case(e, from, to, op);
+        move_to(e, lo);
+    } else {
+        vi_apply(a, e, op, from, to, whole);
+        if (op == 'y') {
+            move_to(e, lo);
+        }
+    }
+}
+
 #define VI_VERT (-2)                    // a vertical move: the column aimed at stays
 #define VI_COUNT_MAX 99999              // a count's ceiling, its further digits dropped
 #define VI_DOT (-3)                     // `.`: the caller replays the last change
@@ -1578,14 +1685,20 @@ static int vi_normal(moy_sh_app_t *a, ed_t *e, int k, int rows) {
         case 'J':
             vi_join(a, e, cnt);
             break;
-        case '~':
-            for (int i = 0; i < cnt && e->cur < line_end(e, e->cur); i++) {
-                char c = at(e, e->cur);
-                char t = isupper((unsigned char)c) ? (char)tolower((unsigned char)c)
-                       : (char)toupper((unsigned char)c);
-                del_char(a, e);
-                vi_ins(a, e, &t, 1);
+        case '~': {
+            size_t t = line_end(e, e->cur), q = e->cur;
+            for (int i = 0; i < cnt && q < t; i++) {
+                while (++q < t && cont(at(e, q))) {
+                }
             }
+            vi_case(e, e->cur, q, '~');
+            move_to(e, q);
+            break;
+        }
+        case 'v':
+        case 'V':
+            e->vis = k;
+            e->anchor = e->cur;
             break;
         case 'i':
             e->mode = VI_INSERT;
@@ -1621,6 +1734,33 @@ static int vi_normal(moy_sh_app_t *a, ed_t *e, int k, int rows) {
             break;
     }
     return MOY_SH_APP_GO;
+}
+
+// One key in VISUAL: NORMAL's motions move the cursor, the selection's free
+// end; an operator acts on the selection; the keys that change the text in
+// NORMAL and are not VISUAL's do nothing.
+static int vi_visual(moy_sh_app_t *a, ed_t *e, int k, int rows) {
+    if (e->op != 0 || (k >= '1' && k <= '9') || (k == '0' && e->count > 0)) {
+        return vi_normal(a, e, k, rows);    // a prefix's second key, a count's digit
+    }
+    e->eol = k == '$' || k == MOY_SH_KEY_END;
+    if (k > 0 && k < 0x80 && strchr("vVoOdxXDyYcsCSRJ~uUpPriaIA.\x12", k) != NULL) {
+        if (k == 'v' || k == 'V') {
+            e->vis = e->vis == k ? 0 : k;
+        } else if (k == 'o' || k == 'O') {
+            size_t t = e->anchor;
+            e->anchor = e->cur;
+            move_to(e, t);
+        } else if (strchr("pPriaIA.\x12", k) == NULL) {
+            vi_vop(a, e, k);
+        }
+        e->count = 0;
+        return MOY_SH_APP_GO;
+    }
+    if (k == ':') {
+        e->vis = 0;                     // the `:` line takes no range
+    }
+    return vi_normal(a, e, k, rows);
 }
 
 // One key in INSERT.
@@ -1698,7 +1838,7 @@ static int vi_line_key(moy_sh_app_t *a, ed_t *e, int k) {
 
 // One key, whatever the mode; the change it starts recorded for `.`.
 static int vi_key(moy_sh_app_t *a, ed_t *e, int k, int rows) {
-    if (e->mode == VI_NORMAL && e->op == 0 && !e->replaying && e->vi != 2
+    if (e->mode == VI_NORMAL && e->op == 0 && !e->replaying && e->vi != 2 && !e->vis
             && vi_starts_change(k)) {
         vi_snap(a, e);
         e->recording = 1;
@@ -1727,6 +1867,9 @@ static int vi_key(moy_sh_app_t *a, ed_t *e, int k, int rows) {
     } else if (k == 0x1b) {
         e->op = 0;
         e->count = e->opcount = 0;
+        e->vis = e->eol = 0;
+    } else if (e->vis) {
+        r = vi_visual(a, e, k, rows);
     } else {
         r = vi_normal(a, e, k, rows);
     }
@@ -1773,6 +1916,10 @@ static void vi_draw(moy_sh_app_t *a, void *st) {
     int ccol = col_of(e, cur, e->cur);
     int left = ccol >= tcols - 1 ? ccol - tcols / 2 : 0;
     int last = vi_last(e);
+    size_t s0 = 0, s1 = 0;
+    if (e->vis) {
+        vi_sel(e, &s0, &s1);
+    }
     for (int r = 0; r < h; r++) {
         snprintf(b, sizeof b, "\x1b[%d;1H", r + 1);
         moy_sh_app_write(a, b);
@@ -1785,7 +1932,7 @@ static void vi_draw(moy_sh_app_t *a, void *st) {
             snprintf(b, sizeof b, DIM "%3d " PLAIN, lnr + 1);
             moy_sh_app_write(a, b);
         }
-        put_line(a, e, p, p == cur ? left : 0, tcols);
+        put_line(a, e, p, p == cur ? left : 0, tcols, s0, s1);
         p = line_end(e, p);
         if (p < n) {
             p++;
@@ -1798,9 +1945,10 @@ static void vi_draw(moy_sh_app_t *a, void *st) {
         moy_sh_app_writen(a, e->line, e->line_n);
     } else if (e->msg[0]) {
         moy_sh_app_clip(a, e->msg, cols - 16);
-    } else if (e->mode == VI_INSERT) {
+    } else if (e->mode == VI_INSERT || e->vis) {
         moy_sh_app_write(a, TITLE);
-        moy_sh_app_write(a, "-- INSERT --" PLAIN);
+        moy_sh_app_write(a, e->mode == VI_INSERT ? "-- INSERT --" PLAIN
+                            : e->vis == 'V' ? "-- VISUAL LINE --" PLAIN : "-- VISUAL --" PLAIN);
     } else {
         snprintf(b, sizeof b, "\"%s\"%s%s", e->name, e->changed ? " [+]" : "",
                  e->vi == 2 ? " [read-only]" : "");

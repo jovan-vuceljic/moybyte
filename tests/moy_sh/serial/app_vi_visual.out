@@ -1,0 +1,608 @@
+> sh printf 'one two three\nfour five six\nseven eight nine\nten eleven twelve\n' > /v.txt
+SH end 0
+> sh vi /v.txt
+SH one two three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt"                                                                     1,1
+SH app vi
+> sh wv2l
+SH one two three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH -- VISUAL --                                                                1,7
+SH app vi
+> sh oh
+SH one two three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH -- VISUAL --                                                                1,4
+SH app vi
+> sh d
+SH one three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 1,4
+SH app vi
+> sh $p
+SH one three two
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                1,13
+SH app vi
+> sh u
+SH one three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 1,9
+SH app vi
+> sh ^R
+SH one three two
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                1,13
+SH app vi
+> sh u
+SH one three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 1,9
+SH app vi
+> sh jVjy
+SH one three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 2,9
+SH app vi
+> sh Gp
+SH one three
+SH four five six
+SH seven eight nine
+SH ten eleven twelve
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 5,1
+SH app vi
+> sh ggjVd
+SH one three
+SH seven eight nine
+SH ten eleven twelve
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 2,1
+SH app vi
+> sh vjJ
+SH one three
+SH seven eight nine ten eleven twelve
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                2,17
+SH app vi
+> sh wvec
+SH one three
+SH seven eight nine  eleven twelve
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH -- INSERT --                                                               2,18
+SH app vi
+> sh NEW^[
+SH one three
+SH seven eight nine NEW eleven twelve
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                2,20
+SH app vi
+> sh V~
+SH one three
+SH SEVEN EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                2,20
+SH app vi
+> sh vV
+SH one three
+SH SEVEN EIGHT NINE new ELEVEN TWELVE 
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH -- VISUAL LINE --                                                          2,20
+SH app vi
+> sh v
+SH one three
+SH SEVEN EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH -- VISUAL --                                                               2,20
+SH app vi
+> sh v
+SH one three
+SH SEVEN EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                2,20
+SH app vi
+> sh 0v4l^[
+SH one three
+SH SEVEN EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 2,5
+SH app vi
+> sh 0v4ld
+SH one three
+SH  EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 2,1
+SH app vi
+> sh u
+SH one three
+SH SEVEN EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 2,5
+SH app vi
+> sh ^R
+SH one three
+SH  EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 2,1
+SH app vi
+> sh gg$v$d
+SH one thre EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH ~
+SH "v.txt" [+]                                                                 1,9
+SH app vi
+> sh :wq^M
+SH end 0
+> sh cat /v.txt
+SH one thre EIGHT NINE new ELEVEN TWELVE
+SH four five six
+SH seven eight nine
+SH end 0
+[exit 0]

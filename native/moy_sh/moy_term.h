@@ -7,10 +7,11 @@
 // THE GRID is a ring of `lines` lines of `cols` cells: the screen is its last
 // `rows`, the lines above it the scrollback, which a line scrolled off the
 // screen's top joins and the oldest leaves when the ring is full. A cell is
-// one word: the codepoint in its low 20 bits (one past U+FFFFF is U+FFFD),
-// the ink above (MOY_TERM_FG_AT: 0-15 the ANSI colours, which a text view
-// draws in the theme's tones, MOY_TERM_INK the default, MOY_TERM_PAL and up
-// the console's sixteen base colours exactly), the dim bit, and the ground
+// one word: the codepoint in its low 19 bits (one past U+7FFFF is U+FFFD:
+// the planes above hold no character a console's font draws), the reverse
+// bit, the ink above (MOY_TERM_FG_AT: 0-15 the ANSI colours, which a text
+// view draws in the theme's tones, MOY_TERM_INK the default, MOY_TERM_PAL and
+// up the console's sixteen base colours exactly), the dim bit, and the ground
 // (MOY_TERM_BG_AT: 0 none, 1-16 a base colour). The
 // ring's memory comes from the caller's `alloc` at moy_term_new and resize
 // (PSRAM on a board), nothing else is kept.
@@ -23,12 +24,12 @@
 //                         below or above, to a column, a row, a place
 //   J (0 1 2 3)           erase below, above, the screen, the scrollback
 //   K (0 1 2)             erase right, left, the line
-//   m                     SGR: 0 reset, 2 dim, 22 normal, 30-37 and 90-97 the
-//                         ink, 39 the default, 38;5;N its first sixteen,
-//                         38;2;R;G;B the nearest base colour; 48;2;R;G;B and
-//                         48;5;N (N < 16: that base colour) the ground, 49
-//                         none; the rest (bold, 40-47, inverse) are read and
-//                         drop
+//   m                     SGR: 0 reset, 2 dim, 22 normal, 7 reverse, 27 not,
+//                         30-37 and 90-97 the ink, 39 the default, 38;5;N
+//                         its first sixteen, 38;2;R;G;B the nearest base
+//                         colour; 48;2;R;G;B and 48;5;N (N < 16: that base
+//                         colour) the ground, 49 none; the rest (bold,
+//                         40-47) are read and drop
 //   s u, ESC 7 ESC 8      the cursor saved and restored
 //   ? 25 h / l            the cursor shown and hidden
 // and ESC D (index), ESC E (next line), ESC M (up a row), ESC c (reset).
@@ -50,9 +51,11 @@
 #define MOY_TERM_FG_AT 20
 #define MOY_TERM_INK 16u                // the default ink
 #define MOY_TERM_PAL 32u                // + i: base colour i, exactly
+#define MOY_TERM_REV (1u << 19)
 #define MOY_TERM_DIM (1u << 26)
 #define MOY_TERM_BG_AT 27
-#define MOY_TERM_CP(cell) ((cell) & 0xFFFFFu)
+#define MOY_TERM_CP_MAX 0x7FFFFu
+#define MOY_TERM_CP(cell) ((cell) & MOY_TERM_CP_MAX)
 #define MOY_TERM_FG(cell) (((cell) >> MOY_TERM_FG_AT) & 0x3Fu)
 #define MOY_TERM_BG(cell) ((cell) >> MOY_TERM_BG_AT)
 
@@ -66,8 +69,9 @@ int moy_term_nearest(uint32_t rgb);
 // base colour `base` (0-15) as an ink's or (`ground`) a ground's SGR, its RGB
 // (38;2 / 48;2; 38;5;N in a build that links no palette), into `o`, which
 // holds MOY_TERM_SGR_BYTES. The accent is what the shell marks with: the
-// typed line, a text app's title and selection: a reset, then its ink, into
-// `o` (MOY_TERM_ACCENT_BYTES), which it returns.
+// typed line, a text app's title and mode, top's selected row (vi's
+// selection is reverse video): a reset, then its ink, into `o`
+// (MOY_TERM_ACCENT_BYTES), which it returns.
 #define MOY_TERM_SGR_BYTES 24u
 #define MOY_TERM_ACCENT_BYTES (MOY_TERM_SGR_BYTES + 4u)
 #define MOY_TERM_ACCENT 12              // the palette's blue
@@ -103,9 +107,9 @@ uint32_t moy_term_gen(const moy_term_t *t);
 void moy_term_take(moy_term_t *t, uint32_t out[3]);
 
 // The view's line `i` (0 the oldest held) as UTF-8 with an SGR escape where
-// its ink or its ground changes, its trailing blanks dropped (a blank with a
-// ground is kept), into `out` (NUL-terminated, cut at a character that does
-// not fit): its bytes.
+// its ink, its ground or its reverse changes, its trailing blanks dropped (a
+// blank with a ground or reversed is kept), into `out` (NUL-terminated, cut
+// at a character that does not fit): its bytes.
 size_t moy_term_line(const moy_term_t *t, int i, char *out, size_t cap);
 
 // The bytes a line's buffer holds a column, plus 8: a cell's ANSI ink and

@@ -119,6 +119,8 @@ through no other face, since the screen face draws the app on a screen of
 its own. `host/app_main.c` runs a text app on an app heap that refuses
 any request over a cap, and `test_the_editor_asks_for_no_text_bigger_than_a_block`
 opens, grows, undoes and saves files many blocks long in `edit` and `vi`
-under a cap of one block. `tests/test_moy_term.py` holds the grid's escapes,
-`tests/test_terminal.py` the Terminal app and its text apps over the host
-binding, `tests/test_recovery_floor.py` the editor on the floor.
+under a cap of one block, and yanks and deletes them whole in vi's VISUAL.
+`tests/test_moy_term.py` holds the grid's escapes, `tests/test_terminal.py`
+the Terminal app and its text apps over the host binding (vi's selection
+in reverse video among them), `tests/test_recovery_floor.py` the editor on
+the floor.
