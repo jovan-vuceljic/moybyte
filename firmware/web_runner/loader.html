@@ -1,5 +1,14 @@
-<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><title>Moybyte</title>
-<body style="font:16px system-ui,sans-serif;margin:2em;background:#1d2b53;color:#fff1e8"><div id=s>Loading the console...</div>
+<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width"><meta name=color-scheme content="light dark"><title>Moybyte</title>
+<style>
+:root{--g:#eceef3;--c:#fff;--t:#15161d;--d:#5f6478;--a:#4c3fd6;--o:#fff;--e:#cfd3dc;--s:#f4f5f8}
+@media(prefers-color-scheme:dark){:root{--g:#0f1127;--c:#181b38;--t:#eef0fb;--d:#a1a6cc;--a:#b6a8f7;--o:#15123a;--e:#33385f;--s:#23274b}}
+body{font:16px/1.4 system-ui,sans-serif;margin:0;padding:16px;background:var(--g);color:var(--t)}
+#s{max-width:440px;margin:0 auto;padding:20px;border-radius:8px;background:var(--c);border:1px solid var(--e)}
+#s p{margin:.8em 0}#s p+p{color:var(--d)}#s input{accent-color:var(--a)}
+#s button{font:inherit;padding:.7em 1.2em;margin:1em .6em 0 0;border-radius:4px;border:1px solid var(--e);background:var(--s);color:var(--t)}
+#s button:first-of-type{background:var(--a);border-color:var(--a);color:var(--o);font-weight:600}
+</style>
+<body><div id=s>Loading the console...</div>
 <script>
 // The loader (docs/web_console_online_2026-11.md §3): the page a board's root
 // serves in place of the console. It asks the board which pack its image
@@ -99,6 +108,9 @@ return;
 // again (About's Fast console on iPhone row, settings_rows.py). The board
 // opens the door, then this page goes there. self.moyFast tells the console
 // page the board has the door.
+// The page's colours are the moy seed theme's, light and dark as the browser
+// prefers (native/moy_ui/themes/moy.json: desktop, surface, ink, ink_dim,
+// accent, selection_ink, border, surface_alt).
 self.moyFast = s.tls ? 1 : 0;
 if (s.tls && location.protocol == "http:") {
 const K = "moy.fast", ask = /fast/.test(location.search);
@@ -107,10 +119,7 @@ try { if (ask) localStorage.removeItem(K); fast = localStorage.getItem(K); } cat
 if (fast == null && (ask || /iPhone|iPad|iPod/.test(navigator.userAgent)
 || navigator.platform == "MacIntel" && navigator.maxTouchPoints > 1)) {
 const [go, keep] = await new Promise((ok) => {
-S.innerHTML = "<style>#s button{font:inherit;padding:.7em 1.2em;margin:1em .6em 0 0;border-radius:8px;"
-+ "border:1px solid;background:none;color:inherit}#s button:first-of-type"
-+ "{background:#29adff;border-color:#29adff;color:#1d2b53;font-weight:600}</style>"
-+ "<b style=font-size:1.4em>Make it faster on iPhone?</b><p>iPhones run the console slowly on this connection. "
+S.innerHTML = "<b style=font-size:1.3em>Make it faster on iPhone?</b><p>iPhones run the console slowly on this connection. "
 + "The fast way uses a secure link to your board.<p>Safari will warn that it can't check the board's certificate. "
 + "That's expected for a console on your own Wi-Fi: tap <b>Show Details</b>, then <b>visit this website</b>. "
 + "You only do this once.<p><label><input type=checkbox> Remember my choice</label><br>"
