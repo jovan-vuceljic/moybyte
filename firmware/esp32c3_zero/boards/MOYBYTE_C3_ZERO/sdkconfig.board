@@ -103,6 +103,15 @@ CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE_PATH="../../../../boards/MOYBYTE_C3_ZER
 # ESP-IDF's four segments, so a burst still lands; the dynamic buffers that
 # carry a frame up are made per frame.
 CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=4
+# The dynamic buffers each way are made per frame (about 1.6 KB each) and
+# held until lwIP or the radio is done with it, so their most is the peak a
+# burst can take of this heap: 12 each way where ESP-IDF's is 32 (51 KB). A
+# connection's window is four segments either way (above), and the page
+# holds two or three at once, so twelve carry what the windows let fly;
+# Espressif's own smallest set for this chip is six each way (the Wi-Fi
+# guide's "Minimum" rank, its reorder window 6 over 3 static buffers).
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=12
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=12
 
 # A CLOSED CONNECTION'S BLOCK GOES BACK IN SECONDS: lwIP keeps a closed TCP
 # connection's control block (208 bytes of this one heap) for twice the
