@@ -57,6 +57,7 @@ import os
 import time
 
 import moy_evq as _E
+from moy_store_base import cart_path as _cart_path
 
 try:
     import moy_log as _L
@@ -202,7 +203,7 @@ class Services:
         except OSError:
             return out
         for name in names:
-            folder = self.root + "/" + name
+            folder = _cart_path(self.root, name)
             try:
                 m = json.loads(_read(folder + "/manifest.json"))
             except (OSError, ValueError):
