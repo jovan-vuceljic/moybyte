@@ -881,6 +881,24 @@ def _where(url):
     return "http://%s%s" % (ip, ":%d" % u.port if u.port else "")
 
 
+def _forget_only(ssid):
+    """Steps that forget network `ssid` from the panel by keys, or press
+    nothing. The panel's Forget names the row its cursor last stood on, and a
+    walk down to it ends on the last row heard, so Enter is sent only while
+    the focus is Forget and that row is `ssid`: another saved network there,
+    the board's own, would be the one forgotten. The js step's value is
+    "FORGET sent", or "FORGET withheld" and what the panel showed."""
+    from test_web_zero_wifi_e2e import _focus
+    press = ("(function () { return window.__moyState().then(function (s) { "
+             "var p = s.wifi_panel || {}, n = p.nets || []; "
+             "if (p.focus != 'forget' || n[n.length - 1] != %s) "
+             "return 'FORGET withheld ' + JSON.stringify([p.focus, n.length]); "
+             "send({type: 'kd', code: 13, mods: 0}); "
+             "setTimeout(function () { send({type: 'ku', code: 13, mods: 0}); }, 120); "
+             "return 'FORGET sent'; }); })()" % json.dumps(ssid))
+    return _focus(ssid=ssid) + _focus("forget") + [{"wait": 400}, {"js": press}, {"wait": 400}]
+
+
 def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
     """From the console's own Wi-Fi panel on the board's page: a network
     forgotten and saved (nothing dropped), never the one the board is on;
@@ -888,7 +906,7 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
     (the board comes back and the page says so), a move to it that works, and
     a move back. The passwords are the board's own saved ones, read over the
     cable and never printed."""
-    from test_web_zero_wifi_e2e import ENTER, _forget, _keys, _move, _panel, _say
+    from test_web_zero_wifi_e2e import ENTER, _keys, _move, _panel, _say
     _needs_password(zero)
     doc = json.loads((zero.before_files.get(STORE + "/wifi.json") or b"{}").decode())
     saved = {n["ssid"]: n.get("password") or "" for n in doc.get("networks", []) if n.get("ssid")}
@@ -902,7 +920,8 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
     gone, known = ("p.known.indexOf(%s) " + c + " && !p.card" for c in ("< 0", ">= 0"))
     if others:
         x = others[0]
-        steps = (_forget(x) + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")]
+        steps = (_forget_only(x)
+                 + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")]
                  + _move(x, WRONG_PASSWORD, 2)
                  + [_panel("p.card && p.card[0] == 'tell'", 90000), _say("FAILED")]
                  + _keys(ENTER) + [_panel("!p.card", 5000)]
@@ -916,18 +935,26 @@ def test_the_page_manages_the_boards_wifi(zero, mirror, tmp_path):
                     {"wait": 1000}, _say("MOVED")])
     else:
         # The one saved network in range is the one the board is on, and a
-        # board is never asked to forget that: another network in range is
-        # saved under a bench password, without a join, and that one forgotten.
-        near = [s for s in look["p"]["nets"] if s not in saved]
-        if not near:
-            pytest.skip("%s hears no network but its own: nothing to save and forget" % zero.name)
-        x = near[0]
+        # board is never asked to forget that: the last network heard (the
+        # row the keys reach Forget from, _forget_only) is saved under a
+        # bench password, without a join, and that one forgotten.
+        x = look["p"]["nets"][-1]
+        if x in saved:
+            pytest.skip("%s hears its own network last: no other row the keys can forget"
+                        % zero.name)
         secrets.append(BENCH_WIFI_PASSWORD)
         steps = (_move(x, BENCH_WIFI_PASSWORD, 1)
                  + [_panel(known % json.dumps(x)), {"wait": 1500}, _say("SAVED")]
-                 + _forget(x) + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")])
+                 + _forget_only(x)
+                 + [_panel(gone % json.dumps(x)), {"wait": 1500}, _say("FORGOT")])
     out = _wifi_browse(zero, zero.url, steps, tmp_path / "manage", secrets)
     forgot, saved_again = _tagged(out, "FORGOT"), _tagged(out, "SAVED")
+    if "FORGET withheld" in out:
+        if not others:
+            assert x in saved_again["p"]["known"], saved_again["p"]["known"]
+        assert forgot["w"][:2] == [True, on], forgot["w"]
+        pytest.skip("%s: the scan moved under the panel and Forget no longer named the "
+                    "network to forget: nothing pressed" % zero.name)
     assert x not in forgot["p"]["known"], forgot["p"]["known"]
     assert forgot["w"][:2] == [True, on], "forgetting dropped the network: %s" % (forgot["w"],)
     assert x in saved_again["p"]["known"], saved_again["p"]["known"]
