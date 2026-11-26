@@ -50,6 +50,7 @@ def _console(carts, size="320"):
     from ws_helpers import open_cart, quiesce
     ws = host_app.build_workstation(carts, **shots.SIZES[size])
     ws.look.set_theme("moy", persist=False, variant="dark")
+    ws.bar_layer.clock_text = lambda: "10:30"   # (runs compared are made minutes apart)
     drv = host_app.ConsoleDriver(ws)
 
     def frame():
