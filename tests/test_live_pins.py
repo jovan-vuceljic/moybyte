@@ -194,6 +194,7 @@ def test_the_pin_verbs_ride_the_socket_and_fall_back_to_the_batches(board):
         frame()
         time.sleep(0.01)
     assert g.read(2) == 0, "the write's level comes back pushed"
+    assert len(g.rt) == 1 and g.rt[0] >= 0, "...timed from the write (the meter)"
     assert _level(board, 21) == (1, 2)
     g.live_in(b"dA" + ROW + b"W" + BAD.to_bytes(4, "little", signed=True) + b"\x03")
     g.live_in(b"dA" + ROW + b"W" + BAD.to_bytes(4, "little", signed=True) + b"\x03")

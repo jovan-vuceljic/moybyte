@@ -36,6 +36,17 @@ becomes something people turn off.
 """
 
 import json
+import time
+
+try:
+    _ms = time.ticks_ms
+    _since = time.ticks_diff
+except AttributeError:                   # the host's CPython
+    def _ms():
+        return int(time.monotonic() * 1000)
+
+    def _since(a, b):
+        return a - b
 
 PROTOCOL_V = 1
 
@@ -70,6 +81,8 @@ class GpioLink:
         self._driven = {}        # pin -> the level last written, said again at a reopen
         self._opening = False    # the row's open to say
         self._said = None        # the pins watched as the board knows them
+        self._wrote = {}         # watched pin -> (level, ms) of a write not yet read back
+        self.rt = []             # ms from a write to its level read back, the last 64
 
     # -- the cart verbs ------------------------------------------------------
 
@@ -78,8 +91,21 @@ class GpioLink:
         n = self._pin(n)
         if n is None:
             return False
-        self._writes[n] = self._driven[n] = 1 if v else 0
+        v = 1 if v else 0
+        if n in self._watch and self._level.get(n) != v:
+            self._wrote[n] = (v, _ms())
+        self._writes[n] = self._driven[n] = v
         return True
+
+    def _heard(self, n, v):
+        """Pin n's level as the board reported it; a write it shows timed."""
+        self._level[n] = v
+        w = self._wrote.get(n)
+        if w is not None and w[0] == v:
+            del self._wrote[n]
+            self.rt.append(_since(_ms(), w[1]))
+            if len(self.rt) > 64:
+                self.rt.pop(0)
 
     def read(self, n):
         """The last level the board reported for pin n, or None if it has not
@@ -159,7 +185,7 @@ class GpioLink:
         if isinstance(reads, dict):
             for k, v in reads.items():
                 try:
-                    self._level[int(k)] = 1 if v else 0
+                    self._heard(int(k), 1 if v else 0)
                 except (TypeError, ValueError):
                     pass
         for err in doc.get("err") or ():
@@ -222,7 +248,7 @@ class GpioLink:
                 if v >= 0x80000000:
                     self._level.pop(n, None)
                 else:
-                    self._level[n] = 1 if v else 0
+                    self._heard(n, 1 if v else 0)
             return
         if pl[1:2] != b"A" or len(pl) < 8:
             return

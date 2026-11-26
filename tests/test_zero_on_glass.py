@@ -849,6 +849,47 @@ def test_the_page_s_requests_ride_its_live_socket(zero, mirror, tmp_path):
     assert arms["socket"][1]["reqs"] >= 3 and arms["socket"][3][15] >= 3, arms["socket"]
 
 
+PIN_LIGHT = "moybyte.pin_light.moy"
+PINS_STATE = ("window.__moyState().then(function (s) { return 'PINS ' + JSON.stringify("
+              "{gpio: s.gpio, live: s.live && {opens: s.live.opens, drops: s.live.drops}}); })")
+PIN_PRESSES = 24
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_a_pin_write_reaches_the_pin_and_comes_back(zero, mirror, tmp_path):
+    """Pin Light on the page, its A pressed again and again: each press is a
+    pin_write of the board's LED and its next draw a pin_read of it, so the
+    page's queue (firmware/web_runner/gpio_link.py) times each write to the
+    board's report of that level. Two arms: the live socket's pins
+    (native/moy_net/moy_live.c, THE PINS) and /gpio's 33 ms batches
+    (`?pins=0`), the write-to-read-back round trips of each taken."""
+    _needs_password(zero)
+    roster = board_config.roster_only(str(zero.dir)) + board_config.roster_install(str(zero.dir))
+    if PIN_LIGHT[:-4] not in roster:
+        pytest.skip("%s's roster has no Pin Light" % zero.name)
+    arms = {}
+    for arm, extra in (("http", "&pins=0"), ("socket", "")):
+        steps = sign_in(zero) + [
+            {"waitFor": "window.__moyState().then(function (s) { return !!(s.gpio && "
+                        "s.gpio.live === %s); })" % ("false" if extra else "true"),
+             "timeout": 120000},
+            {"wait": 3000}] + _keys(*("z",) * PIN_PRESSES, wait=400) + [{"js": PINS_STATE}]
+        out = _browse(zero, zero.url, steps, tmp_path / arm,
+                      query="?handheld=1&dev=1&start=1&cart=%s%s" % (PIN_LIGHT, extra))
+        got = _tagged(out, "PINS")
+        assert got and got["gpio"], out[-2000:]
+        rt = got["gpio"]["rt"]
+        assert len(rt) >= PIN_PRESSES // 2, (arm, got)
+        arms[arm] = rt
+        med, p90 = Z.rtt(rt)
+        zero.take("zero pin write to read-back median %s" % arm, med, rt)
+        zero.take("zero pin write to read-back p90 %s" % arm, p90, rt)
+        print("%s pins over %s: write to read-back over %d presses: min %d, median %.1f, "
+              "p90 %.1f, max %d ms; live %s" % (zero.name, arm, len(rt), min(rt), med, p90,
+                                                max(rt), got["live"]))
+    assert Z.rtt(arms["socket"])[0] < Z.rtt(arms["http"])[0], arms
+
+
 TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
         "{term: s.term, live: s.live && {opens: s.live.opens, drops: s.live.drops}}); })")
 

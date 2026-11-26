@@ -1372,6 +1372,8 @@ def state_json():
     lk = getattr(_S["ws"], "link", None)
     st["link_stats"] = lk.stats() if lk is not None else None
     st["devs"] = _live_devs()
+    g = _S.get("gpio")
+    st["gpio"] = {"live": g.live, "rt": g.rt} if g is not None else None
     return json.dumps(st)
 
 
@@ -2041,7 +2043,7 @@ def live_pump(gap_ms=0, hidden=0):
     else:
         st["gap"] = st["hidden"] = False
     import moy_net
-    out = moy_net.live_take()
+    out = moy_net.live_take() or b""
     g = _S.get("gpio")
     if g is not None:
         for pl in g.take_live():
