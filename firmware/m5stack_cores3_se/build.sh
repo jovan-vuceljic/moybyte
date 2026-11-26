@@ -43,6 +43,7 @@ moybyte_patch_gc_run_hints
 moybyte_patch_gc_meters
 moybyte_patch_slice_store
 moybyte_patch_fatfs_lfn
+moybyte_patch_fatfs_close
 moybyte_patch_import_cache
 moybyte_patch_map_load
 moybyte_patch_gc_split_reserve
