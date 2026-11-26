@@ -96,6 +96,7 @@ _SIGS = (
     ("mg_shift_rect", [_P, _P, _Z, _I, _I, _I, _I, _I, _I, _I], None),
     ("mg_shift_clip", [_I, _I, _I, _I, _I, _I, _I, _I, _P], _I),
     ("mg_copy_block", [_P, _Z, _I, _P, _Z, _I, _I, _I, _I, _I, _I, _I], None),
+    ("mg_restore_under", [_P, _Z, _I, _I, _I, _I, _I, _P, _P, _Z], None),
     ("mg_block_clip", [_I, _I, _I, _I, _P], _I),
     ("mg_blit565", [_P, _Z, _I, _I, _I, _I, _P, _Z, _I, _I, _I,
                     _I, _I, _I, _I], None),
@@ -477,6 +478,15 @@ def copy_block(dst, dstride, src, sstride, dx, dy, sx, sy, w, h):
     _lib().mg_copy_block(ctypes.cast(darr, _P), dcap, int(dstride), ctypes.cast(sarr, _P),
                          scap, int(sstride), int(dx), int(dy), int(sx), int(sy), int(w),
                          int(h))
+
+
+def restore_under(buf, stride, x, y, w, h, saved, drawn):
+    arr, cap = _buf(buf)
+    sarr, scap = _rbuf(saved)
+    darr, dcap = _rbuf(drawn)
+    _lib().mg_restore_under(ctypes.cast(arr, _P), cap, int(stride), int(x), int(y), int(w),
+                            int(h), ctypes.cast(sarr, _P), ctypes.cast(darr, _P),
+                            min(scap, dcap))
 
 
 def block_clip(dw, dh, sw, sh, dx, dy, sx, sy, w, h):

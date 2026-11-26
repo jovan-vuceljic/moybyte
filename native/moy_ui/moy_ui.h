@@ -329,9 +329,10 @@ int moy_ui_icon_ink(int slot, int box, int *x0, int *x1);
 // An icon mask through a sink (docs/history/look_2026-10.md step 16): the glyph at
 // index byte `code` of font `font` (an icon set's file, tools/make_icons.py;
 // moy_text_glyph, never decoded as text) at (x, y), the top left of its
-// square, blended in colour index `ci` at scale 1. MOY_UI_BAD for a font that
-// is not loaded or not version 2.
-int moy_ui_sink_mask(const moy_ui_sink_t *s, uint32_t font, int code, int x, int y, int ci);
+// square, blended in colour index `ci` at `alpha` (0..256) of its coverage, at
+// scale 1. MOY_UI_BAD for a font that is not loaded or not version 2.
+int moy_ui_sink_mask(const moy_ui_sink_t *s, uint32_t font, int code, int x, int y, int ci,
+                     int alpha);
 // Every primitive counts its entry: the gate's "one crossing per widget".
 void moy_ui_count_call(void);
 uint32_t moy_ui_calls(void);
