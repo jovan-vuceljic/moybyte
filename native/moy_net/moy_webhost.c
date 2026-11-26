@@ -26,13 +26,19 @@
 //                                              without the upgrade, {"live":1,"link":0|1}
 //                                              and "kinds" where it relays any, "term":1
 //                                              where it carries the web terminal, "hints":1
-//                                              where it says what changed (the
+//                                              where it says what changed, "req":N where it
+//                                              takes the routes below on it (THE REQUESTS:
+//                                              N the most plaintext a frame up carries) (the
 //                                              probe: whether this board relays its radio
 //                                              to the page, the device kinds it relays,
 //                                              moy_dev_relayed's text, and its shell; such
 //                                              a board answers GET /term 404)
 //   anything in the configured `defer`         sealed, then parked for the VM (/run, /update,
 //                                              /console.json; "*": every path)
+//
+// Every route but /auth, /live and /term is asked on the live socket as well,
+// where the board builds it (THE REQUESTS, below): the same route, sign-in
+// check and park, its answer the same bytes in the socket's frames.
 //
 // A SEALED ROUTE takes a request of a signed-in session and nothing else
 // (moy_seal.h: the session, the sequence number and the tag ride the query;
@@ -119,6 +125,7 @@
 #pragma weak moy_gpio_pins
 #include "moy_vol.h"
 #include "moy_webauth.h"
+#include "moy_ws.h"
 
 // The bundle is the add-on cart's pack (moy_page.h); the stamp of the one this
 // image names is native/moy_web's, where the image links it.
@@ -157,6 +164,9 @@ static const moy_htab_mem_t STORE_MEM = { moy_store_alloc, moy_store_free };
 #pragma weak moy_web_live_term
 #pragma weak moy_live_store_mine
 #pragma weak moy_live_hint
+#pragma weak moy_web_live_req
+#pragma weak moy_live_req_take
+#pragma weak moy_live_req_say
 
 #define CHUNK_MIN 8192
 #define CHUNK_HEAD 8
@@ -196,6 +206,9 @@ typedef struct {
     int lfd;                        // the listener, -1 when none
     int cur;                        // the connection being served, -1 when none
     int pfd;                        // the parked connection, -1 when none
+    uint8_t plive;                  // ...or the parked request is the live socket's
+    uint16_t pid;                   // ...its id
+    uint32_t pgen;                  // ...and its socket's session (moy_live.h)
     int afd;                        // the connection a PAKE answers, -1 when none
     uint8_t closing, taken;
     uint16_t port;
@@ -226,8 +239,11 @@ typedef struct {
 
 static web_t *W;
 
+struct lout;
+
 typedef struct {
-    int fd;                         // -1: into buf
+    int fd;                         // -1: into buf, or into `lv`
+    struct lout *lv;                // a live socket's request's answer (THE REQUESTS)
     char *buf;
     size_t n, cap;
     int err;
@@ -241,6 +257,8 @@ typedef struct {
     uint8_t paged;                  // the target came under the page's prefix
     uint8_t lasting;                // ...and that prefix names this image's page
 } out_t;
+
+static void lout_raw(out_t *o, const char *p, size_t n);
 
 // -- the host's state -----------------------------------------------------------
 
@@ -322,6 +340,11 @@ static void req_done(void) {
     W->req = W->head;
 }
 
+// A request waits for the VM's answer: a connection's or the live socket's.
+static int parked(void) {
+    return W->pfd >= 0 || W->plive;
+}
+
 int moy_web_start(const moy_web_cfg_t *cfg) {
     if (!ensure()) {
         return MOY_ENOMEM;
@@ -382,6 +405,7 @@ static void stop_now(void) {
     close_conn(&W->lfd);
     close_conn(&W->pfd);
     close_conn(&W->afd);
+    W->plive = 0;                   // the page's socket asks again
     if (W->cur < 0) {
         req_done();                 // a stop from inside a route leaves serve() its request
     }
@@ -447,7 +471,7 @@ void moy_web_state(moy_web_state_t *out) {
     out->serving = W->lfd >= 0 && !W->closing;
     out->listening = W->lfd >= 0;
     out->closing = W->closing;
-    out->parked = W->pfd >= 0;
+    out->parked = parked();
     out->port = W->port;
     out->requests = W->requests;
     out->events = W->events;
@@ -542,6 +566,10 @@ static void raw(out_t *o, const void *p, size_t n) {
     if (o->err || n == 0) {
         return;
     }
+    if (o->lv != NULL) {
+        lout_raw(o, p, n);
+        return;
+    }
     if (o->fd >= 0) {
         if (moy_http_send(o->fd, p, n) != 0) {
             o->err = 1;
@@ -581,6 +609,11 @@ static void frame(out_t *o) {
                      d, n, d + n);
         start -= MOY_SEAL_HEAD;
         n += MOY_SEAL_HEAD + MOY_SEAL_TAG;
+    }
+    if (o->lv != NULL) {            // the socket's frames say where a piece ends
+        raw(o, start, n);
+        o->cn = 0;
+        return;
     }
     char head[CHUNK_HEAD + 1];
     int k = snprintf(head, sizeof(head), "%x\r\n", (unsigned)n);
@@ -690,10 +723,16 @@ static void chunked_end(out_t *o) {
         moy_seal_rec(1, o->seal->kb, o->seal->seq, o->ri++, o->status, 1, r, NULL, 0,
                      r + MOY_SEAL_HEAD);
         memcpy(last + 4 + MOY_SEAL_HEAD + MOY_SEAL_TAG, "\r\n", 2);
-        raw(o, last, sizeof last);
+        if (o->lv != NULL) {
+            raw(o, last + 4, MOY_SEAL_HEAD + MOY_SEAL_TAG);
+        } else {
+            raw(o, last, sizeof last);
+        }
     }
     o->chunked = 0;
-    rawz(o, "0\r\n\r\n");
+    if (o->lv == NULL) {
+        rawz(o, "0\r\n\r\n");
+    }
 }
 
 // -- JSON text, as MicroPython's json.dumps writes it -----------------------------
@@ -1769,15 +1808,18 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
                 memcpy(k, ",\"kinds\":\"", 10);
                 strcat(k, "\"");
             }
-            char d[208];
+            char d[232], q[24] = "";
             const char *t = live_term ? ",\"term\":1" : "";
             const char *h = moy_live_hint != NULL ? ",\"hints\":1" : "";
+            if (moy_web_live_req != NULL) {
+                snprintf(q, sizeof q, ",\"req\":%u", (unsigned)moy_web_live_req());
+            }
             if (moy_web_live_link == NULL || !moy_web_live_link(m)) {
-                snprintf(d, sizeof d, "{\"live\":1,\"link\":0%s%s%s}", k, t, h);
+                snprintf(d, sizeof d, "{\"live\":1,\"link\":0%s%s%s%s}", k, t, h, q);
             } else {
                 snprintf(d, sizeof d,
-                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"%s%s%s}",
-                         m[0], m[1], m[2], m[3], m[4], m[5], k, t, h);
+                         "{\"live\":1,\"link\":1,\"mac\":\"%02x%02x%02x%02x%02x%02x\"%s%s%s%s}",
+                         m[0], m[1], m[2], m[3], m[4], m[5], k, t, h, q);
             }
             json(o, 200, d);
         }
@@ -1807,6 +1849,179 @@ static int stream(out_t *o, const moy_http_req_t *r, int which) {
     static const char busy[] = "\x88\x06\x03\xf5" "busy";
     moy_http_send(o->fd, busy, sizeof(busy) - 1);
     return 0;
+}
+
+// -- THE REQUESTS on the live socket (moy_live.c has the wire) ---------------------
+//
+// A request the page asked on its live socket is served here, in the poll,
+// as one off a connection is: the same route, its sign-in check and its
+// park for the VM. Its answer goes through the same writer into `lout`,
+// which sends it on the socket as it is written: the head as one 'A' (its
+// status and Content-Type), the body as 'D's of at most LIVE_PIECE bytes (a
+// chunked answer's framing left out) and 'Z' at its end.
+
+#define LIVE_PIECE 2048
+#define LIVE_AT (MOY_WS_HEAD + 4)       // a frame's channel, kind and id go before its bytes
+#define LIVE_CTYPE 64
+
+typedef struct lout {
+    uint32_t gen;
+    uint16_t id;
+    uint8_t body;                       // the head is past
+    size_t n;                           // bytes at buf + LIVE_AT
+    uint8_t *buf;                       // LIVE_AT + LIVE_PIECE + MOY_SEAL_TAG, NULL: no memory
+} lout_t;
+
+// One frame of kind `k`, its `n` bytes at p + 4 (MOY_WS_HEAD bytes free
+// before p, MOY_SEAL_TAG after its bytes).
+static int lout_say(lout_t *lv, uint8_t *p, char k, size_t n) {
+    p[0] = 'r';
+    p[1] = (uint8_t)k;
+    p[2] = (uint8_t)lv->id;
+    p[3] = (uint8_t)(lv->id >> 8);
+    return moy_live_req_say(lv->gen, p, 4 + n);
+}
+
+// The head's 'A': its status and Content-Type, the type cut at LIVE_CTYPE.
+static int lout_head(lout_t *lv, int status, const char *ctype, size_t cn) {
+    uint8_t a[LIVE_AT + 2 + LIVE_CTYPE + MOY_SEAL_TAG];
+    uint8_t *p = a + MOY_WS_HEAD;
+    cn = cn < LIVE_CTYPE ? cn : LIVE_CTYPE;
+    p[4] = (uint8_t)status;
+    p[5] = (uint8_t)(status >> 8);
+    memcpy(p + 6, ctype, cn);
+    lv->body = 1;
+    return lout_say(lv, p, 'A', 2 + cn);
+}
+
+static void lout_open(lout_t *lv) {
+    lv->buf = moy_net_alloc(LIVE_AT + LIVE_PIECE + MOY_SEAL_TAG);
+}
+
+static int lout_flush(lout_t *lv) {
+    int r = lv->n ? lout_say(lv, lv->buf + MOY_WS_HEAD, 'D', lv->n) : 0;
+    lv->n = 0;
+    return r;
+}
+
+// The staged head, once whole: its 'A', and the bytes after it are body.
+static int lout_ended_head(out_t *o) {
+    lout_t *lv = o->lv;
+    char *h = (char *)lv->buf + LIVE_AT;
+    size_t e = 0;
+    for (size_t i = 3; i < lv->n && !e; i++) {
+        if (memcmp(h + i - 3, "\r\n\r\n", 4) == 0) {
+            e = i + 1;
+        }
+    }
+    if (!e) {
+        return 0;
+    }
+    int status = e > 12 && memcmp(h, "HTTP/1.", 7) == 0 ? atoi(h + 9) : 500;
+    size_t cn = 0;
+    const char *ct = header(h, e, "Content-Type", &cn);
+    if (lout_head(lv, status, ct != NULL ? ct : "", ct != NULL ? cn : 0) < 0) {
+        o->err = 1;
+    }
+    memmove(h, h + e, lv->n - e);
+    lv->n -= e;
+    return 1;
+}
+
+static void lout_raw(out_t *o, const char *p, size_t n) {
+    lout_t *lv = o->lv;
+    if (lv->buf == NULL) {
+        o->err = 1;
+        return;
+    }
+    while (n > 0 && !o->err) {
+        size_t take = LIVE_PIECE - lv->n;
+        take = take < n ? take : n;
+        memcpy(lv->buf + LIVE_AT + lv->n, p, take);
+        lv->n += take;
+        p += take;
+        n -= take;
+        if (!lv->body && !lout_ended_head(o)) {
+            if (lv->n == LIVE_PIECE) {
+                o->err = 1;             // no head is this long
+            }
+            continue;
+        }
+        if (lv->n == LIVE_PIECE && lout_flush(lv) < 0) {
+            o->err = 1;
+        }
+    }
+}
+
+// The answer's end: what is staged, then 'Z'. An answer with no head (no
+// memory for its pieces) is a 503.
+static void lout_end(out_t *o) {
+    lout_t *lv = o->lv;
+    if (!lv->body) {
+        lout_head(lv, 503, "", 0);
+    } else if (!o->err) {
+        lout_flush(lv);
+    }
+    uint8_t z[LIVE_AT + MOY_SEAL_TAG];
+    lout_say(lv, z + MOY_WS_HEAD, 'Z', 0);
+    moy_net_free(lv->buf);
+    lv->buf = NULL;
+}
+
+// The live socket's next request, served: 1 when there was one.
+static int serve_live(void) {
+    moy_live_req_t *q = moy_live_req_take != NULL ? moy_live_req_take() : NULL;
+    if (q == NULL) {
+        return 0;
+    }
+    W->requests++;
+    req_done();
+    W->req = W->big = (char *)q;    // its bytes are the request's until it ends
+    lout_t lv = {.gen = q->gen, .id = q->id};
+    out_t o = {.fd = -1, .lv = &lv};
+    lout_open(&lv);
+    moy_http_req_t r = {0};
+    char *sp = memchr(q->data, ' ', q->len);
+    char *lf = sp != NULL ? memchr(sp, '\n', (size_t)(q->data + q->len - sp)) : NULL;
+    if (lf == NULL) {
+        json(&o, 400, "{\"error\":\"request\"}");
+        lout_end(&o);
+        req_done();
+        return 1;
+    }
+    r.method = q->data;
+    r.method_n = (size_t)(sp - q->data);
+    r.target = sp + 1;
+    r.target_n = (size_t)(lf - sp - 1);
+    r.head_end = (size_t)(lf + 1 - W->req);
+    r.clen = (uint32_t)(q->data + q->len - (lf + 1));
+    unprefix(&o, &r.target, &r.target_n);
+    const char *qm = memchr(r.target, '?', r.target_n);
+    size_t pn = qm ? (size_t)(qm - r.target) : r.target_n;
+    // the sign-in and the sockets are a connection's: a session opens this one
+    if (path_is(r.target, pn, "/auth") || path_is(r.target, pn, "/live")
+        || path_is(r.target, pn, "/term")) {
+        simple(&o, 404, "text/plain; charset=utf-8", "not found");
+        lout_end(&o);
+        req_done();
+        return 1;
+    }
+    int done = route(&o, r.method, r.method_n, r.target, r.target_n, lf + 1, r.clen);
+    if (done != ROUTE_PARKED) {
+        lout_end(&o);
+        req_done();
+        return 1;
+    }
+    moy_net_free(lv.buf);           // its answer is the VM's, at moy_web_answer
+    W->plive = 1;
+    W->pid = q->id;
+    W->pgen = q->gen;
+    W->preq = r;
+    W->pbn = o.bn;
+    W->pseal = o.sealed;
+    W->taken = 0;
+    W->parked_at = moy_net_ms();
+    return 1;
 }
 
 // -- the poll -------------------------------------------------------------------------
@@ -1908,6 +2123,22 @@ static void later(void) {
     }
 }
 
+static void answer_vm(out_t *o, const char *resp, size_t n);
+
+// The parked live request's answer: the VM's `resp`, or NULL for a 503.
+static void unpark_live(const char *resp, size_t n) {
+    lout_t lv = {.gen = W->pgen, .id = W->pid};
+    out_t o = {.fd = -1, .lv = &lv, .seal = W->pseal.on ? &W->pseal : NULL};
+    lout_open(&lv);
+    if (resp != NULL) {
+        answer_vm(&o, resp, n);
+    } else {
+        json(&o, 503, "{\"error\":\"busy\"}");
+    }
+    lout_end(&o);
+    W->plive = 0;
+}
+
 int moy_web_poll(void) {
     if (W == NULL) {
         return 0;
@@ -1922,18 +2153,22 @@ int moy_web_poll(void) {
     if (W->lfd < 0) {
         return 0;
     }
-    if (W->pfd >= 0) {
+    if (parked()) {
         if ((uint32_t)(moy_net_ms() - W->parked_at) < MOY_WEB_DEFER_MS) {
             return 0;               // the request buffer is the parked one's
         }
-        out_t o = {.fd = W->pfd, .seal = W->pseal.on ? &W->pseal : NULL};
-        json(&o, 503, "{\"error\":\"busy\"}");
-        close_conn(&W->pfd);
+        if (W->plive) {
+            unpark_live(NULL, 0);
+        } else {
+            out_t o = {.fd = W->pfd, .seal = W->pseal.on ? &W->pseal : NULL};
+            json(&o, 503, "{\"error\":\"busy\"}");
+            close_conn(&W->pfd);
+        }
         req_done();
         W->taken = 0;
     }
-    int did = 0;
-    for (int i = 0; i < MOY_WEB_POLL_MAX && W->pfd < 0; i++) {
+    int did = serve_live();
+    for (int i = 0; i < MOY_WEB_POLL_MAX && !parked(); i++) {
         int fd = moy_http_accept(W->lfd, &W->peer);
         if (fd < 0) {
             break;
@@ -1952,7 +2187,7 @@ void moy_web_abort(void) {
 
 int moy_web_take(const char **method, size_t *method_n, const char **target,
                  size_t *target_n, const char **body, size_t *body_n) {
-    if (W == NULL || W->pfd < 0 || W->taken) {
+    if (W == NULL || !parked() || W->taken) {
         return 0;
     }
     moy_http_req_t *r = &W->preq;
@@ -1985,12 +2220,16 @@ static void answer_vm(out_t *o, const char *resp, size_t n) {
 }
 
 void moy_web_answer(const void *resp, size_t n) {
-    if (W == NULL || W->pfd < 0) {
+    if (W == NULL || !parked()) {
         return;
     }
-    out_t o = {.fd = W->pfd, .seal = W->pseal.on ? &W->pseal : NULL};
-    answer_vm(&o, resp, n);
-    close_conn(&W->pfd);
+    if (W->plive) {
+        unpark_live(resp, n);
+    } else {
+        out_t o = {.fd = W->pfd, .seal = W->pseal.on ? &W->pseal : NULL};
+        answer_vm(&o, resp, n);
+        close_conn(&W->pfd);
+    }
     req_done();
     moy_seal_wipe(&W->pseal, sizeof W->pseal);
     W->taken = 0;

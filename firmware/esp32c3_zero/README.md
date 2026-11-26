@@ -127,7 +127,11 @@ chip changes.
   only its statics: its task and its buffers (the page's frames waiting to
   be whole, `MOY_LIVE_IN`, half the XIAO's; one frame down; one radio frame)
   are made when the webhost hands it a page's socket and given back at its
-  end. The radio's receive ring (`MOY_LIVE_RING`, a quarter of the XIAO's)
+  end. A request the page asks on the socket (`moy_live.c`, THE REQUESTS)
+  is pieced together in a block of its own length, and its answer leaves
+  through one of `LIVE_PIECE` bytes (`native/moy_net/moy_webhost.c`), both
+  given back once it is answered, as an HTTP request's upload buffer is.
+  The radio's receive ring (`MOY_LIVE_RING`, a quarter of the XIAO's)
   is the kernel link's, made at the first match and kept, as the link keeps
   it on every board (`native/moy_net/moy_link.c`). A socket whose buffers do
   not fit is refused like a second page's, and the page tries again. The

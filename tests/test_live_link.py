@@ -168,6 +168,7 @@ class Page:
         self.echoes = []
         self.terms = []                 # the terminal channel's messages, 't' and all
         self.hints = []                 # the hints' letters, a message each
+        self.answers = []               # the requests' messages, 'r' and all
         self.out = ctypes.create_string_buffer(16384)
 
     def open(self, proto="moy.live"):
@@ -254,6 +255,8 @@ class Page:
                 self.terms.append(pl)
             elif pl[:2] == b"cH":
                 self.hints.append(pl[2:])
+            elif pl[:1] == b"r":
+                self.answers.append(pl)
         n = self.lib.moy_link_web_take(self.out, len(self.out))
         raw = self.out.raw[:n]
         at = 0
@@ -429,7 +432,8 @@ def two_pages(twin_exe, page_so, tmp_path, monkeypatch, air):
 
 def test_the_probe_says_the_board_relays_its_radio_and_its_address(two_pages):
     ha, hb, pa, pb, air = two_pages
-    assert ha.page.json("GET", "/live") == (200, {"live": 1, "link": 1, "mac": MAC_A.hex(), "term": 1, "hints": 1})
+    assert ha.page.json("GET", "/live") == (200, {"live": 1, "link": 1, "mac": MAC_A.hex(), "term": 1, "hints": 1,
+                                                 "req": 4096 - 8 - 16})
     assert "Sec-WebSocket-Protocol: moy.live" in pa.head
 
 

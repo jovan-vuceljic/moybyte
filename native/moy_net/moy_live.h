@@ -3,9 +3,10 @@
 // its own, so neither the page's frame nor the board's waits on it. Its
 // channels are the radio link (a Zero relays its ESP-NOW radio to the
 // browser console it serves, which plays a match on it as a console does,
-// docs/netplay_v1.md section 5) and the device channel (the board's device
-// APIs a page's cart holds by handle, moy_live_dev.c). moy_live.c's header
-// is the wire.
+// docs/netplay_v1.md section 5), the device channel (the board's device
+// APIs a page's cart holds by handle, moy_live_dev.c), the web terminal and
+// the requests (the webhost's routes, asked and answered on the socket as
+// over HTTP). moy_live.c's header is the wire.
 //
 // The webhost answers GET /live's upgrade (moy_webhost.c, sealed as /term
 // is) and hands the socket here. A board builds the bridge where its
@@ -38,6 +39,21 @@ int moy_live_term_message(const uint8_t *p, size_t n);
 int moy_live_term_fd(void);
 int moy_live_term_pump(void);
 void moy_live_term_end(void);
+// THE REQUESTS ('r', moy_live.c): the most plaintext one frame up carries
+// (the probe's "req"); a request the page sent whole, taken by the webhost
+// (moy_webhost.c, its poll), which frees it with moy_net_free, NULL with
+// none: `len` bytes at `data`, "METHOD TARGET\n" and the body, sealed as
+// over HTTP; and one plaintext of its answer down on the socket of session
+// `gen` (`p` with MOY_WS_HEAD bytes free before it and MOY_SEAL_TAG after,
+// sealed in place): 0, or -1 when that socket is gone.
+typedef struct {
+    uint32_t len, gen;
+    uint16_t id;
+    char data[];
+} moy_live_req_t;
+size_t moy_web_live_req(void);
+moy_live_req_t *moy_live_req_take(void);
+int moy_live_req_say(uint32_t gen, uint8_t *p, size_t n);
 // THE HINTS (moy_live.c): `topics` (letters) told to the page at the
 // bridge's next pass; and the webhost's word that the socket's own page's
 // sync applies (`on` 1 before, 0 after), whose changes are no news to it.
@@ -75,6 +91,7 @@ typedef struct {
     // records and events pushed (moy_live_dev_stats)
     uint32_t devs, dev_calls, dev_writes, dev_pushes;
     uint32_t hints;                     // hint messages sent (THE HINTS, moy_live.c)
+    uint32_t reqs;                      // requests the page sent whole (THE REQUESTS)
 } moy_live_stats_t;
 
 void moy_live_stats(moy_live_stats_t *out);
