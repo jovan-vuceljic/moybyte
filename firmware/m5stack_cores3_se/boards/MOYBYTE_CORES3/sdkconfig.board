@@ -12,7 +12,6 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 # bootloader uses, and DIO reads every flash QIO does.
 CONFIG_ESPTOOLPY_FLASHMODE_QIO=
 CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
-CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
 
 # The dual-OTA partition table (#53): two 7 MiB app slots, the coredump
 # partition and the vfs; the CSV carries the arithmetic and what a change to
@@ -67,9 +66,19 @@ CONFIG_ESP32S3_DATA_CACHE_64KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_32B=y
 
 # PSRAM: this S3's is QUAD, 8 MB, external (esptool reads no embedded PSRAM),
-# so mpconfigboard.cmake takes sdkconfig.spiram_sx and not the octal fragment,
-# at its 80 MHz. The T-Deck's 120 MHz is an octal-and-flash pair with a
-# temperature retune (its sdkconfig.board); not taken here.
+# so mpconfigboard.cmake takes sdkconfig.spiram_sx and not the octal fragment.
+# Its MSPI runs at 120 MHz, flash and PSRAM together, with the temperature
+# retune: the T-Deck's five flags (its sdkconfig.board says why each, and why
+# all five or none; the retune needs tools/esp32_build_lib.sh's #169 patch).
+# A quad PSRAM moves half an octal one's bytes a clock, and a cart's render
+# is mostly fills of the PSRAM-resident canvas, so the clock is the lever.
+CONFIG_IDF_EXPERIMENTAL_FEATURES=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=
+CONFIG_ESPTOOLPY_FLASHFREQ_120M=y
+CONFIG_SPIRAM_SPEED_80M=
+CONFIG_SPIRAM_SPEED_120M=y
+CONFIG_SPIRAM_TIMING_TUNING_POINT_VIA_TEMPERATURE_SENSOR=y
+CONFIG_SPIRAM_TIMING_MEASURE_TEMPERATURE_INTERVAL_SECOND=5
 
 # USB-Serial-JTAG as the PRIMARY console, so serial INPUT works (#201).
 #
