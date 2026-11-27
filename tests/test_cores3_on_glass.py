@@ -88,7 +88,10 @@ def test_the_battery_reads_the_axp2101(board):
         assert mv is None and charging is False
     else:
         assert 0 <= lvl <= 100 and 2500 <= mv <= 4400, (lvl, mv)
-    assert board.pyval("ws.battery.level() == %r" % (lvl,), strict=True) is True
+    # The bar's reading is cached for battery.REFRESH_MS: a charging cell can
+    # step once between the two reads.
+    bar = board.pyval("ws.battery.level()", strict=True)
+    assert (bar is None) == (lvl is None) and (lvl is None or abs(bar - lvl) <= 1), (bar, lvl)
 
 
 def test_the_clock_chip_keeps_the_time(board):
