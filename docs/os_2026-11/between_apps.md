@@ -323,3 +323,44 @@ stack (Reticulum, Meshtastic) can be an app on any tier. Decisions
   secret does. Curve25519's twist security and the clamped scalar keep the
   raw output from leaking the secret to a chosen peer, and a peer of small
   order is answered None. No compiled tier imports them.
+
+## 6. Radio messages
+
+One radio service owns each board radio's traffic, ESP-NOW first and LoRa
+beside it, and every user of that radio goes through it: a match, a beamed
+cart, an app's messages. Its body is `native/moy_net/moy_link.c`, which
+holds ESP-NOW's one receive slot and dispatches by frame type, and
+`native/moy_play/moy_match.c`, the match's protocol over it
+(`docs/netplay_v1.md` §1). The order of work and its measurements are #350.
+Decisions (owner, 2026-11-27):
+
+- **Its own task, not the frame loop's tail.** The service runs as a C task
+  woken by the radio, so a packet is answered and a lost one resent on the
+  radio's clock, never a frame later. A slow frame on one console must not
+  stall its peer.
+- **Two lanes.** The real-time lane carries a match's inputs: one small
+  packet a tick, sent first, resent at once, the newest replacing an unsent
+  older one, no queue. The reliable lane carries everything else (a beamed
+  file, an app's message): acknowledged, resent until taken, in order,
+  chunked, and sent only when the real-time lane is idle, so a chat message
+  never delays a tick. A beamed cart's resend and chunking (`netplay_v1.md`
+  §7) become the reliable lane's, moved, not copied.
+- **One port verb set for apps, every tier, both radios.** An app opens a
+  port by name, sends to a console or to everyone in range, and reads what
+  came. The interface is published when its first app (a messaging app) needs
+  it, not before.
+- **A page reaches it through its board.** On a Zero the app's window runs in
+  the phone's browser and its service on the board, and the two talk as any
+  window and its service do (`firmware/web_runner/`'s live socket). The
+  service on the board is what holds the port, so messages are heard and
+  kept while the page is closed.
+- **A service starts on its message** (the media run's rule, `hardware.md`,
+  applied to the radio). An app's manifest declares the ports its service
+  listens on. A message for a port whose service is not running is held by
+  the radio service in a bounded buffer and starts that service. The service
+  takes what waits, keeps its state in storage (a chat's inbox is a file),
+  does its work and ends after a short idle, so a burst is one start. Only an
+  installed app's declared ports wake anything, and wakes are rate-limited. A
+  full buffer acknowledges nothing, so a reliable sender resends. A match
+  never runs this way: its inputs stay on the resident real-time lane, and
+  only an invitation to a match may start a cart.
