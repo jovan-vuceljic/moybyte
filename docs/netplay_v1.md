@@ -13,6 +13,11 @@ regression, the stall-rate hunt, the slave-image pipeline). Those are the
 RECORD; this file BINDS — the rules a change must not break, each with its date
 and the measurement that settled it. Trackers **#65**, **#7**, **#99**.
 
+**Pairing by sitting on the same cart is to be replaced by a choice**
+(owner, 2026-11-27): a two-player cart opens on a Players sheet, and a match
+forms only from a host's lobby that a guest joins. The design and its
+phases are `docs/netplay_lobby_2026-12.md`; the order of work is **#350**.
+
 ## 1. The bodies
 
 `native/moy_play/moy_match.c` is the deterministic core — tick clock, input
