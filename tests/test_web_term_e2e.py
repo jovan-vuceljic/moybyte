@@ -318,6 +318,56 @@ def test_a_page_paired_by_the_qr_reloads_signed_in_and_its_terminal_is_sealed(
         host.end()
 
 
+# The Terminal's window closed by its strip's X: a press and a release at
+# the strip's last button (runtime/wm/wm_strip.py, `close` the rightmost).
+_CLOSE_TERMINAL = {"js": (
+    "window.__moyState().then(function (s) { var w = s.wins.terminal, "
+    "x = w[0] + w[2] - Math.round(w[4] / 2), y = w[1] + Math.round(w[4] / 2); "
+    "send({type: 'down', x: x, y: y, mods: 0}); return new Promise(function (ok) { "
+    "setTimeout(function () { send({type: 'up'}); ok('X ' + JSON.stringify([x, y])); }, 80); "
+    "}); })")}
+
+
+def test_a_closed_terminal_gives_the_board_s_shell_back_to_ssh(tty_exe, tmp_path, short):
+    """The Terminal's window closed and its page left open: the board's face
+    ends (the link's close, native/moy_sh/moy_sh_link.h), so SSH opens one
+    while the page stays."""
+    host = _board(tty_exe, short)
+    server, base = _serve(tmp_path, host.port)
+    try:
+        steps = [_GRANT, _until(_SHELL), _CLOSE_TERMINAL,
+                 {"waitFor": "window.__moyState().then(s => (s.order || []).indexOf("
+                             "'terminal') < 0)", "timeout": 10000},
+                 {"wait": 1500},
+                 {"js": "'CLOSED'"},
+                 {"wait": 8000}]
+        scenario = tmp_path / "closed.json"
+        scenario.write_text(json.dumps({"query": "?dev=1&desktop=1&cart=Terminal"
+                                        + _qr_fragment(host), "boot_ms": 30000,
+                                        "steps": steps}))
+        proc = subprocess.Popen(
+            ["node", "browsershot.mjs", str(scenario), str(tmp_path / "closed")], cwd=RUNNER,
+            env=dict(os.environ, MOY_BASE=base, MOY_PROFILE=str(tmp_path / "chrome")),
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        lines, ran = [], None
+        try:
+            for line in proc.stdout:
+                lines.append(line)
+                if ran is None and 'js -> "CLOSED"' in line:
+                    at = len(host.log())
+                    host.say("run echo ssh")
+                    ran = host.wait_line("RAN ", after=at)
+            proc.wait(timeout=120)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+        out = "".join(lines)
+        assert ran == "RAN 0", "%s\n%s" % (ran, out[-3000:] + _sides(host, tmp_path, out))
+    finally:
+        server.terminate()
+        host.end()
+
+
 def _end_when(host, sessions):
     """The board gone once `sessions` sockets were served and none is live."""
     end = time.monotonic() + 120

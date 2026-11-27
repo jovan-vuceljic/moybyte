@@ -5,6 +5,7 @@ does, Tab, the history, Ctrl-C at the prompt and inside a run, and that an
 idle frame makes nothing."""
 
 import os
+import sys
 import time
 
 import pytest
@@ -288,6 +289,27 @@ def test_exit_starts_a_new_session(term):
     _ws, app = term
     run(app, "x=5; exit 3")
     assert plain(app)[-1] == "[the shell exited 3]"
+    run(app, "echo ${x:-gone}")
+    assert plain(app)[-1] == "gone"
+
+
+def test_leaving_the_board_s_shell_gives_it_back_and_a_console_keeps_its_own(term,
+                                                                            monkeypatch):
+    """Left by any route (`leave_surface`: the window's X, the back, home):
+    a console's own session is kept, and on a page a board serves, whose
+    face is the board's shell's (`_LINKED`), the session is given back, so
+    the board's face ends and SSH can open one; the next open starts anew."""
+    ws, app = term
+    run(app, "x=5")
+    ws.leave_surface("terminal")
+    app.open()
+    app.draw(0)
+    run(app, "echo ${x:-gone}")
+    assert plain(app)[-1] == "5"
+    monkeypatch.setattr(sys.modules[type(app).__module__], "_LINKED", True)
+    ws.leave_surface("terminal")
+    app.open()
+    app.draw(0)
     run(app, "echo ${x:-gone}")
     assert plain(app)[-1] == "gone"
 
