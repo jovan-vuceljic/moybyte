@@ -265,3 +265,39 @@ def test_audio_off_makes_no_context_and_the_hud_says_so(tmp_path):
     assert got["actx"] and got["played"] == -1, got
     assert got["shown"] == "block", got
     assert "sound off http" in got["hud"] and "steps" in got["hud"], got
+
+
+# WebKit's "interrupted": the state iOS leaves a page's context in once its
+# audio session was taken, which only a resume inside a gesture ends. The
+# page's context answers it until the page resumes it; `__resumed` counts the
+# resumes.
+INTERRUPTED = r"""(() => {
+  const AC = window.AudioContext;
+  window.__resumed = 0;
+  window.AudioContext = class extends AC {
+    constructor(o) { super(o); this.__held = true; }
+    get state() { return this.__held ? "interrupted" : super.state; }
+    resume() { window.__resumed++; this.__held = false; return super.resume(); }
+  };
+})()"""
+
+
+def test_a_context_left_interrupted_resumes_on_the_next_tap(tmp_path):
+    """The page's context reads "interrupted" from the start, and the first
+    tap on the page resumes it."""
+    server, base = web_e2e.serve(web_e2e.DIST, web_e2e.free_port())
+    read = ("Promise.resolve('CTX ' + JSON.stringify({state: actx.state, "
+            "resumed: window.__resumed}))")
+    try:
+        out, js = web_e2e.run(
+            tmp_path, "interrupted", "?dev=1&desktop=1",
+            [{"wait": 2500}, {"js": read}, {"click": [600, 300]}, {"wait": 500},
+             {"js": read}],
+            base, tmp_path / "chrome", boot_ms=40000, init=INTERRUPTED)
+    finally:
+        server.terminate()
+        server.wait(timeout=10)
+    got = [json.loads(j[4:]) for j in js if isinstance(j, str) and j.startswith("CTX ")]
+    assert len(got) == 2, out[-3000:]
+    assert got[0] == {"state": "interrupted", "resumed": 0}, got
+    assert got[1]["resumed"] >= 1 and got[1]["state"] == "running", got
