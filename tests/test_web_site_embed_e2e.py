@@ -2,8 +2,8 @@
 
 One console and no tiers to pick: it lays itself out from the room its frame
 gives it (page_core.html, THE GLASS). A phone's frame is the handheld's 4:3
-with the pads under it, a wider page's the desk's; Expand is a compact
-button beside the hint line, a thumb-sized icon on a phone.
+with the pads under it, a wider page's the desk's; Full screen is a compact
+button beside the hint line, a thumb's height on a phone.
 
     MOYBYTE_WEB_E2E=1 .venv/bin/python -m pytest tests/test_web_site_embed_e2e.py
 """
@@ -76,12 +76,12 @@ def test_the_site_embeds_one_console_that_fits_itself(tmp_path, monkeypatch, dev
         assert e["tabs"] == 0 and "handheld=1" not in e["src"] and "desktop=1" not in e["src"], e
         w, h = e["stage"]
         if device is PHONE:
-            # The icon alone, a thumb's size; the 4:3 console across the
-            # frame's width with the pads under it, the handheld's layout.
-            assert e["exp"][0] <= 64 and e["exp"][1] >= 40 and "Expand" not in e["label"], e
+            # A thumb's height; the 4:3 console across the frame's width with
+            # the pads under it, the handheld's layout.
+            assert e["exp"][1] >= 40 and "Full screen" in e["label"], e
             assert h > w * 3 / 4 and not e["phl"] and e["cls"] == "handheld", e
         else:
-            assert "Expand" in e["label"] and e["exp"][1] <= 40, e
+            assert "Full screen" in e["label"] and e["exp"][1] <= 40, e
             assert abs(h - w * 600 / 1024) < 40, ("the desk's aspect", e)
             room_desk = e["room"][0] >= 1024 and e["room"][1] >= 600
             assert e["cls"] == ("desk" if room_desk else "handheld"), e

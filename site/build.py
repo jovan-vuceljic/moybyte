@@ -1350,6 +1350,8 @@ def page(pal, has_player, cards, channel=None, stills=False):
    for on top of it where it exists, which additionally hides the browser
    chrome. Either can end first, so the JS syncs both ways. */
 .exp{margin-left:auto;align-self:center}
+/* A phone's Full screen is a thumb's height. */
+@media (max-width:700px){.exp{min-height:44px}}
 .exp[hidden]{display:none}
 /* Filling the screen, the console sits under a strip of its own that holds
    Close: the console's OS bar is at its very top, battery and clock in its
