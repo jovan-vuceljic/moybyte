@@ -2915,9 +2915,12 @@ def vm_stops_leave_psram_flat(board, n=20, per_cycle=60.0):
     VM down (`route=kstop lease=kstop` on the KSTOP down line); the heaps read
     then -- the first heap area freed with the VM -- hold flat from the second
     cycle, the largest block to the byte and free within KSTOP_JITTER. The
-    app ABI's grants (`grants=N`, native/moy_app) read the same every cycle:
-    each start re-registers the shipped apps onto the rows they had; and the
-    clipboard, a kernel row, holds what was put before the first stop."""
+    app ABI's grants (`grants=N`, native/moy_app) read the same from the
+    second cycle: each start re-registers the shipped apps onto the rows they
+    had. The first stop's console ran its autostart services, whose run
+    grants the stop leaves for the next start to end; each later cycle stops
+    at its first frame, before they start. And the clipboard, a kernel row,
+    holds what was put before the first stop."""
     import time
     # The clipboard is the app ABI's kernel row (native/moy_app): text put
     # before the stops reads back after them.
@@ -2933,7 +2936,7 @@ def vm_stops_leave_psram_flat(board, n=20, per_cycle=60.0):
             grants.append(line.split("grants=", 1)[1].split()[0])
             down.append(_kstop_after(line.replace(" down ", " after ")))
     assert len(down) == n, "only %d of %d stops came back" % (len(down), n)
-    assert grants[0] not in ("-", "0") and len(set(grants)) == 1, (
+    assert grants[-1] not in ("-", "0") and len(set(grants[1:])) == 1, (
         "the grant count moved across stops: %s" % grants)
     free0, largest0 = down[min(1, n - 1)][1:]
     drift = [a for a in down[1:]
