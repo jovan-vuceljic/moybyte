@@ -164,7 +164,8 @@ the live socket open, the echo's round trip, the Improv join, the page
 load) are the board's perf record, appended and printed as a console's
 stage's. With `tdeck` in the same pass each Zero's suite runs after the
 T-Deck's row, one Zero at a time, and plays a match against it from the
-page; export `MOYBYTE_BENCH_WIFI` (a wifi.json of the bench network) for
+page (the XIAO also exchanges Moy Mesh's direct messages with it over
+LoRa); export `MOYBYTE_BENCH_WIFI` (a wifi.json of the bench network) for
 the Improv join, which the suite otherwise skips. The
 `board-pass` agent (`.claude/agents/board-pass.md`) runs it and reports the
 table and the perf blocks.

@@ -725,6 +725,11 @@ below used to hold:
   desk and with it running Brick Siege (its radio inside the band-gap gate), the
   far end both this driver and an SX1262 script written apart from it; and a
   ping-pong, the T-Deck listening between its own sends, 20 of 20.
+- **Moy Mesh talks to the T-Deck's** (2026-11-27,
+  `test_moy_mesh_on_the_page_and_on_a_tdeck_talk_over_lora`): the service on
+  this board and the T-Deck's on one Meshtastic setup (MediumFast, EU_868),
+  a direct message each way under the nodes' keys, each delivered, the
+  board's typed into its window on the page.
 
 **NOT verified on hardware**, and each for its own reason:
 
