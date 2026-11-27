@@ -44,8 +44,6 @@ with, set by the setup form or `provision.sh --password`, and changed with
 import gc
 import os
 
-from ticks import _ticks_ms, _ticks_diff
-
 try:
     import moy_loop
     import moy_tty
@@ -58,8 +56,6 @@ NEEDS_VM = -9                   # MOY_SH_DOOR_NEEDS_VM: the console's to answer
 RUNNING = -100                  # a role command goes on: the session steps it again
 NOT_RUN, INTERRUPTED = 126, 130     # moy_proc_exit.h: asked a question; Ctrl-C
 SHELL = 1
-SCAN_MS = 15000                 # `wifi scan`'s wait, past ZeroWifi's own bound
-WIFI_USAGE = "[status] | scan | list | join [-y] SSID [PASSWORD] | forget SSID"
 
 
 class Console:
@@ -111,7 +107,7 @@ class Door:
     def v_role(self, job, *argv):
         if argv and argv[0] == "wifi":
             self.v_stop(job)
-            self.jobs[job] = self._wifi(list(argv[1:]))
+            self.jobs[job] = self._wifi(*argv[1:])
             return self.v_step(job)
         if argv and argv[0] == "service":
             return self.service(list(argv[1:]))
@@ -222,12 +218,12 @@ class Door:
             next(gen)
             return RUNNING
         except StopIteration as e:
-            self.jobs.pop(job, None)
-            return e.args[0] if e.args and e.args[0] is not None else 0
+            r = e.value
         except Exception as e:  # noqa: BLE001 -- a role's failure is its exit
-            self.jobs.pop(job, None)
             self.err("wifi", str(e))
-            return 1
+            r = 1
+        del self.jobs[job]
+        return r
 
     def v_stop(self, job):
         gen = self.jobs.pop(job, None)
@@ -236,80 +232,78 @@ class Door:
         gen.close()
         return INTERRUPTED
 
-    def _yes(self, question):
-        # moy_sh.h's question: the answer typed to it in this line's earlier
-        # run, else None once asked (the line runs again with the answer);
-        # a session that asks nothing (a stream face) says how to say yes
-        try:
-            line = self.io.answer()
-            if line is None:
-                self.io.ask(question + " [y/N] ", False)
-                return None
-        except (AttributeError, OSError):
-            self.err("wifi", "it asks first: -y says yes")
-            return False
-        return line.strip().lower() in ("y", "yes")
-
-    def _wifi(self, a):
+    def _wifi(self, verb="status", *a):
         w = getattr(self.ws.webhost, "wifi", None)
-        yes = a[1:2] == ["-y"]
+        yes = a[:1] == ("-y",)
         if yes:
-            del a[1]
-        verb, rest = (a[0], a[1:]) if a else ("status", [])
-        if verb not in ("status", "scan", "list", "join", "forget") \
-                or len(rest) > (2 if verb == "join" else 1 if verb == "forget" else 0) \
-                or (verb in ("join", "forget") and not rest) or (yes and verb != "join"):
-            self.err("usage", "wifi " + WIFI_USAGE)
+            a = a[1:]
+        n = {"status": 0, "scan": 0, "list": 0, "forget": 1, "join": 2}.get(verb)
+        if n is None or len(a) > n or (n and not a) or (yes and n != 2):
+            self.err("usage", "wifi [status] | scan | list | join [-y] SSID [PASSWORD]"
+                     " | forget SSID")
             return 2
         if w is None:
             self.err("wifi", "this board has none")
             return 1
-        up, on, ip, _ = w.link()
+        up, on, ip, _ = w.link()        # `on` None while down
         if verb == "status":
             self.out("connected to %s (%s)\n" % (on, ip) if up else "not connected\n")
             return 0
+        saved = []
+        for net in w.saved():
+            saved.append(net["ssid"])
         if verb == "list":
-            self.out("".join("%-6s  %s\n" % ("in use" if up and n["ssid"] == on else "",
-                                             n["ssid"]) for n in w.saved()))
+            for ssid in saved:
+                self.out("%-6s  %s\n" % ("in use" if ssid == on else "", ssid))
             return 0
-        if verb == "forget":
-            if up and rest[0] == on:
-                self.err("wifi", "%s is the network in use: join another first" % on)
-                return 1
-            ok, msg = w.request({"action": "forget", "ssid": rest[0]})
-            if not ok:
-                self.err("wifi", "%s: %s" % (rest[0], msg))
-            return 0 if ok else 1
         if verb == "scan":
-            sid, t0 = w.scan_id, _ticks_ms()
+            # bounded by ZeroWifi's own SCAN_MS: the webhost's poll steps a
+            # busy ZeroWifi every turn (moy_webhost.WebHost.poll), and a scan
+            # that has not ended by then ends with what it found
+            sid = w.scan_id
             w.request({"action": "scan"})
             while w.scan_id == sid:
-                if _ticks_diff(_ticks_ms(), t0) >= SCAN_MS:
-                    self.err("wifi", "timed out")
-                    return 1
                 yield
             on = w.link()[1]
-            saved = [n["ssid"] for n in w.saved()]
-            self.out("".join("%3d%%  %-6s  %-6s  %s\n" % (
-                sig, "locked" if locked else "open",
-                "in use" if ssid == on else "saved" if ssid in saved else "", ssid)
-                for ssid, sig, locked in w.nets))
+            for ssid, sig, locked in w.nets:
+                self.out("%3d%%  %-6s  %-6s  %s\n" % (
+                    sig, "locked" if locked else "open",
+                    "in use" if ssid == on else "saved" if ssid in saved else "", ssid))
             return 0
-        if up and on == rest[0]:
+        if a[0] == on:
+            if verb == "forget":
+                self.err("wifi", "%s is the network in use: join another first" % on)
+                return 1
             self.out("already on %s\n" % on)
             return 0
+        if verb == "forget":
+            ok, msg = w.request({"action": "forget", "ssid": a[0]})
+            if not ok:
+                self.err("wifi", "%s: %s" % (a[0], msg))
+            return 0 if ok else 1
         if up and not yes:
-            said = self._yes("Leave %s for %s? This session ends as the board moves." % (on, rest[0]))
-            if not said:
-                return NOT_RUN if said is None else 1
-        ok, msg = w.request({"action": "join", "ssid": rest[0],
-                             "password": rest[1] if len(rest) > 1 else None})
+            # moy_sh.h's question: the answer typed to it in this line's
+            # earlier run, else None once asked (the line runs again with the
+            # answer); a session that asks nothing (a stream face) says how
+            # to say yes
+            try:
+                said = self.io.answer()
+                if said is None:
+                    self.io.ask("Leave %s for %s? [y/N] " % (on, a[0]), False)
+                    return NOT_RUN
+            except (AttributeError, OSError):
+                self.err("wifi", "it asks first: -y says yes")
+                return 1
+            if said.strip().lower() not in ("y", "yes"):
+                return 1
+        ok, msg = w.request({"action": "join", "ssid": a[0],
+                             "password": a[1] if len(a) > 1 else None})
         if not ok:
             self.err("wifi", msg)
             return 1
         self.out("moving to %s: the board is %s.local there%s\n"
-                 % (rest[0], w.name, ", or back on %s if %s does not answer in %d s"
-                    % (on, rest[0], w.join_ms // 1000) if up else ""))
+                 % (a[0], w.name, ", or back on %s if %s does not answer in %d s"
+                    % (on, a[0], w.join_ms // 1000) if up else ""))
         return 0
 
 

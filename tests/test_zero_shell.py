@@ -242,7 +242,7 @@ def test_wifi_join_asks_first_and_moves_the_board_with_its_way_back(board):
     assert wifi(door, w, clock, "join", "-y", "Home") == 0
     assert said(io) == ("already on Home\n", "")
     assert wifi(door, w, clock, "join", "Home_RPT", "rptpw") == zero_shell.NOT_RUN
-    assert io.asked == ["Leave Home for Home_RPT? This session ends as the board moves. [y/N] "]
+    assert io.asked == ["Leave Home for Home_RPT? [y/N] "]
     io.answers = ["n"]
     assert wifi(door, w, clock, "join", "Home_RPT", "rptpw") == 1 and w.busy() is False
     io.answers = ["y"]
