@@ -53,7 +53,9 @@ def test_the_icons_are_moy_on_the_page_s_colour():
 
 def test_the_page_carries_the_app_s_tags_and_its_colour():
     page = _page()
-    assert web_app.BG in re.search(r"html,body\{[^}]*background:(#[0-9a-f]{6})", page).group(1)
+    # the page's ground is the scheme's token, the app's colour its night value
+    assert re.search(r"html,body\{[^}]*background:var\(--pg\)", page)
+    assert web_app.BG == re.search(r":root\{--pg:(#[0-9a-f]{6})", page).group(1)
     assert '<link rel=manifest href="manifest.webmanifest">' in page
     assert '<link rel=apple-touch-icon href="icon-180.png">' in page
     assert "<meta name=apple-mobile-web-app-capable content=yes>" in page
