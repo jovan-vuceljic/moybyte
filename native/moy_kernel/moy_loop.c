@@ -756,7 +756,11 @@ int moy_loop_diag_take(char *hitch, char *loop, size_t cap) {
 // -- the PERF window ------------------------------------------------------------------
 
 moy_perf_values_t *moy_loop_perf_console(void) {
-    return L.heavy != NULL ? &L.heavy->perf.console : NULL;
+    if (L.heavy == NULL) {
+        return NULL;
+    }
+    L.heavy->perf.pushed = true;        // the console is writing its half
+    return &L.heavy->perf.console;
 }
 
 bool moy_loop_perf_due(void) {

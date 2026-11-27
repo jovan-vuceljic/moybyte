@@ -66,13 +66,20 @@ typedef struct {
     uint32_t period_ms, secs, at;
     uint32_t n, busy, drawn_at;
     bool have_ov, have_gc;
+    bool pushed;                        // the console pushed its half this period
     moy_perf_overlap_t ov;
     uint32_t gc[3];
     moy_perf_values_t console;          // the console's half, as it pushed it
 } moy_perf_t;
 
 void moy_perf_init(moy_perf_t *p, uint32_t now, uint32_t period_ms);
-// One frame. Answers true when the period closed (the caller samples).
+// One frame. Answers true when the period closed (the caller samples): its
+// time is up and the console pushed its half, or MOY_PERF_PUSH_GRACE_MS
+// passed without one. The console asks whether a sample is due inside its
+// frame and the kernel counts after the frame's tail, so a period that ends
+// between the two waits for the next frame's half rather than printing the
+// fields a line clears (`net`, `lock`) as absent.
+#define MOY_PERF_PUSH_GRACE_MS 250u
 bool moy_perf_account(moy_perf_t *p, uint32_t now, uint32_t elapsed);
 // The period's line from the kernel's own counts and the console's pushed
 // values; `overlap` and `gc` NULL where the board has none.

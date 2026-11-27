@@ -613,6 +613,36 @@ def test_the_sample_carries_the_consoles_half_and_its_own(loop):
     assert v["fps"][0] > 0
 
 
+def test_no_sample_closes_between_the_consoles_ask_and_the_kernels_count(loop):
+    """`net=-` in a live match (T-Deck and CoreS3, 2026-11-27, about one
+    sample in six): the console asks perf_due() inside its frame, the kernel
+    counts the period after the frame's tail, and a period that ended
+    between the two was written without the console's half -- `net` and
+    `lock` are cleared at each line, so they read absent. The kernel waits
+    for the half, a grace at most."""
+    L.capture(True)
+    pushed = []
+
+    def frame_and_ask(dt):
+        if L.perf_due():
+            L.perf_cart("Brick Siege")
+            L.perf("net", 29)
+            pushed.append(1)
+        L.trace_advance(30000)          # the frame's own work, after the ask
+        loop.drawn += 1
+        return loop.drawn
+
+    loop.frame = frame_and_ask
+    L.unregister()
+    L.register(loop.handle_input, loop.handle_pointer, loop.frame, loop.words, loop.service)
+    logs = []
+    for i in range(120):
+        logs.append(frame(1000 + 47 * i)[1])
+    lines = [t for log in logs for t in log.split() if t.startswith("say[PERF")]
+    assert len(lines) >= 2, logs
+    assert all("net=29" in t for t in lines), lines
+
+
 # -- HITCH and LOOP -----------------------------------------------------------------------
 
 DIAG_STAGES = STAGES[:STAGES.index("tail") + 1]

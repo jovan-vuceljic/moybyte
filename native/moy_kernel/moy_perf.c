@@ -167,11 +167,13 @@ void moy_perf_init(moy_perf_t *p, uint32_t now, uint32_t period_ms) {
 bool moy_perf_account(moy_perf_t *p, uint32_t now, uint32_t elapsed) {
     p->n++;
     p->busy += elapsed;
-    return (int32_t)(now - p->at) >= 0;
+    int32_t past = (int32_t)(now - p->at);
+    return past >= 0 && (p->pushed || past >= (int32_t)MOY_PERF_PUSH_GRACE_MS);
 }
 
 void moy_perf_close(moy_perf_t *p, uint32_t now, uint32_t drawn) {
     p->at = now + p->period_ms;
+    p->pushed = false;
     p->n = 0;
     p->busy = 0;
     p->drawn_at = drawn;

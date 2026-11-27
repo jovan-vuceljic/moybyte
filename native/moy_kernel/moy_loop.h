@@ -294,7 +294,9 @@ void moy_loop_set_lit(bool lit);
 // light cannot dim (no backlight stage, or the ladder's `can_dim` false).
 int moy_loop_light_top(int top);
 // The console's half of the PERF line, which it fills when a sample is due
-// (moy_loop_perf_due: PERF DIAG is on and this frame closes the period).
+// (moy_loop_perf_due: PERF DIAG is on and this frame closes the period). A
+// fill marks the period's half pushed, which the sample waits for
+// (moy_perf_account).
 moy_perf_values_t *moy_loop_perf_console(void);
 bool moy_loop_perf_due(void);
 
