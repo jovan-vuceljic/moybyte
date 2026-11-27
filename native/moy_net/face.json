@@ -139,6 +139,7 @@
       {"py": "live_budget(rows)", "hand": true, "absent": ["host"]},
       {"py": "Link", "hand": true, "absent": ["host"]},
       {"py": "RATE_54M", "hand": true, "absent": ["host"]},
+      {"py": "RATE_24M", "hand": true, "absent": ["host"]},
       {"py": "RATE_12M", "hand": true, "absent": ["host"]},
       {"py": "build(verbose=False)", "hand": true, "absent": ["mp"]},
       {"py": "net_vm_stop()", "hand": true, "absent": ["mp"]},
