@@ -67,9 +67,9 @@ CONFIG_ESP32S3_DATA_CACHE_LINE_32B=y
 
 # PSRAM: this S3's is QUAD, 8 MB, external (esptool reads no embedded PSRAM),
 # so mpconfigboard.cmake takes sdkconfig.spiram_sx and not the octal fragment.
-# Its MSPI runs at 120 MHz, flash and PSRAM together, with the temperature
-# retune: the T-Deck's five flags (its sdkconfig.board says why each, and why
-# all five or none; the retune needs tools/esp32_build_lib.sh's #169 patch).
+# Its MSPI runs at 120 MHz, flash and PSRAM together. IDF's temperature
+# retune is octal-only (its Kconfig depends on SPIRAM_MODE_OCT), so a quad
+# PSRAM at 120 MHz runs on the tuning point its boot found.
 # A quad PSRAM moves half an octal one's bytes a clock, and a cart's render
 # is mostly fills of the PSRAM-resident canvas, so the clock is the lever.
 CONFIG_IDF_EXPERIMENTAL_FEATURES=y
@@ -77,8 +77,6 @@ CONFIG_ESPTOOLPY_FLASHFREQ_80M=
 CONFIG_ESPTOOLPY_FLASHFREQ_120M=y
 CONFIG_SPIRAM_SPEED_80M=
 CONFIG_SPIRAM_SPEED_120M=y
-CONFIG_SPIRAM_TIMING_TUNING_POINT_VIA_TEMPERATURE_SENSOR=y
-CONFIG_SPIRAM_TIMING_MEASURE_TEMPERATURE_INTERVAL_SECOND=5
 
 # USB-Serial-JTAG as the PRIMARY console, so serial INPUT works (#201).
 #
