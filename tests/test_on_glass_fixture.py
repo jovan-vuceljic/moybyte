@@ -319,3 +319,28 @@ def test_two_lines_in_one_read_are_both_found_in_order():
                     "KSTOP 2/2 before", "KSTOP 2/2 after"]
     assert on_glass._line_since(b, at, "KSTOP ", 0.1) == (None, at)
     assert on_glass._said_since(b, 0, "MPY: soft reboot", 0)
+
+
+class _LossySerial(_ChunkedSerial):
+    """A board whose first answer to `state` never reaches the host, as a
+    reply goes missing every so often over the cable (P4Board.cmd)."""
+
+    def __init__(self):
+        super().__init__(())
+        self.asked = 0
+
+    def write(self, data):
+        if data == b"state\n":
+            self.asked += 1
+            if self.asked > 1:
+                self.reads.append(b'STATE {"stack": ["launcher"]}\n')
+        return len(data)
+
+
+def test_a_state_whose_reply_went_missing_is_asked_again():
+    """The release pass of 2026-11-27 failed a T-Deck test on one `state`
+    with no reply, the board answering the next command at once."""
+    ser = _LossySerial()
+    b = p4_autotest.P4Board("fake", board_dir=GUITION, ser=ser)
+    assert b.state(timeout=0.2) == {"stack": ["launcher"]}
+    assert ser.asked == 2

@@ -621,9 +621,9 @@ class P4Board:
     # -- verbs ------------------------------------------------------------
 
     def state(self, timeout=8.0):
-        """The `state` snapshot as a dict (see moy_runtime._remote_state)."""
-        self._write_line("state")
-        line = self.wait_line("STATE ", timeout)
+        """The `state` snapshot as a dict (see moy_runtime._remote_state).
+        A probe, so a missing reply is asked again once, as `cmd` asks."""
+        line = self.cmd("state", wait_for="STATE ", timeout=timeout)
         if line is None:
             raise RuntimeError("no STATE reply")
         return json.loads(line.split("STATE ", 1)[1])
