@@ -1485,3 +1485,38 @@ def test_the_store_words_are_for_store_errors_only(board):
     assert m._store_short(OSError(28)) == m.NO_ROOM
     assert m._store_short(OSError(5)) == m.NO_WRITE
     assert m._store_short(ValueError("not an app image")) == "not an app image"
+
+
+def test_a_vm_stop_leaves_the_worker_s_and_the_media_service_s_clients():
+    """The http device API's worker and the media service fetch on tasks that
+    run on through a VM stop, each on a client slot of its own: the stop
+    closes the VM's clients and leaves theirs. A T-Deck's fetch worker wrote
+    its request into the head buffer a stop had freed under it."""
+    import ctypes
+    lib = nb._lib()
+    lib.moy_httpc_open_ex.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint32,
+                                      ctypes.POINTER(ctypes.c_int),
+                                      ctypes.POINTER(ctypes.c_uint32)]
+    lib.moy_httpc_open_ex.restype = ctypes.c_int
+
+    def open_ex(url, flags):
+        status, clen = ctypes.c_int(), ctypes.c_uint32()
+        h = lib.moy_httpc_open_ex(url.encode(), b"t", flags, ctypes.byref(status),
+                                  ctypes.byref(clen))
+        assert h > 0 and status.value == 200, h
+        return h
+
+    with Server() as srv:
+        srv.routes["/a"] = (200, {}, b"ok")
+        vm, _status, _clen = nb.http_open(srv.url("/a"), "t")
+        worker = open_ex(srv.url("/a"), 0x02)     # MOY_HTTPC_WORKER
+        media = open_ex(srv.url("/a"), 0x04)      # MOY_HTTPC_MEDIA
+        try:
+            nb.net_vm_stop()
+            assert nb._http_head_room(vm) == 0, "the VM's client closed"
+            assert nb._http_head_room(worker) > 0 and nb._http_head_room(media) > 0
+            buf = bytearray(16)
+            assert buf[:nb.http_readinto(worker, buf)] == b"ok"
+        finally:
+            nb.http_close(worker)
+            nb.http_close(media)

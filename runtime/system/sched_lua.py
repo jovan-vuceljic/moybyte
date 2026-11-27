@@ -21,8 +21,11 @@ wakes its task; a stepped one is stepped at the next poll, or at once by the
 frame start (`mail`) where the OS's own `send` posted it.
 """
 
+import time as _time
+
 import moy_evq as _E
-from sched_proc import (BACKGROUND, SUSPENDED, EXITED, EXIT_CRASHED, ALLOC_WRAP,
+from ticks import _ticks_ms, _ticks_diff
+from sched_proc import (BACKGROUND, SUSPENDED, STOPPING, EXITED, EXIT_CRASHED, ALLOC_WRAP,
                         _end_grant, _log, INFO, ERR)
 
 try:
@@ -33,7 +36,15 @@ except ImportError:  # pragma: no cover - every VM has it
 LUA_SVC_STACK = 12288           # moycore_svc.h's MOYCORE_SVC_STACK, in PSRAM on a board
 LUA_SVC_NEED = 40 << 10         # a Lua service at its start: its stack and its state
 SVC_EXITED = 4                  # moycore_svc.h's MOYCORE_SVC_EXITED
+SVC_STOP_WAIT_MS = 2500         # MOYCORE_SVC_STOP_MS (TERM to KILL) and a margin
 EINVAL = 22
+
+
+def _sleep_ms(ms):
+    try:
+        _time.sleep_ms(ms)
+    except AttributeError:
+        _time.sleep(ms / 1000.0)
 
 
 def runtime():
@@ -176,7 +187,25 @@ class LuaServices:
         self.sched.poll()
 
     def reset(self):
-        """Every stepped state closed under its grant (a test's teardown)."""
-        svc = self.stepping()
-        if svc is not None:
+        """Every Lua service ended (a test's teardown). A stepped state is
+        closed under its grant; one on a task of its own is asked to stop
+        and polled, its calls to the VM served, until its task is done or
+        SVC_STOP_WAIT_MS has passed: a task left running with its row
+        forgotten has no poll to end it, and spins on its stop."""
+        svc = runtime()
+        if svc is None:
+            return
+        if not svc.svc_tasks():
             svc.svc_reset()
+            return
+        live = [p for p in self.sched.procs.values() if p.native]
+        for p in live:
+            if p.state != EXITED:
+                p.state = STOPPING      # an asked end: no restart follows it
+            svc.svc_stop(p.native)
+        t0 = _ticks_ms()
+        while live and _ticks_diff(_ticks_ms(), t0) < SVC_STOP_WAIT_MS:
+            self.sched.poll()
+            live = [p for p in live if p.native]
+            if live:
+                _sleep_ms(10)
