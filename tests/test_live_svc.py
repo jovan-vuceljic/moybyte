@@ -130,8 +130,14 @@ def test_a_window_s_message_reaches_its_service_and_the_answer_comes_back(board,
     rc, took = win.send(b"ping", [42, "hi"])
     assert rc == 0 and took == 1, "the page's stand-in of the board's echo took it"
     assert _until(page, win, lambda g: ("echo", "pong", [42, "hi"]) in g), win.got
-    live = D._live(board)
-    assert int(live["msgs_up"]) >= 1 and int(live["msgs_down"]) >= 2, live
+    end = time.monotonic() + 3.0                # the twin's LIVE line is periodic: wait for one
+    while True:                                 # printed after the pong was counted
+        live = D._live(board)
+        if live and int(live["msgs_up"]) >= 1 and int(live["msgs_down"]) >= 2:
+            break
+        assert time.monotonic() < end, live
+        page.pump()
+        time.sleep(0.05)
 
 
 def test_a_dropped_socket_is_said_and_a_send_meanwhile_reaches_nobody(board, page_so,
