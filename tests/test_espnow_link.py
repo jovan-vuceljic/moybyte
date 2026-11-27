@@ -1289,6 +1289,36 @@ def test_two_consoles_on_a_lossy_air_play_the_same_brick_siege(tmp_path, monkeyp
         assert ws.ns["key"]() == 0, "a key does not cross the air, so a match has none"
 
 
+def test_restarting_a_match_from_the_pause_menu_ends_it_on_both_consoles(tmp_path,
+                                                                          monkeypatch):
+    """The pause menu's Restart re-runs the cart in place, and the run used to
+    adopt the live session at its frame N with a world at frame zero, while
+    the peer played on: two worlds parted. A restart ends the match: the
+    restarting console is one player again at once, and the peer hears BYE
+    and re-runs solo at its next poll."""
+    seen = {}
+
+    def tamper(k, wss):
+        if k == 300:
+            np0, np1 = wss[0].run.player.netplay, wss[1].run.player.netplay
+            assert np0 is not None and np1 is not None and np0.frame > 50, \
+                "the premise: a match formed and advanced"
+            seen["session"] = np1.session
+            ws = wss[1]
+            ws.pause.show()
+            ws.pause.choose(ws.pause.rows.index("Restart"))
+            assert ws.cart_error is None
+            seen["restarted"] = (ws.run.player.netplay, ws.input.players.count())
+        elif k == 301:
+            seen["peer"] = wss[0].run.player.netplay
+
+    worlds, wss = _two_consoles(tmp_path, monkeypatch, "Brick Siege", 0.0, 302,
+                                tamper=tamper)
+    assert seen["restarted"] == (None, 1), "the restarting console plays solo"
+    assert seen["peer"] is None, "the peer heard BYE and re-ran solo"
+    assert wss[0].cart_error is None
+
+
 def test_a_match_plays_while_one_console_serves_ssh(tmp_path, monkeypatch):
     """SSH during a match (2026-11-07), as far as a host can take it: one
     console serves SSH, so its radio is held for "ssh" and its station is

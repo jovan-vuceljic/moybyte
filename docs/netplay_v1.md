@@ -265,7 +265,12 @@ picked the dead session back up and never simulated again (on glass: a survivor
 stuck at frame 2874, stalls past 6856, the link reporting no match; 2026-08-27,
 `387a68c`). **`Player.start` refuses to adopt a session that has declared itself
 dead**, for the re-runs the link never hears about (Editor PLAY, the dev `run`,
-a shelf tap) — which frees that run to form a NEW match.
+a shelf tap) — which frees that run to form a NEW match. **Nor does it adopt a
+live session its own run already plays** (2026-11-27): a restart in place
+(the pause menu's or the stop card's Restart, the dev `run`) ends the match,
+since the peer's world cannot go back to frame zero with it, and the peer
+hears BYE (below) and re-runs solo. A match forming re-runs with a session
+the run never held, so it is adopted as before.
 
 **A console that leaves says so** (2026-11-27). Closing a live, bound session
 (the run's teardown: the pause menu's Quit, a `leave`, a stopped link) sends

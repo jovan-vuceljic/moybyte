@@ -924,8 +924,13 @@ class Player(PlayerDiag):
                 # dev channel's `run`, a kid re-launching from the shelf --
                 # would otherwise adopt a session whose advance() can only
                 # ever stall, and the cart would never simulate again.
+                # Nor does a live one survive a restart of the run that
+                # plays it (the pause menu's or the stop card's Restart, a
+                # dev `run`): the peer cannot rejoin a world at frame zero,
+                # so the match ends, the peer hears BYE and plays on solo.
+                # A match forming re-runs with a session this run never held.
                 _np = ws.netplay
-                if _np is not None and getattr(_np, "dead", False):
+                if _np is not None and (_np is self.netplay or getattr(_np, "dead", False)):
                     link.end_match(ws)
                 if ws.netplay is None:
                     link.offer(ws, cart.get("title") or "")
