@@ -364,3 +364,20 @@ Decisions (owner, 2026-11-27):
   full buffer acknowledges nothing, so a reliable sender resends. A match
   never runs this way: its inputs stay on the resident real-time lane, and
   only an invitation to a match may start a cart.
+- **Beaming asks in the OS, whatever runs.** A beam's offer reaches the
+  always-on radio service, and the question ("the T-Deck wants to send you
+  `photo.png`: Accept / Decline") is OS chrome over any app, as the "open
+  with" menu is (§1). An accepted file lands in the shared folders (§2), and
+  the OS offers to open it with the app that handles its type. A Zero has no
+  screen: the question goes to its page while one is connected. With no
+  page connected, the offer is held briefly and then declined, so a Zero
+  never takes a file on its own.
+- **A flood is muted, never answered.** An offer or an invitation that
+  is declined, or left to time out, counts against its sender. Past three in
+  a row, that sender's next ones are dropped without a question for a
+  window that doubles with each further one, up to a day, and an accept
+  resets it. "Block this console" in the question mutes it for good, kept in
+  `system/settings`. A sender is only a radio address, and radio addresses can be
+  forged (`threat_model.md`), so the console also caps how many questions
+  it asks a minute, whoever sends: the same flood from fresh addresses still
+  asks at most that many times.
