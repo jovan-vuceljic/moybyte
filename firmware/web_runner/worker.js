@@ -2686,9 +2686,14 @@ function liveGone(ws) {
 // the console's frames run, its boot's (liveOpen), which minds no silence:
 // the VM's start holds this thread for seconds at a time, and a board gone
 // meanwhile ends the request in flight (LIVE_REQ_MS) or closes the socket.
-let liveBootBeat = 0;
+// The silence is counted only while this thread listens: a frame that held
+// it (a cart's launch, a slow phone's frame) left what the board said
+// meanwhile queued unread, so after such a stall the count starts again.
+let liveBootBeat = 0, liveBeatAt = 0;
 function liveBeat(ws, booting) {
     const now = performance.now();
+    if (now - liveBeatAt > LIVE_BEAT_MS) liveHeard = Math.max(liveHeard, now);
+    liveBeatAt = now;
     if (!booting && now - liveHeard > LIVE_LOST_MS) { liveDrop(ws, "silent"); return; }
     if (now - liveSaid >= LIVE_BEAT_MS) {
         liveSaid = now;

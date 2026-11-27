@@ -36,15 +36,18 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   open, and its internal heap after each is the idle one's within
   HEAP_SPREAD.
 
-  A MATCH, where a T-Deck is on MOYBYTE_TDECK_PORT (the pass gives the
-  T-Deck's port when it is in the same pass, after the T-Deck's own row): the
-  page plays a Lua cart's and a Python cart's match against it, the world
-  check armed on both sides (the page's `?linkcheck=1`, the T-Deck's `link
-  check on`), and both report checkpoints and no desync. The T-Deck's
-  math.atan2 is probed against the wasm's too. And MOY MESH OVER LORA, on
-  the XIAO: its service on the board takes the T-Deck's Moy Mesh setup, and
-  a direct message goes each way between the two radios, the XIAO's typed
-  into its window on the page, each acknowledged by the other node.
+  A MATCH, where a console is on its port: the T-Deck on MOYBYTE_TDECK_PORT
+  (the pass gives the T-Deck's port when it is in the same pass, after the
+  T-Deck's own row), or the board MOYBYTE_MATCH_BOARD names (its id, `cores3`)
+  on MOYBYTE_MATCH_PORT: the page plays a Lua cart's and a Python cart's
+  match against it, the world check armed on both sides (the page's
+  `?linkcheck=1`, the console's `link check on`), and both report
+  checkpoints and no desync, the page's live socket never dropping and no
+  notice of the link on its screen. The console's math.atan2 is probed
+  against the wasm's too. And MOY MESH OVER LORA, on
+  the XIAO with a T-Deck: its service on the board takes the T-Deck's Moy
+  Mesh setup, and a direct message goes each way between the two radios, the
+  XIAO's typed into its window on the page, each acknowledged by the other node.
 
 THE CLAIM. The password removed, the board serves no SSH; the cable's
 fresh claim opens the console on its URL, the page sets the password and
@@ -126,6 +129,8 @@ MATCH_CARTS = ("Brick Siege Lua", "Brick Siege")
 # on, a few ms without; and the beats it takes (one a second).
 RTT_MEDIAN_MS = 40.0
 RTT_BEATS = 30
+# A match is played this much longer once it formed (MOYBYTE_MATCH_HOLD_S).
+MATCH_HOLD_S = int(os.environ.get("MOYBYTE_MATCH_HOLD_S") or 5)
 LIVE_LOG = re.compile(r"LIVE|live|WEBHOST|WEBAUTH|alloc|refus|busy|ssh", re.I)
 
 sys.path.insert(0, str(ROOT / "tools"))
@@ -133,9 +138,12 @@ import board_config  # noqa: E402
 import gen_web_blob  # noqa: E402
 from p4_autotest import P4Board  # noqa: E402
 
-TDECK_PORT = os.environ.get("MOYBYTE_TDECK_PORT")
-needs_tdeck = pytest.mark.skipif(not TDECK_PORT, reason="MOYBYTE_TDECK_PORT not set "
-                                 "(the T-Deck a page plays a match against)")
+MATCH_BOARD = os.environ.get("MOYBYTE_MATCH_BOARD") or "tdeck"
+MATCH_PORT = os.environ.get("MOYBYTE_MATCH_PORT") or (
+    os.environ.get("MOYBYTE_TDECK_PORT") if MATCH_BOARD == "tdeck" else None)
+needs_partner = pytest.mark.skipif(not MATCH_PORT, reason="neither MOYBYTE_TDECK_PORT nor "
+                                   "MOYBYTE_MATCH_PORT set (the console a page plays a "
+                                   "match against)")
 
 
 def _ota(board_dir):
@@ -944,7 +952,7 @@ MESH_SVC = ("window.__moyState().then(function (s) { return 'MESH ' + JSON.strin
 MESH_TEXT = "hi-from-the-page"
 SVC_LOOK = ("(lambda s: (s.info(), __import__('moycore').svc_budget(), "
             "s.rows.get('moymesh_log', None), __import__('moy_lora').owner(), "
-            "__import__('moy_log').read(0, 32), __import__('moy_net').live_stats()[16:]) "
+            "__import__('moy_log').read(0, 32), __import__('moy_net').live_stats()[16:18]) "
             "if s else None)"
             "(__import__('zero_host').SERVICES[0])")
 
@@ -2735,20 +2743,20 @@ def test_moy_mesh_holds_the_board_s_radio_from_the_page(zero, mirror, tmp_path):
               % (med, p90))
 
 
-# -- a match against a T-Deck --------------------------------------------------------------
+# -- a match against a console --------------------------------------------------------------
 
 
-def _tdeck(*args, timeout=180):
-    run = subprocess.run([sys.executable, str(ROOT / "tools" / "board.py"), "tdeck"]
-                         + list(args) + ["--port", TDECK_PORT],
+def _partner(*args, timeout=180):
+    run = subprocess.run([sys.executable, str(ROOT / "tools" / "board.py"), MATCH_BOARD]
+                         + list(args) + ["--port", MATCH_PORT],
                          capture_output=True, text=True, timeout=timeout, cwd=str(ROOT))
-    assert run.returncode == 0, "board.py tdeck %s: %s" % (
+    assert run.returncode == 0, "board.py %s %s: %s" % (MATCH_BOARD,
         " ".join(args), (run.stdout + run.stderr)[-1500:])
     return run.stdout
 
 
-def _tdeck_py(expr, timeout=60):
-    out = _tdeck("py", expr, "--timeout", str(timeout), timeout=timeout + 60)
+def _partner_py(expr, timeout=60):
+    out = _partner("py", expr, "--timeout", str(timeout), timeout=timeout + 60)
     return ast.literal_eval(out.strip().splitlines()[-1].split(" -> ", 1)[1])
 
 
@@ -2771,50 +2779,65 @@ def match_carts(zero):
             src = _folder_of(title)
             if CARTS + "/" + src.name not in zero.before_tree:
                 r.put_folder(str(src), CARTS + "/" + src.name)
-    shelf = _tdeck_py("[c.get('title') for c in ws.carts.all]")
+    shelf = _partner_py("[c.get('title') for c in ws.carts.all]")
     for title in MATCH_CARTS:
         if title not in shelf:
-            _tdeck("push", str(_folder_of(title)))
+            _partner("push", str(_folder_of(title)))
             pushed.append(_folder_of(title).name)
     try:
         yield
     finally:
-        _tdeck("desk")
+        _partner("desk")
         for folder in pushed:
-            _tdeck("remove", folder)
+            _partner("remove", folder)
 
 
-@needs_tdeck
+@needs_partner
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 @pytest.mark.parametrize("cart", MATCH_CARTS)
-def test_the_page_plays_a_match_against_a_tdeck(zero, mirror, match_carts, cart, tmp_path):
-    """The T-Deck runs the cart with the world check armed; the page the
+def test_the_page_plays_a_match_against_a_console(zero, mirror, match_carts, cart, tmp_path):
+    """The console runs the cart with the world check armed; the page the
     board serves opens the same cart with it armed too; the match forms,
-    plays its frames, and neither side finds its checkpoints apart."""
+    plays its frames for MATCH_HOLD_S more, and neither side finds its
+    checkpoints apart. The page's live socket stays up all the while, and
+    the page shows no notice of its link."""
     _needs_password(zero)
-    _tdeck("run", cart)
+    _partner("run", cart)
     try:
-        _tdeck("tail", "1", "--send", "link check on", "--grep", "REMOTE")
+        _partner("tail", "1", "--send", "link check on", "--grep", "REMOTE")
         state = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
-                 "{link: s.link, cart: s.cart, stats: s.link_stats}); })")
+                 "{link: s.link, cart: s.cart, stats: s.link_stats, notice: s.notice_up, "
+                 "live: s.live && {opens: s.live.opens, drops: s.live.drops, "
+                 "rtt: s.live.rtt}}); })")
         steps = sign_in(zero) + [
             {"waitFor": "window.__moyState().then(function (s) { return !!(s.link && "
                         "s.link[2] && s.link[3] > 600); })", "timeout": 120000},
+            {"js": state % "FORMED"},
+            {"wait": MATCH_HOLD_S * 1000},
             {"js": state % "PLAYED"},
         ]
         query = "?dev=1&desktop=1&linkcheck=1&cart=" + cart.replace(" ", "%20")
         out = _browse(zero, zero.url, steps, tmp_path / "match", query=query)
-        page = _tagged(out, "PLAYED")
-        deck = _tdeck_py("ws.link.stats()")
+        formed, page = _tagged(out, "FORMED"), _tagged(out, "PLAYED")
+        deck = _partner_py("ws.link.stats()")
     finally:
-        _tdeck("leave")
+        _partner("leave")
     pm, dm = (page or {}).get("stats", {}).get("match"), deck.get("match")
-    print("%s %s: page %s | tdeck %s" % (zero.name, cart, pm, dm))
+    print("%s %s against %s: page %s | %s %s" % (zero.name, cart, MATCH_BOARD, pm,
+                                                 MATCH_BOARD, dm))
     assert page and page["link"][2] and pm, "the match formed on the page:\n" + out[-2000:]
-    assert dm, "the match formed on the T-Deck: %s" % deck
+    assert dm, "the match formed on the %s: %s" % (MATCH_BOARD, deck)
+    live, rtt = page["live"], page["live"]["rtt"]
+    if rtt:
+        med, p90 = Z.rtt(rtt)
+        zero.take("zero live rtt median in a match", med, rtt)
+        print("the live socket in the match: opens %d, drops %d, echo median %.1f ms, "
+              "p90 %.1f ms" % (live["opens"], live["drops"], med, p90))
     assert page["stats"]["world_check"] and deck["world_check"], "both armed the world check"
     assert pm["checks"] >= 10 and dm["checks"] >= 10, (pm, dm)
     assert pm["desync"] is None and dm["desync"] is None, (pm, dm)
+    assert live["drops"] == formed["live"]["drops"], "the live socket dropped in the match"
+    assert not page["notice"], "a notice over the match: %s" % (page["notice"],)
 
 
 ATAN2_ARGS = [(y, x) for y in (-7.5, -1.0, -0.3, 0.0, 0.2, 1.0, 3.25, 100.0)
@@ -2832,16 +2855,16 @@ process.stdout.write(out.join("\\n") + "\\n");
 """
 
 
-@needs_tdeck
+@needs_partner
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
-def test_the_tdeck_atan2_is_the_wasm_s(tmp_path):
+def test_the_console_s_atan2_is_the_wasm_s(tmp_path):
     """math.atan2 over every quadrant and both axes, as the single the VM
-    keeps, on the T-Deck and in the browser's wasm: one answer, or a Python
+    keeps, on the match's console and in the browser's wasm: one answer, or a Python
     cart that steers by it parts the two sides of a match."""
     dist = RUNNER / "dist"
     if not (dist / "micropython.mjs").exists():
         pytest.skip("web_runner dist/ not built")
-    deck = _tdeck_py(ATAN2)
+    deck = _partner_py(ATAN2)
     script = tmp_path / "atan2.mjs"
     script.write_text(RUN_WASM)
     run = subprocess.run(["node", str(script)], capture_output=True, text=True, timeout=120,
@@ -2850,8 +2873,8 @@ def test_the_tdeck_atan2_is_the_wasm_s(tmp_path):
     assert run.returncode == 0, run.stderr[-1500:]
     wasm = ast.literal_eval(run.stdout.strip().splitlines()[-1])
     apart = [(a, d, w) for a, d, w in zip(ATAN2_ARGS, deck, wasm) if d != w]
-    print("atan2: %d of %d agree between the T-Deck and the wasm; apart: %s"
-          % (len(ATAN2_ARGS) - len(apart), len(ATAN2_ARGS), apart))
+    print("atan2: %d of %d agree between the %s and the wasm; apart: %s"
+          % (len(ATAN2_ARGS) - len(apart), len(ATAN2_ARGS), MATCH_BOARD, apart))
     assert len(deck) == len(wasm) == len(ATAN2_ARGS)
     assert not apart, apart
 

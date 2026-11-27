@@ -2068,9 +2068,10 @@ def _live_say(ws, key):
 
 
 def live_state(open_, why=""):
-    """The socket opened (1) or closed (0). A drop while the radio is held
-    is said on the screen, and so is its return: the match waits meanwhile,
-    as it does for a lost input."""
+    """The socket opened (1) or closed (0). A drop during a match is said on
+    the screen, and so is its return: the match waits meanwhile, as it does
+    for a lost input. A game that holds the radio with no match formed has
+    nothing waiting, and the page's status already says it reconnects."""
     st = _S.get("live")
     ws = _S.get("ws")
     if st is None or ws is None:
@@ -2078,11 +2079,15 @@ def live_state(open_, why=""):
     import moy_net
     on = bool(int(open_))
     moy_net.live_open(on)
-    held = moy_net.live_info()[1]
     if on != st["open"]:
         print("[live] socket %s%s" % ("open" if on else "closed", (": " + why) if why else ""))
-        if held:
-            _live_say(ws, "link_back" if on else "link_lost")
+        if not on:
+            st["match"] = bool(moy_net.live_info()[1]) and getattr(ws, "netplay", None) is not None
+            if st["match"]:
+                _live_say(ws, "link_lost")
+        elif st.get("match"):
+            st["match"] = False
+            _live_say(ws, "link_back")
     st["open"] = on
     g = _S.get("gpio")
     if g is not None:

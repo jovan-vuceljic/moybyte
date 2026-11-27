@@ -293,8 +293,12 @@ node.port.postMessage({port:ch.port1},[ch.port1]);
 w.postMessage({t:"sink",port:ch.port2,rate:rate},[ch.port2]);SINK="worklet";
 }).catch(function(){SINK="page";w.postMessage({t:"sink",rate:rate});});return;}catch(e){}}
 SINK="page";w.postMessage({t:"sink",rate:rate});}
+// A gesture resumes a context that is not running: "suspended" before the
+// first, and WebKit's "interrupted", which iOS leaves a page's context in
+// after its audio session was taken (the tab hidden, another app's sound,
+// a call) and which nothing but a resume inside a gesture ends.
 function ensureAudio(){if(!actx){audioInit();if(actx&&WORKER)audioSink(WORKER);}
-if(actx&&actx.state==="suspended")actx.resume();}
+if(actx&&actx.state!=="running"&&actx.state!=="closed")actx.resume().catch(function(){});}
 // The page's sink: the samples it has played are those it got less those
 // still scheduled.
 function audioPlayed(){if(actx&&schedNext>actx.currentTime)
