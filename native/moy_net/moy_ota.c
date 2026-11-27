@@ -1753,7 +1753,9 @@ void moy_net_vm_stop(void) {
     if (s_up != NULL && (s_u.st.phase == MOY_OTA_FETCHING || s_u.st.phase == MOY_OTA_WRITING)) {
         moy_ota_cancel();
     }
-    for (int i = 0; s_cl != NULL && i < MOY_HTTPC_SLOTS - 1; i++) {
+    // The VM's clients only: the worker's and the media service's are their
+    // tasks', which run on through the stop and close their own.
+    for (int i = 0; s_cl != NULL && i < MOY_HTTPC_SLOTS - 2; i++) {
         if (s_cl[i].open) {
             client_drop(&s_cl[i]);
         }
