@@ -6390,7 +6390,7 @@ def ota_verification_is_fast_enough(board):
     assert 0 < us < 500_000, "verify took %dus -- something got much slower" % us
 
 
-def ota_updater_is_live(board, board_id, saw_boot=True):
+def ota_updater_is_live(board, board_id, saw_boot=True, update_dir="/moy/update"):
     """#53 on a P4 board. The partition table has been OTA-shaped since bring-up and
     update_ui frozen in all along; what was missing was moy_ota itself, the
     staging directory (this board has no SD), the identity stamp and the
@@ -6403,7 +6403,7 @@ def ota_updater_is_live(board, board_id, saw_boot=True):
     assert board.pyval("ws.updater is not None") is True
     assert board.pyval("ws.updater.available()") is True, "not an OTA build"
     assert board.pyval("__import__('moy_ota').BOARD") == board_id
-    assert board.pyval("ws.updater.update_dir") == "/moy/update"
+    assert board.pyval("ws.updater.update_dir") == update_dir
     assert board.pyval("ws.updater.slot()") in ("ota_0", "ota_1")
     # The manifest it would fetch is this board's, not another's -- an OTA
     # payload is an app-partition image, so the wrong one cannot boot.

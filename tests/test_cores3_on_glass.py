@@ -255,7 +255,10 @@ def test_ota_verification_is_fast_enough(board):
 
 
 def test_the_ota_updater_is_live_on_this_board(board):
-    on_glass.ota_updater_is_live(board, "cores3", saw_boot=False)
+    # Staged on the card when the card is the store (moy_ota.UPDATE_DIR), else in flash.
+    on_card = board.pyval("ws.carts_root").startswith("/sd/")
+    on_glass.ota_updater_is_live(board, "cores3", saw_boot=False,
+                                 update_dir="/sd/update" if on_card else "/moy/update")
 
 
 def test_rollback_confirm_comes_from_the_frame_loop(board):
