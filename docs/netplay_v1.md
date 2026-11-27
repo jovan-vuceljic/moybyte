@@ -337,17 +337,24 @@ either field, and the kernel's loop writes both from its own match
   frame 0 showing a tank nobody drove.
 - **The tuning recipe is ORDER-SENSITIVE and the ack LIES.** `rxbuf=32768` goes
   in BEFORE `active(True)` — reconfiguring the ring live desyncs it until a full
-  activation cycle — and `RATE_54M` after. At the 526-byte default, 64 of 200
+  activation cycle — and the PHY rate after. At the 526-byte default, 64 of 200
   messages arrived while `send(sync=True)` answered True for every one.
+- **A match sends at 24M** (2026-11-27, on glass). A bench of 26-byte
+  frames of varied bytes, the size of a match's inputs, from a T-Deck to a
+  CoreS3 delivered 89–90% at 54M against 99–100% at 24M and 97% at 12M; the
+  other way every rate delivered all but a frame or two. In a Brick Siege
+  match at 54M the T-Deck's losses came in bursts, and both consoles
+  stalled together through them. `players.MATCH_RATE` names it, and
+  `BEAM_RATE` the beam's 12M below.
 - **At 54M a frame's delivery depends on its bytes, so a beam sends at 12M**
   (2026-11-19, on glass, #7). A Guition S3's 54M frames reach a T-Deck and a
   Waveshare P4 by content: a given full frame arrives nearly every time or
   never, whatever the number of sends, and the same frames all arrive at 12M
-  and at 6M. A match never notices (its frames are small, and each carries
-  the inputs the last one did), but a beam resends the same bytes: a report
+  and at 6M. A match's frame carries the inputs the last one did, so a lost
+  one costs a stall at worst, but a beam resends the same bytes: a report
   whose bitmap was all ones never bound its sender, and a chunk of the wrong
   bytes would stall a file for good. `EspNowLink.phy` gives the radio
-  `RATE_12M` while a beam holds it and the match's `RATE_54M` back when a
+  `RATE_12M` while a beam holds it and the match's `RATE_24M` back when a
   game takes it; at a beam's pace the air time of 12M is not what bounds it.
 - **The receive ring is the kernel's** (`native/moy_net/moy_link.c`, since
   2026-10-07). The port's modespnow committed a record in three ring puts while

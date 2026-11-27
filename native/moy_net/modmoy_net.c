@@ -250,6 +250,7 @@ static MP_DEFINE_CONST_FUN_OBJ_3(mod_wifi_remember_obj, mod_wifi_remember);
 // The ESP-IDF's wifi_phy_rate_t values the page's link forwards to its
 // board's radio (moy_link_web.c).
 #define WIFI_PHY_RATE_12M 0x0A
+#define WIFI_PHY_RATE_24M 0x09
 #define WIFI_PHY_RATE_54M 0x0C
 #endif
 #include "moy_link.h"
@@ -1332,6 +1333,7 @@ static const mp_rom_map_elem_t moy_net_globals_table[] = {
     #if defined(MOY_NET_LINK) && MOY_NET_LINK
     {MP_ROM_QSTR(MP_QSTR_Link), MP_ROM_PTR(&moy_net_link_type)},
     {MP_ROM_QSTR(MP_QSTR_RATE_54M), MP_ROM_INT(WIFI_PHY_RATE_54M)},
+    {MP_ROM_QSTR(MP_QSTR_RATE_24M), MP_ROM_INT(WIFI_PHY_RATE_24M)},
     {MP_ROM_QSTR(MP_QSTR_RATE_12M), MP_ROM_INT(WIFI_PHY_RATE_12M)},
     #if defined(MOY_NET_LIVE) && MOY_NET_LIVE
     {MP_ROM_QSTR(MP_QSTR_live_stats), MP_ROM_PTR(&mod_live_stats_obj)},

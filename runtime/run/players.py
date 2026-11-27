@@ -363,11 +363,15 @@ START_TRIES = 12
 # The radio's recipe (T-Deck <-> Guition): rxbuf BEFORE active()
 # (a live change desyncs the ring for good); not the default 526 (64 of 200
 # messages arrived at the default while every send said True), and room for a
-# bound beam's whole window between two polls (MOY_MATCH_BEAM_DRAIN); RATE_54M
-# (a 48 KB payload went from 1680 ms to 65 ms). The station's power save is
-# none on every board and is the idle ladder's to rest (native/moy_net/
-# moy_net.h), never the link's.
+# bound beam's whole window between two polls (MOY_MATCH_BEAM_DRAIN); then
+# the PHY rate, after active() (an activation resets it to 1M; `phy`). The
+# station's power save is none on every board and is the idle ladder's to
+# rest (native/moy_net/moy_net.h), never the link's.
 RXBUF = 163840
+# The PHY rates (moy_net's names): a match's frames leave at 24M, a beam's at
+# 12M (docs/netplay_v1.md §4).
+MATCH_RATE = "RATE_24M"
+BEAM_RATE = "RATE_12M"
 DRAIN_MAX = 24
 
 
@@ -812,11 +816,11 @@ class EspNowLink:
         return up
 
     def phy(self, beam):
-        """The PHY rate every frame leaves at: the match's 54M, where a
-        frame is small and a lost one is covered by the next, or a beam's
-        12M. A beam resends the same bytes, and at 54M a frame's delivery
-        depends on its bytes: from a Guition S3 some full frames never
-        arrive however often they are sent (docs/netplay_v1.md §4)."""
+        """The PHY rate every frame leaves at: the match's MATCH_RATE or a
+        beam's BEAM_RATE. At 54M a frame's delivery depends on its bytes
+        and its pair of boards: from a Guition S3 some full frames never
+        arrive however often they are sent, and a T-Deck's match frames
+        reached a CoreS3 less often than at 24M (docs/netplay_v1.md §4)."""
         rate = self._rate_beam if beam else self._rate_match
         if rate is None or rate == self._rate:
             return
@@ -841,8 +845,8 @@ class EspNowLink:
             if kernel:
                 import moy_net
                 self.radio = moy_net.Link()
-                self._rate_match = getattr(moy_net, "RATE_54M", None)
-                self._rate_beam = getattr(moy_net, "RATE_12M", None)
+                self._rate_match = getattr(moy_net, MATCH_RATE, None)
+                self._rate_beam = getattr(moy_net, BEAM_RATE, None)
             if self._rate is None or self._game:
                 self._rate = self._rate_match
             try:

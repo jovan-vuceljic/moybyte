@@ -418,6 +418,40 @@ def test_two_consoles_play_one_game_over_the_radio():
     assert ra.count() == 2 and rb.count() == 2
 
 
+def test_a_match_leaves_at_24m_and_a_beam_at_12m(monkeypatch):
+    """The kernel radio's PHY rates (docs/netplay_v1.md §4, 2026-11-27): a
+    T-Deck's 54M match frames reached a CoreS3 less often than its 24M
+    ones, in bursts both consoles stalled through. The rate goes in
+    after active(), which resets it."""
+    import sys
+    log = []
+
+    class _Link:
+        def config(self, **kw):
+            log.append(("config", kw))
+
+        def active(self, on=None):
+            log.append(("active", on))
+            return True
+
+        def add_peer(self, mac):
+            pass
+
+    fake = types.SimpleNamespace(Link=_Link, RATE_54M=0x0C, RATE_24M=0x09, RATE_12M=0x0A)
+    monkeypatch.setitem(sys.modules, "moy_net", fake)
+    lk = moy_espnow.EspNowLink(board="tdeck", name="A", ticks_ms=_Clock(),
+                               wlan=_FakeWlan(b"\x01" * 6))
+    lk.start()
+    assert (lk._rate_match, lk._rate_beam) == (0x09, 0x0A)
+    up = log.index(("active", True))
+    assert ("config", {"rate": 0x09}) in log[up:], "24M, after the activation"
+    import os
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    src = open(os.path.join(root, "native", "moy_net", "modmoy_net.c")).read()
+    assert "MP_QSTR_RATE_24M), MP_ROM_INT(WIFI_PHY_RATE_24M)" in src, \
+        "the board's moy_net names the rate the link asks for"
+
+
 def test_a_dead_link_stalls_both_consoles_and_neither_runs_ahead():
     air, clock, a, b = _pair(lambda ws, title: True)
     _see_each_other(a, b, clock)
