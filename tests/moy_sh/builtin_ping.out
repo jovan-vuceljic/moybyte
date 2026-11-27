@@ -1,28 +1,28 @@
-$ # ICMP echoes, as iputils prints them; the harness's 10.0.0.1 answers each
+$ # ICMP echoes, in iputils' lines; the harness's 10.0.0.1 answers each
 $ ping -c 2 -i 0.2 router.lan
 PING router.lan (10.0.0.1) 56(84) bytes of data.
-64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=20.0 ms
-64 bytes from 10.0.0.1: icmp_seq=2 ttl=64 time=20.0 ms
+64 bytes from 10.0.0.1: icmp_seq=1 ttl=64 time=20.000 ms
+64 bytes from 10.0.0.1: icmp_seq=2 ttl=64 time=20.000 ms
 
 --- router.lan ping statistics ---
 2 packets transmitted, 2 received, 0% packet loss, time 230ms
-rtt min/avg/max/mdev = 20.000/20.000/20.000/0.000 ms
+rtt min/avg/max = 20.000/20.000/20.000 ms
 $ echo answered=$?
 answered=0
 $ ping -c 4 -i 0.2 lossy.lan; echo some=$?
 PING lossy.lan (10.0.0.3) 56(84) bytes of data.
-64 bytes from 10.0.0.3: icmp_seq=1 ttl=64 time=20.0 ms
-64 bytes from 10.0.0.3: icmp_seq=3 ttl=64 time=20.0 ms
+64 bytes from 10.0.0.3: icmp_seq=1 ttl=64 time=20.000 ms
+64 bytes from 10.0.0.3: icmp_seq=3 ttl=64 time=20.000 ms
 
 --- lossy.lan ping statistics ---
-4 packets transmitted, 2 received, 50% packet loss, time 1600ms
-rtt min/avg/max/mdev = 20.000/20.000/20.000/0.000 ms
+4 packets transmitted, 2 received, 50% packet loss, time 2400ms
+rtt min/avg/max = 20.000/20.000/20.000 ms
 some=0
 $ ping -c 2 -i 0.2 -W 0.3 10.0.0.9; echo none=$?
 PING 10.0.0.9 (10.0.0.9) 56(84) bytes of data.
 
 --- 10.0.0.9 ping statistics ---
-2 packets transmitted, 0 received, 100% packet loss, time 500ms
+2 packets transmitted, 0 received, 100% packet loss, time 600ms
 none=1
 $ ping -c 1 nowhere.lan; echo missing=$?
 ping: nowhere.lan: not found
@@ -34,7 +34,7 @@ $ ping -c two router.lan; echo bad=$?
 ping: -c two: not a number
 bad=2
 $ ping -i 0.1 router.lan; echo bad=$?
-ping: -i below 0.2 seconds
+ping: -i 0.1: out of range
 bad=2
 $ ping -x router.lan; echo bad=$?
 sh: 1: ping: Illegal option -x

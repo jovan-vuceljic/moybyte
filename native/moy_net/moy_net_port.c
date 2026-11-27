@@ -1182,57 +1182,45 @@ int moy_net_echo_open(void) {
         return -MOY_NET_ENET;
     }
     int fd = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
-    if (fd < 0) {
-        return -(errno ? errno : ENOMEM);
-    }
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK);
-    return fd;
+    return fd >= 0 ? fd : -ENOMEM;
 }
 
+// An echo request, its payload zeros. The send is the socket's own: lwIP
+// queues it on its task and returns.
 int moy_net_echo_send(int fd, uint32_t ip, uint16_t id, uint16_t seq) {
-    uint8_t pkt[sizeof(struct icmp_echo_hdr) + ECHO_DATA];
-    struct icmp_echo_hdr *h = (struct icmp_echo_hdr *)pkt;
-    memset(h, 0, sizeof *h);
-    ICMPH_TYPE_SET(h, ICMP_ECHO);
-    h->id = lwip_htons(id);
-    h->seqno = lwip_htons(seq);
-    for (size_t i = 0; i < ECHO_DATA; i++) {
-        pkt[sizeof *h + i] = (uint8_t)i;
-    }
-    h->chksum = inet_chksum(pkt, sizeof pkt);
-    struct sockaddr_in to;
-    memset(&to, 0, sizeof to);
-    to.sin_family = AF_INET;
-    to.sin_addr.s_addr = ip;
-    ssize_t n = sendto(fd, pkt, sizeof pkt, 0, (struct sockaddr *)&to, sizeof to);
-    return n == (ssize_t)sizeof pkt ? 0 : -(errno ? errno : EIO);
+    struct {
+        struct icmp_echo_hdr h;
+        uint8_t data[ECHO_DATA];
+    } pkt;
+    memset(&pkt, 0, sizeof pkt);
+    ICMPH_TYPE_SET(&pkt.h, ICMP_ECHO);
+    pkt.h.id = lwip_htons(id);
+    pkt.h.seqno = lwip_htons(seq);
+    pkt.h.chksum = inet_chksum(&pkt, sizeof pkt);
+    struct sockaddr_in to = { .sin_family = AF_INET, .sin_addr.s_addr = ip };
+    return sendto(fd, &pkt, sizeof pkt, 0, (struct sockaddr *)&to, sizeof to) == sizeof pkt
+           ? 0 : -EIO;
 }
 
-// lwIP hands a raw socket the whole IPv4 packet, its header first: the TTL
-// is there, and the ICMP message after it. Any other ICMP (another echo's
-// reply, an unreachable) is passed over.
+// lwIP hands a raw socket the whole IPv4 packet, its header first: the
+// sender and the TTL are there, and the ICMP message after it. Any other
+// ICMP (another echo's reply, an unreachable) is passed over. Never waits
+// (MSG_DONTWAIT): 0 once nothing is left, or the socket failed.
 int moy_net_echo_recv(int fd, uint32_t ip, uint16_t id, uint16_t *seq, uint8_t *ttl) {
     uint8_t buf[IP_HLEN + sizeof(struct icmp_echo_hdr) + ECHO_DATA + 8];
-    for (;;) {
-        struct sockaddr_in from;
-        socklen_t fl = sizeof from;
-        ssize_t n = recvfrom(fd, buf, sizeof buf, MSG_DONTWAIT, (struct sockaddr *)&from, &fl);
-        if (n < 0) {
-            return errno == EAGAIN || errno == EWOULDBLOCK ? 0 : -errno;
-        }
+    ssize_t n;
+    while ((n = recv(fd, buf, sizeof buf, MSG_DONTWAIT)) >= 0) {
         const struct ip_hdr *iph = (const struct ip_hdr *)buf;
         size_t hl = (size_t)IPH_HL(iph) * 4u;
-        if ((size_t)n < IP_HLEN || (size_t)n < hl + sizeof(struct icmp_echo_hdr)) {
-            continue;
-        }
         const struct icmp_echo_hdr *h = (const struct icmp_echo_hdr *)(buf + hl);
-        if (ICMPH_TYPE(h) != ICMP_ER || lwip_ntohs(h->id) != id || from.sin_addr.s_addr != ip) {
-            continue;
+        if ((size_t)n >= hl + sizeof *h && ICMPH_TYPE(h) == ICMP_ER
+            && h->id == lwip_htons(id) && iph->src.addr == ip) {
+            *seq = lwip_ntohs(h->seqno);
+            *ttl = IPH_TTL(iph);
+            return (int)((size_t)n - hl);
         }
-        *seq = lwip_ntohs(h->seqno);
-        *ttl = IPH_TTL(iph);
-        return (int)((size_t)n - hl);
     }
+    return 0;
 }
 
 void moy_net_echo_close(int fd) {

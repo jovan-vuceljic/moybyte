@@ -1,6 +1,6 @@
 $ # the kernel's clock: the harness's stands at 3 days 4:05
 $ uptime
-up 3 days, 4:05
+up 3d 4h 5m
 $ uptime -p; echo bad=$?
 usage: uptime
 bad=1

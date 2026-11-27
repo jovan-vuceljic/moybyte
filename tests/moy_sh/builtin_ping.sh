@@ -1,4 +1,4 @@
-# ICMP echoes, as iputils prints them; the harness's 10.0.0.1 answers each
+# ICMP echoes, in iputils' lines; the harness's 10.0.0.1 answers each
 ping -c 2 -i 0.2 router.lan
 echo answered=$?
 ping -c 4 -i 0.2 lossy.lan; echo some=$?

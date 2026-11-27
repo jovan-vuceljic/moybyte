@@ -82,7 +82,7 @@ ends it before the built-in can; a block's END (`moy_sh_pend`) lets go what
 it holds outside the session as it goes, so a network command's socket and
 its hold on the radio (the `sh` tag, `native/moy_kernel/moy_lease.h`, which
 a Zero's own station takes no row for) go on every way out. A network command keeps no buffer of its own: `ping`'s
-figures and the times of its last eight echoes are on its stack. A pipeline's stages run one after
+figures and its one awaited echo are on its stack. A pipeline's stages run one after
 another, so a pipe holds its writer's whole stream: 1 MB in memory, 4 KB on
 a board without PSRAM (the C3 Zero), and past that in a temporary file of the
 store (`/etc/pipes/*.tmp`, the store's `system/pipes`) written and read a

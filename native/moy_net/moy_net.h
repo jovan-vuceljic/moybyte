@@ -594,10 +594,11 @@ int moy_wifi_shell_hold(int on);
 int moy_net_resolve(const char *name);
 int moy_net_resolved(int q, uint32_t *ip);
 
-// The ICMP echo (moy_net_port.c): a raw socket that never blocks, a 64-byte
-// echo request sent to `ip` as `id` and `seq`, and the replies to `id` from
-// `ip` read as they come: the reply's bytes with *seq and *ttl, 0 while none
-// waits, or minus an errno. Open answers the socket, or minus an errno.
+// The ICMP echo (moy_net_port.c): a raw socket, a 64-byte echo request sent
+// to `ip` as `id` and `seq`, and the replies to `id` from `ip` read as they
+// come, never waiting: the reply's bytes with *seq and *ttl, else 0 (none
+// waits, or the socket failed, which ping counts as a loss). Open answers the
+// socket, or minus an errno.
 int moy_net_echo_open(void);
 int moy_net_echo_send(int fd, uint32_t ip, uint16_t id, uint16_t seq);
 int moy_net_echo_recv(int fd, uint32_t ip, uint16_t id, uint16_t *seq, uint8_t *ttl);

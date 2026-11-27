@@ -745,9 +745,7 @@ int moy_wifi_info(char ssid[33], uint32_t addr[4], uint8_t mac[6]) {
     memcpy(ssid, st.ssid, sizeof st.ssid);
     memset(addr, 0, 4 * sizeof addr[0]);
     memset(mac, 0, 6);
-    if (s_netif == NULL || esp_netif_get_mac(s_netif, mac) != ESP_OK) {
-        esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    }
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
     if (st.connected && s_netif != NULL) {
         esp_netif_ip_info_t ip;
         esp_netif_dns_info_t dns;
