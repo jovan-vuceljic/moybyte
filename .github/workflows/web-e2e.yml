@@ -259,7 +259,11 @@ jobs:
           fi
 
       - name: Install package
-        run: make setup
+        run: |
+          make setup
+          # Playwright drives the system Chrome for the loading-card suite
+          # (tests/test_web_load_progress_e2e.py); it downloads no browser.
+          .venv/bin/python -m pip install -q -e '.[web]'
 
       # firmware-build.yml's cache: emsdk + the micropython clone, ~1.8 GB,
       # keyed on the build script and the pin file that pin them.

@@ -62,6 +62,10 @@ moybyte_patch_usj_rx_init
 moybyte_patch_pwm_ledc_book
 moybyte_patch_mdns_psram
 
+# PSRAM temperature retune (#169) -- REQUIRED by the 120 MHz MSPI profile in
+# sdkconfig.board (sdkconfig.spiram_sx).
+moybyte_patch_psram_retune
+
 # The T-Deck's declines, for the T-Deck's reasons (the same chip and the same
 # panel and card arrangement):
 # DECLINED moybyte_patch_thread_state_tls -- the VM's thread state as a
@@ -112,9 +116,6 @@ moybyte_patch_mdns_psram
 # the ring has room for while the USB host waits with the rest, so a heap
 # collection costs it throughput and never a byte; the internal SRAM stays.
 
-# DECLINED moybyte_patch_psram_retune -- the #169 temperature retune of the
-# 120 MHz MSPI profile; this board's quad PSRAM runs at 80 MHz
-# (sdkconfig.board), which needs none.
 
 moybyte_stage_native
 "${BUILD_PYTHON}" "${REPO_ROOT}/tools/board_config.py" stage "${SCRIPT_DIR}"

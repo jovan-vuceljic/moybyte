@@ -50,8 +50,9 @@ device = [
   "esptool>=4.13,<5",
   "pyserial>=3.5",     # serial monitor + tools/p4_autotest.py (on-glass tests)
 ]
-# A page in headless Chrome (tools/web.py shot). Not in `make setup`: no test
-# needs it, and it drives the SYSTEM Chrome (`channel="chrome"`), so it
+# A page in headless Chrome (tools/web.py shot, and the loading-card suite
+# tests/test_web_load_progress_e2e.py, whose CI job installs it). Not in
+# `make setup`; it drives the SYSTEM Chrome (`channel="chrome"`), so it
 # downloads no browser -- never `playwright install`.
 web = [
   "playwright>=1.40",
