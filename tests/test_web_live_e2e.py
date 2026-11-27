@@ -210,6 +210,80 @@ def test_the_live_socket_comes_back_after_the_board_restarts(live_exe, tmp_path,
         shutil.rmtree(root, ignore_errors=True)
 
 
+# A cart whose frame holds the page's worker HOLD_MS once, three seconds in:
+# a slow phone's cart launch or frame, past the page's LIVE_LOST_MS and short
+# of the board's MOY_LIVE_IDLE_MS.
+HOLD_MS = 4000
+STALL_MAIN = """
+held = false
+
+function _update()
+  if not held and time() > 3000 then
+    held = true
+    local stop = time() + %d
+    while time() < stop do end
+  end
+end
+
+function _draw()
+  cls(held and 1 or 0)
+end
+""" % HOLD_MS
+
+
+def test_a_frame_that_holds_the_worker_keeps_the_live_socket(live_exe, tmp_path,
+                                                             monkeypatch):
+    """What the board said while one frame held the worker was waiting
+    unread, not missing: the page keeps its socket through the frame, and
+    the board ends no session."""
+    import json as _json
+    import test_live_link as L
+    import test_moy_tty as T
+    import test_web_term_e2e as W
+    air = L.Air()
+    monkeypatch.setenv("MOY_AIR", str(air.port))
+    monkeypatch.setenv("MOY_AIR_MAC", "020000000001")
+    root = W.tempfile.mkdtemp(prefix="moyl")
+    host = T.Host(live_exe, W.pathlib.Path(root))
+    store = host.tree / "sd" / "moybyte" / "carts"
+    for src in sorted((ROOT / "system_carts").glob("*.moy")):
+        shutil.copytree(src, store / src.name)
+    cart = store / "test.stall.moy"
+    cart.mkdir()
+    (cart / "main.lua").write_text(STALL_MAIN)
+    (cart / "manifest.json").write_text(_json.dumps({
+        "format": "moy-1", "version": 1, "title": "Stall", "id": "test.stall",
+        "runtime": "lua", "main": "main.lua", "canvas": "320x240", "input": ["touch"],
+        "moybyte": {"type": "game", "permissions": ["graphics", "input"]}}))
+    server, base = W._serve(tmp_path, host.port)
+    st = ("window.__moyState().then(s => '%s ' + JSON.stringify({cart: s.cart, "
+          "opens: s.live && s.live.opens, drops: s.live && s.live.drops}))")
+    try:
+        steps = [{"waitFor": "window.__moyState().then(s => s.cart === 'Stall' && s.live "
+                             "&& s.live.opens >= 1)", "timeout": 60000},
+                 {"js": st % "BEFORE"},
+                 {"wait": 3000 + HOLD_MS + 4000},
+                 {"js": st % "AFTER"}]
+        query = "?dev=1&desktop=1&cart=Stall" + W._qr_fragment(host)
+        out, js = web_e2e.run(tmp_path, "live_stall", query, steps, base,
+                              tmp_path / "chrome", boot_ms=30000)
+        before, after = W._tagged(js, "BEFORE"), W._tagged(js, "AFTER")
+        why = "\n%s\n%s" % (js, W._sides(host, tmp_path, out))
+        assert before and after, why
+        assert after["drops"] == before["drops"] and after["opens"] == before["opens"], why
+        live = [ln for ln in host.log().splitlines() if ln.startswith("LIVE ")]
+        last = dict(kv.split("=") for kv in live[-1].split()[1:])
+        page, idle, send, cut, err = last["ends"].split(",")
+        # one socket, which only the browser's own end at the run's close ended
+        assert last["sessions"] == "1" and (idle, send, cut, err) == ("0",) * 4, \
+            "the board ended a session (%s)%s" % (last["ends"], why)
+    finally:
+        server.terminate()
+        host.end()
+        air.close()
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def test_the_terminal_of_a_page_a_zero_serves_rides_the_live_socket(
         live_exe, tmp_path, monkeypatch):
     """A board with the live socket serves its page's shell on it
