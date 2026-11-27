@@ -406,7 +406,7 @@ Both make "start equals end" true without a second protocol.
   - the new-board steps in `docs/board_ports_2026-08.md`;
   - `runtime/README.md` and `.claude/rules/shell.md`.
 
-  The grep for `_on_glass.py` and `after-suite` is the list.
+  A grep for the words on_glass.py and after-suite is the list.
 
 ## 6. The host side
 
@@ -614,10 +614,8 @@ Each phase lands alone and keeps coverage.
   `--no-flash` run is affected.
 - **Deleting the soaks** (the C3's twelve minutes, twenty resets down to
   six) trades a long-run leak detector for the suite-wide drift trace. A
-  leak that needs hundreds of cycles to show would now pass. A dedicated
-  long soak, if the owner wants one, is a separate tool run by hand, not
-  part of the pass. That is the one exception to "one suite", and the
-  owner's to make.
+  leak that needs hundreds of cycles to show would now pass. A long soak is a
+  separate tool run by hand, not part of the pass (§9).
 - **A shared Chrome page across Zero tests** couples them: a page left in a
   bad state fails the tests after it. Each test that needs a fresh page
   asks for one, and the fixture reloads after a failure.
@@ -642,19 +640,19 @@ Each phase lands alone and keeps coverage.
 - **The match's ticks and stall.** No pass records them today. The pair
   stage's bounds are set from its first records.
 
-## 9. The owner's decisions
+## 9. The owner's decisions (2026-11-27)
 
-1. **Whether perf is a gate.** The plan makes each board's history band
-   fail the pass (P5), with a second reading before failing and an accept
-   record for an intended move. The alternative is to keep it a report.
-2. **How the drift test lands.** The plan lands it with the memory metrics
-   as strict xfails naming #248 and a new fragmentation issue, and fps and
-   ms asserted from the first day. The alternative is to fix the memory
-   drift first and land the test green.
-3. **Whether the soaks go.** The plan removes the C3's twelve-minute soak
-   and cuts the twenty soft resets to six, relying on the suite-wide drift
-   trace. The alternative is to keep a long soak as a separate, hand-run
-   tool, outside the pass.
+The owner took the plan as recommended:
+
+1. **Perf is a gate.** From P5 each board's history band fails the pass,
+   with a second reading before failing and an accept record for an
+   intended move.
+2. **The drift test lands before the drift is fixed.** The memory metrics
+   land as strict xfails naming #248 and a fragmentation issue; fps and ms
+   assert from the first day. The test is what shows the fix worked.
+3. **The soaks go from the pass.** The C3's twelve-minute soak goes and the
+   twenty soft resets become six; the suite-wide drift trace replaces them.
+   A long soak, when wanted, is a separate tool run by hand.
 
 ---
 
