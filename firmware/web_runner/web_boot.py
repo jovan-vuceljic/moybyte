@@ -2045,6 +2045,12 @@ def live_enable(mac):
             ws.net = ws.link.net
         _S["live"] = {"open": False, "said": None, "hidden": False, "gap": False,
                       "check": _S.get("linkcheck", False)}
+        # The served apps' prefs rows are the console's Settings before the
+        # first frame the socket brings: a socket opened while the console
+        # booted hands its session's first rows ('P') to the first feed,
+        # ahead of any pump, and a row given with no rows bound is lost.
+        if hasattr(moy_net, "live_budget"):
+            moy_net.live_budget(ws.system)
     except Exception as exc:         # noqa: BLE001 -- never block a boot
         print("live link unavailable:", exc)
     return ""

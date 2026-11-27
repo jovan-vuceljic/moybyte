@@ -558,11 +558,19 @@ def test_a_text_is_utf8_and_a_node_number_is_unsigned(c):
 # -- the app on the console -------------------------------------------------------------
 
 
-def _install(ws, src=CART, tweak=None):
+def _install(ws, src=CART, tweak=None, man=None):
     """Moy Mesh into `ws`'s store, as `pkg install moymesh` leaves it;
-    `tweak(service_source)` the service as installed."""
+    `tweak(service_source)` the service as installed, `man(manifest)` its
+    manifest."""
     dst = os.path.join(ws.carts_root, "moymesh.moy")
     shutil.copytree(src, dst)
+    if man is not None:
+        path = os.path.join(dst, "manifest.json")
+        with open(path) as f:
+            m = json.load(f)
+        man(m)
+        with open(path, "w") as f:
+            json.dump(m, f)
     if tweak is not None:
         path = os.path.join(dst, "service.lua")
         with open(path) as f:
@@ -982,6 +990,8 @@ def test_the_manifest_asks_for_the_radio_and_names_its_service():
     assert (man["runtime"], man["main"]) == ("lua", "main.lua")
     assert man["moybyte"]["entries"] == {"service": "service.lua"}
     assert set(man["moybyte"]["required"]) == {"lora", "prefs"}
+    assert "moybyte.uitree" in man["extensions"], \
+        "its window calls `ui`, which a Lua app is handed only by declaring the UI tree"
 
 
 def test_a_new_region_retunes_the_radio(mesh):
@@ -1039,6 +1049,43 @@ def test_on_the_handheld_the_window_opens_on_its_conversations(tmp_path):
         assert win.get("FOCUS") == "ch0/open", "it opens on its conversations"
     finally:
         S.SCHED.reset()         # opening Mesh started its service on the one scheduler
+        while N.owner():
+            moybyte.end(N.owner())
+        lora_sim.remove()
+
+
+def test_its_window_opens_over_the_service_the_console_started(tmp_path):
+    """Moy Mesh v3 as moybyte-org/carts publishes it (`autostart`,
+    `service_kib`): the console's start runs its service, and the window
+    opened on the handheld afterwards is a UI tree app over that same
+    service, with no error."""
+    from runtime import host_app
+
+    def v3(m):
+        m["moybyte"]["permissions"].append("autostart")
+        m["moybyte"]["service_kib"] = 160
+    lora_sim.install()
+    ws = host_app.build_workstation(str(tmp_path / "carts"), sys_size=(320, 240))
+    try:
+        _install(ws, man=v3)
+        started = S.boot(ws)
+        svc = S.SCHED.find("moymesh")
+        assert svc is not None and svc.pid in started, "the console's start ran its service"
+        assert select_on_home(ws, TITLE) is not None
+        ws.open()
+        pl = ws.run.player
+        drv = make_drv(ws)
+        for _ in range(4):
+            ws.mark_dirty()
+            drv.frame(1 / 30)
+            S.SCHED.poll()
+        assert pl.cart_error is None, pl.cart_error
+        win = _Window(pl)
+        win.run("FOCUS = ui.sys.focus")
+        assert win.get("FOCUS") == "ch0/open"
+        assert S.SCHED.find("moymesh").pid == svc.pid, "the window started no second service"
+    finally:
+        S.SCHED.reset()
         while N.owner():
             moybyte.end(N.owner())
         lora_sim.remove()

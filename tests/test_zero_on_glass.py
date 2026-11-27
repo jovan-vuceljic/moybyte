@@ -41,7 +41,10 @@ pages, which headless Chrome boots (firmware/web_runner/browsershot.mjs).
   page plays a Lua cart's and a Python cart's match against it, the world
   check armed on both sides (the page's `?linkcheck=1`, the T-Deck's `link
   check on`), and both report checkpoints and no desync. The T-Deck's
-  math.atan2 is probed against the wasm's too.
+  math.atan2 is probed against the wasm's too. And MOY MESH OVER LORA, on
+  the XIAO: its service on the board takes the T-Deck's Moy Mesh setup, and
+  a direct message goes each way between the two radios, the XIAO's typed
+  into its window on the page, each acknowledged by the other node.
 
 THE CLAIM. The password removed, the board serves no SSH; the cable's
 fresh claim opens the console on its URL, the page sets the password and
@@ -972,8 +975,9 @@ def test_moy_mesh_s_window_on_the_page_reaches_its_service_on_the_board(zero, mi
     the app ('H'), so the page runs no service of its own, and the window's
     message crosses the live socket's channel 'm' to the service, which
     sends it on the radio and logs it in the app's prefs on the board. The
-    page closed, the service runs on. No second LoRa node is on the bench:
-    what is held is the transmit and the service's own record."""
+    page closed, the service runs on. What is held is the transmit and the
+    service's own record; a second node's reception is the T-Deck's test
+    below."""
     _needs_password(zero)
     if zero.name != "xiao_zero":
         pytest.skip("%s takes no Lua tier" % zero.name)
@@ -1046,6 +1050,152 @@ def test_moy_mesh_s_window_on_the_page_reaches_its_service_on_the_board(zero, mi
           % (zero.name, info, budget, owner, log, said, msgs, got["svc"]["msgs"]))
     assert owner == info[0][1], "the page's end left the service the radio: %r" % owner
     assert MESH_TEXT in texts, "the window's message reached the service: %s" % log
+
+
+# Moy Mesh's setup, the prefs both nodes must share to hear each other
+# (mesh.lua's setup: the region, the modem preset, the slot, the hop limit and
+# the channels), read off the T-Deck and given to the Zero's service.
+MESH_SETUP = ("region", "preset", "slot", "hops", "channels")
+MESH_ROWS = ("(lambda s: dict((k, s.rows.get('moymesh_' + k, None)) for k in %r) "
+             "if s else None)(__import__('zero_host').SERVICES[0])")
+TDECK_MESH = "ws.run.player.ns['prefs'].get(%r)"
+
+
+def _tdeck_mesh(key):
+    return _tdeck_py(TDECK_MESH % key)
+
+
+def _tdeck_lua(src):
+    err = _tdeck_py("ws.run.player.lua.exec(%r, 'test')" % src)
+    assert err is None, "the T-Deck's window: %s" % err
+
+
+def _until(what, probe, secs, every=3.0):
+    """`probe()` until it answers truthy, for `secs`: its answer."""
+    end = time.monotonic() + secs
+    while True:
+        got = probe()
+        if got or time.monotonic() > end:
+            assert got, "%s, in %d s" % (what, secs)
+            return got
+        time.sleep(every)
+
+
+def _dm(log, text, peer):
+    """The record of log `log` whose text is `text` in the direct thread
+    with `peer`, or None."""
+    for m in log or ():
+        if isinstance(m, dict) and m.get("text") == text and m.get("dm") == peer:
+            return m
+    return None
+
+
+def _mesh_on_zero(zero, prefs):
+    """Moy Mesh into the Zero's store, asking for `autostart`, its prefs
+    `prefs`; the board reset, until its service holds the radio."""
+    with zero.repl(clean=False) as r:
+        dst = CARTS + "/moymesh.moy"
+        r.mkdirs(dst)
+        for f in sorted(os.listdir(MESH_CART)):
+            data = (MESH_CART / f).read_bytes()
+            if f == "manifest.json":
+                m = json.loads(data)
+                if "autostart" not in m["moybyte"]["permissions"]:
+                    m["moybyte"]["permissions"].append("autostart")
+                data = json.dumps(m).encode()
+            r.write(dst + "/" + f, data)
+        rows = {"moymesh_" + k: v for k, v in prefs.items()}
+        r.run("import json, moy_docs as D\ns = D.load_system(%r)\ns.update(json.loads(%r))\n"
+              "D.save_system(s, %r)" % (CARTS, json.dumps(rows), CARTS))
+    _until("the Zero's service holds the radio", lambda: _svc_look(zero)[3], 60, every=5)
+
+
+@needs_tdeck
+@pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
+def test_moy_mesh_on_the_page_and_on_a_tdeck_talk_over_lora(zero, mirror, tmp_path):
+    """The XIAO's Moy Mesh (its service on the board, its window in the page)
+    and the T-Deck's are two nodes of one mesh, over the two boards' LoRa
+    radios: the Zero's service takes the T-Deck's setup, the T-Deck asks for
+    its key, and a direct message goes each way under the nodes' keys, each
+    delivered (acknowledged by the other node). The T-Deck's message is sent
+    by its window's own call to its service; the Zero's is typed into the
+    page's window, in the direct thread the T-Deck's message opened. Direct
+    messages, so nothing is shown on the channel to the mesh's other nodes."""
+    _needs_password(zero)
+    if zero.name != "xiao_zero":
+        pytest.skip("%s has no LoRa radio" % zero.name)
+    shelf = _tdeck_py("[c.get('title') for c in ws.carts.all]")
+    pushed = "Moy Mesh" not in shelf
+    if pushed:
+        _tdeck("push", str(MESH_CART))
+    try:
+        _talk_over_lora(zero, tmp_path)
+    finally:
+        _tdeck("desk")
+        if pushed:
+            _tdeck("remove", MESH_CART.name)
+
+
+def _talk_over_lora(zero, tmp_path):
+    _tdeck("run", "Moy Mesh")
+    setup = {k: _tdeck_mesh(k) for k in MESH_SETUP}
+    tdeck = _tdeck_mesh("node")
+    assert tdeck, "the T-Deck's service names its node"
+    tag = os.urandom(2).hex()
+    to_zero, to_tdeck = "tdeck-to-zero-" + tag, "zero-to-tdeck-" + tag
+    _mesh_on_zero(zero, {k: v for k, v in setup.items() if v is not None})
+    got = zero.peek(MESH_ROWS % ((MESH_SETUP + ("node",)),))
+    me = got.pop("node")
+    assert all(got[k] == setup[k] for k in MESH_SETUP if setup[k] is not None), (got, setup)
+    print("moymesh: the T-Deck is %s, the Zero %s, on %s" % (tdeck, me, setup))
+
+    # the T-Deck asks the Zero for its key, which sends the Zero its own
+    _tdeck_lua("moybyte.send(ME, 'act', 'ask', %r)" % me)
+    _until("the T-Deck holds the Zero's key",
+           lambda: ((_tdeck_mesh("nodes") or {}).get(me) or {}).get("key"), 60)
+    _until("the Zero holds the T-Deck's key",
+           lambda: ((zero.peek(MESH_ROWS % (("nodes",),))["nodes"] or {}).get(tdeck) or {})
+           .get("key"), 60, every=5)
+
+    # T-Deck -> Zero: a direct message, delivered
+    _tdeck_lua("moybyte.send(ME, 'send', %r, %r)" % (to_zero, me))
+    sent = _until("the Zero acknowledged the T-Deck's message",
+                  lambda: (lambda m: m if m and m.get("state") in ("delivered", "failed") else None)(
+                      _dm(_tdeck_mesh("log"), to_zero, me)), 90)
+    assert sent["state"] == "delivered", sent
+    heard = _dm(zero.peek(MESH_ROWS % (("log",),))["log"], to_zero, tdeck)
+    assert heard and heard["from"] == tdeck, "the Zero's service kept it: %s" % heard
+    print("moymesh: the T-Deck sent %s; the Zero heard %s" % (sent, heard))
+
+    # Zero -> T-Deck: typed into the page's window, in the thread that opened
+    has = ("window.__moyState().then(function (s) { var l = s.svc && s.svc.rows && "
+           "s.svc.rows.moymesh_log; return !!(l && l.some(function (m) { return m.text == %s"
+           " && m.state == 'delivered'; })); })" % json.dumps(to_tdeck))
+    steps = sign_in(zero) + [
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.svc && "
+                    "s.svc.board.indexOf('moymesh') >= 0); })", "timeout": 120000},
+        {"js": "WORKER.postMessage({t: 'open', cart: 'moymesh.moy'}), 1"},
+        {"waitFor": "window.__moyState().then(function (s) { return !!(s.card && "
+                    "/LoRa/.test(s.card.lines.join(' '))); })", "timeout": 60000},
+        {"js": "cv.focus(), 'focused'"}, {"key": "ArrowRight"}, {"wait": 300},
+        {"key": "Enter"},
+        {"waitFor": "window.__moyState().then(function (s) { return s.cart == 'Moy Mesh'; })",
+         "timeout": 60000},
+        # home: the channel, then the direct thread the T-Deck's message opened
+        {"wait": 3000}, {"key": "ArrowDown"}, {"wait": 500}, {"key": "Enter"},
+        {"wait": 1500}, {"key": "Enter"}, {"wait": 500}]
+    steps += [{"key": c} for c in to_tdeck]
+    steps += [{"key": "Enter"}, {"waitFor": has, "timeout": 90000}, {"shot": "mesh"},
+              {"js": MESH_SVC}]
+    out = _browse(zero, zero.url, steps, tmp_path / "lora", query="?dev=1&desktop=1")
+    page = _tagged(out, "MESH")
+    assert page and page["devs"]["opens"] == 0, page
+    mine = _dm(page["svc"]["rows"].get("moymesh_log"), to_tdeck, tdeck)
+    assert mine and mine["state"] == "delivered", mine
+    got = _until("the T-Deck kept the Zero's message",
+                 lambda: _dm(_tdeck_mesh("log"), to_tdeck, me), 30)
+    assert got["from"] == me, got
+    print("moymesh: the Zero's page sent %s; the T-Deck heard %s" % (mine, got))
 
 
 TERM = ("window.__moyState().then(function (s) { return '%s ' + JSON.stringify("
@@ -2878,3 +3028,4 @@ def test_zz_the_board_is_given_back(zero):
         left = _give_back(zero, r)
     assert zero.url == zero.served_at, (zero.url, zero.served_at)
     assert not left, "the store differs from the suite's start: %s" % left
+
