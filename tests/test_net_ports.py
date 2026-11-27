@@ -38,7 +38,9 @@ class _Console:
 def _make(air, clock, mac, name):
     radio, wlan = _FakeRadio(air, mac), _FakeWlan(mac)
     radio.wlan = wlan
-    return P.EspNowLink(board="tdeck", name=name, ticks_ms=clock, radio=radio, wlan=wlan)
+    # The cart a START names opens: a console without it ends the match.
+    return P.EspNowLink(board="tdeck", name=name, ticks_ms=clock, radio=radio, wlan=wlan,
+                        launch=lambda ws, title: True)
 
 
 @pytest.fixture

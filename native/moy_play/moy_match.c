@@ -244,6 +244,14 @@ bool moy_lockstep_gate(moy_match_t *m, uint32_t now, bool due) {
 
 void moy_lockstep_close(moy_match_t *m) {
     moy_lockstep_t *s = &m->s;
+    if (s->live && s->bound) {
+        // The console lets go of a live match: the peer hears it now rather
+        // than stalling to GIVE_UP. A few copies, the air having no ack.
+        uint8_t bye[3] = {MOY_MATCH_PROTO, MOY_MATCH_T_BYE, s->session};
+        for (int i = 0; i < MOY_MATCH_BYE_SENDS; i++) {
+            broadcast(m, bye, sizeof(bye));
+        }
+    }
     tape_clear(s->mine_f);
     tape_clear(s->theirs_f);
     s->live = false;
@@ -897,6 +905,7 @@ int moy_match_offer_seeded(moy_match_t *m, const char *cart, uint32_t now, bool 
 
 static void lost(moy_match_t *m, const char *why) {
     say(m, "Moybyte link: %s, playing solo", why);
+    m->s.bound = false;                 // the peer left or fell silent: no BYE to say
     moy_match_end(m);
     m->start_len = 0;
     if (m->cart[0]) {
@@ -1147,7 +1156,8 @@ void moy_match_dispatch(moy_match_t *m, const uint8_t mac[6], const uint8_t *msg
             if (p != NULL) {
                 p->used = false;
             }
-            if (from_partner(m, mac)) {
+            // A BYE names its session (a sender older than that sends none).
+            if (from_partner(m, mac) && (n < 3 || msg[2] == m->s.session)) {
                 lost(m, "peer left");
             }
             return;

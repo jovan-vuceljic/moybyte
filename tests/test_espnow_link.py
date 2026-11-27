@@ -928,6 +928,33 @@ def test_the_survivor_of_a_match_gets_its_own_pad_back(death):
     assert wsa.input.players.count() == 1
 
 
+def test_a_console_that_leaves_a_match_says_so_and_the_peer_plays_solo_at_once():
+    """Leaving the cart (the pause menu's Quit; the run's teardown closes its
+    session) used to say nothing: the peer froze until GIVE_UP stalled
+    advances had passed. The leaver says BYE, and the peer re-runs solo on
+    its next poll."""
+    seen = []
+    air, clock, a, b, wsa, wsb = _matched_pads(seen)
+    wsb.netplay.close()                    # Player.release_world
+    b.stop(wsb)                            # ...and its release_radio
+    assert wsb.input.players.count() == 1, "the leaver is one player again"
+    a.poll(wsa)
+    assert a.session is None and wsa.netplay is None, "the peer heard the BYE"
+    assert seen == [(None, 1, False)]
+
+
+def test_a_bye_naming_another_session_ends_nothing():
+    """A BYE carries its session: one from the peer's previous match, landing
+    late, does not end the one it is playing now."""
+    air, clock, a, b, wsa, wsb = _matched()
+    s = a.session
+    other = (s.session + 1) & 0xFF
+    a._dispatch(wsa, b.mac, bytes(bytearray([netplay.PROTO, netplay.T_BYE, other])))
+    assert a.session is s and wsa.netplay is not None
+    a._dispatch(wsa, b.mac, bytes(bytearray([netplay.PROTO, netplay.T_BYE, s.session])))
+    assert a.session is None
+
+
 def test_a_stranger_can_neither_play_nor_end_nor_talk_into_a_match():
     """Frames carry no signature, so the sender's address is the check: a live
     match is bound to its peer, and an input frame carrying the match's

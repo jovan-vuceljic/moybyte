@@ -47,7 +47,9 @@
 // an unregistered peer is dropped). The host resends START until
 // the guest's first input arrives and gives up after START_TRIES; a match
 // whose session declares itself dead, a peer's BYE and an unanswered START
-// all end the match and ask the console to re-run the cart solo.
+// all end the match and ask the console to re-run the cart solo. A console
+// that lets go of a live match itself (its cart left, its link stopped)
+// says BYE, naming the session, BYE_SENDS times.
 //
 // WHO IS HEARD. Frames are neither signed nor encrypted, so the sender's
 // address is the one check: a live match is bound to its peer's MAC, and an
@@ -215,6 +217,7 @@ enum {
 #define MOY_MATCH_PEER_TTL_MS 2000
 #define MOY_MATCH_DRAIN_MAX 24
 #define MOY_MATCH_START_TRIES 12
+#define MOY_MATCH_BYE_SENDS 3
 #define MOY_MATCH_PEERS 8
 #define MOY_MATCH_FRAME 250             // ESP-NOW's frame
 #define MOY_MATCH_FRAME_MAX 1470        // ...ESP-NOW v2's, which only a beam's chunk uses

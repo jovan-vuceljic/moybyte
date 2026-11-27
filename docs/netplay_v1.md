@@ -265,9 +265,16 @@ picked the dead session back up and never simulated again (on glass: a survivor
 stuck at frame 2874, stalls past 6856, the link reporting no match; 2026-08-27,
 `387a68c`). **`Player.start` refuses to adopt a session that has declared itself
 dead**, for the re-runs the link never hears about (Editor PLAY, the dev `run`,
-a shelf tap) — which frees that run to form a NEW match. **T_BYE is receive-only
-today** — nothing sends one, so that half rests on `tests/test_espnow_link.py`,
-the protocol's host pin.
+a shelf tap) — which frees that run to form a NEW match.
+
+**A console that leaves says so** (2026-11-27). Closing a live, bound session
+(the run's teardown: the pause menu's Quit, a `leave`, a stopped link) sends
+T_BYE naming the session, `MOY_MATCH_BYE_SENDS` times since the air has no
+ack, and the peer runs the exit above at its next poll instead of freezing
+for `MOY_MATCH_GIVE_UP` stalled retries, seconds of a held screen. A
+BYE naming another session is dropped; a sender older than the field sends
+none and is taken. The give-up stays the exit for a console that vanishes
+without a word: a reboot, a dropped socket, a paused run.
 
 **The match's player slots go with it** (2026-11-27). A session registers
 both of its players' slots on the console's router, and a registered slot
