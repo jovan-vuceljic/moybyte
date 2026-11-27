@@ -240,9 +240,13 @@ the board's I2S pins (and a codec, `MOY_AUDIO_CODEC_*`) in `mpconfigboard.h`
 → `DevChannel` (+ board extras via its `extra`/`env` hooks) → `Desktop.run`,
 which binds the board's input hardware into the kernel's input stage and
 hands the console to the kernel's loop (`native/moy_kernel/moy_loop.c`). Exit criteria, all three: the desktop on glass;
-`make test` green; **the board's on-glass suite exists and passes**. OTA
-needs no extra step: the board id is in board.toml and the manifest publisher
-follows the CI matrix row.
+`make test` green; **the board's on-glass suite exists and passes**. To
+publish, the board's `[board] ota` id goes in three lists beside its CI
+matrix row: `tools/publish_firmware_release.py`'s `OTA_IMAGES` (its app
+image; `NO_OTA` where its partition table has one app slot),
+`tools/fetch_ci_firmware.py`'s `BOARDS` and `site/build.py`'s `BOARDS` (the
+flasher card). `tests/test_firmware_release.py` and `tests/test_site_flash.py`
+fail on a matrix row missing from any of them.
 
 **TAKE THESE, DO NOT COPY THEM** (2026-08-28, #206 — the third port paid for
 each of these by copying, and a fourth would pay again):

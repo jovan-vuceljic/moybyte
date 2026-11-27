@@ -41,7 +41,9 @@ cart format and its verbs.
 | **LilyGO T-Deck Plus** (ESP32-S3) | 320×240 handheld with keyboard, trackball and touch |
 | **Waveshare ESP32-P4 7B** | 7″ 1024×600 touch screen, windowed desktop |
 | **Guition JC8012P4A1C** (ESP32-P4) | 10.1″ 1280×800 touch screen, the same desktop as the Waveshare |
+| **Elecrow CrowPanel Advance 10.1″** (ESP32-P4) | 10.1″ 1024×600 touch screen, the same desktop as the Waveshare |
 | **Guition JC3248W535** (ESP32-S3) | 3.5″ 480×320 touch screen |
+| **M5Stack CoreS3 SE** (ESP32-S3) | 2″ 320×240 touch screen with the Faces Gamepad3, the T-Deck's console |
 | **Seeed XIAO ESP32-S3** | no screen: it stores carts and serves the browser console over WiFi |
 | **ESP32-C3** (4 MB, e.g. Super Mini) | the same screenless store on the smallest chip, updated by cable |
 | **PC simulator** | `tools/simulate_desktop.py`, running the same `runtime/` modules as the boards |
