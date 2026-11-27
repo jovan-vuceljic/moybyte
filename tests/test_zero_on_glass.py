@@ -144,6 +144,9 @@ MATCH_PORT = os.environ.get("MOYBYTE_MATCH_PORT") or (
 needs_partner = pytest.mark.skipif(not MATCH_PORT, reason="neither MOYBYTE_TDECK_PORT nor "
                                    "MOYBYTE_MATCH_PORT set (the console a page plays a "
                                    "match against)")
+TDECK_PORT = os.environ.get("MOYBYTE_TDECK_PORT")
+needs_tdeck = pytest.mark.skipif(not TDECK_PORT, reason="MOYBYTE_TDECK_PORT not set "
+                                 "(the T-Deck whose Moy Mesh meets the XIAO's over LoRa)")
 
 
 def _ota(board_dir):
@@ -2746,18 +2749,34 @@ def test_moy_mesh_holds_the_board_s_radio_from_the_page(zero, mirror, tmp_path):
 # -- a match against a console --------------------------------------------------------------
 
 
-def _partner(*args, timeout=180):
-    run = subprocess.run([sys.executable, str(ROOT / "tools" / "board.py"), MATCH_BOARD]
-                         + list(args) + ["--port", MATCH_PORT],
+def _console(board, port, *args, timeout=180):
+    run = subprocess.run([sys.executable, str(ROOT / "tools" / "board.py"), board]
+                         + list(args) + ["--port", port],
                          capture_output=True, text=True, timeout=timeout, cwd=str(ROOT))
-    assert run.returncode == 0, "board.py %s %s: %s" % (MATCH_BOARD,
+    assert run.returncode == 0, "board.py %s %s: %s" % (board,
         " ".join(args), (run.stdout + run.stderr)[-1500:])
     return run.stdout
 
 
-def _partner_py(expr, timeout=60):
-    out = _partner("py", expr, "--timeout", str(timeout), timeout=timeout + 60)
+def _console_py(board, port, expr, timeout=60):
+    out = _console(board, port, "py", expr, "--timeout", str(timeout), timeout=timeout + 60)
     return ast.literal_eval(out.strip().splitlines()[-1].split(" -> ", 1)[1])
+
+
+def _partner(*args, timeout=180):
+    return _console(MATCH_BOARD, MATCH_PORT, *args, timeout=timeout)
+
+
+def _partner_py(expr, timeout=60):
+    return _console_py(MATCH_BOARD, MATCH_PORT, expr, timeout)
+
+
+def _tdeck(*args, timeout=180):
+    return _console("tdeck", TDECK_PORT, *args, timeout=timeout)
+
+
+def _tdeck_py(expr, timeout=60):
+    return _console_py("tdeck", TDECK_PORT, expr, timeout)
 
 
 def _folder_of(title):
