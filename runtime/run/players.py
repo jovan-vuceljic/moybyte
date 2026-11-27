@@ -608,13 +608,20 @@ class LockstepSession:
             return (None, None, None) + tail
         return tuple((now[i] - was[1][i]) * 1000 // ms for i in range(3)) + tail
 
-    def close(self):
+    def release(self):
+        """Give the console its one local player back: the session's two
+        slots go from the router. A slot outliving its session is a frozen
+        pad that wins at its index, the local kid's included."""
         for i in (self.index, self.peer):
             try:
                 if self._router is not None:
                     self._router.remove_player(i)
             except Exception:  # noqa: BLE001 -- teardown must never raise
                 pass
+        self._router = None
+
+    def close(self):
+        self.release()
         self._m.close()
 
 
@@ -764,10 +771,16 @@ class EspNowLink:
     def session(self):
         m = self._m
         if m is None or not m.live:
+            # The match ended in C (a give-up, a BYE, an unanswered START):
+            # its view's player slots go with it, before the solo re-run.
+            if self._view is not None:
+                self._view.release()
             self._view = None
             return None
         v = self._view
         if v is None or v.session != m.session or v.index != m.index:
+            if v is not None:
+                v.release()
             v = self._view = LockstepSession(
                 m.index, m.seed, None, _cart_buttons(), self._router, _m=m)
         return v

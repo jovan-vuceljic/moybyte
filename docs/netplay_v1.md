@@ -269,6 +269,16 @@ a shelf tap) — which frees that run to form a NEW match. **T_BYE is receive-on
 today** — nothing sends one, so that half rests on `tests/test_espnow_link.py`,
 the protocol's host pin.
 
+**The match's player slots go with it** (2026-11-27). A session registers
+both of its players' slots on the console's router, and a registered slot
+wins at its index, the local kid's slot 0 included. The link drops its view
+of a session the C side ended and gives those slots back
+(`LockstepSession.release`) before the solo re-run starts. Dropping the
+view alone left a "solo" Brick Siege fielding two frozen tanks, in that
+cart and every cart after it until the console restarted, which is how a
+match that had ended looked like one that never did (owner, T-Deck and
+CoreS3).
+
 **A stopped link asks nothing of the next run** (2026-11-06). The kernel's tail
 polls the link in C and the console syncs the cart it asks for in the Python
 frame's tail, which a front run never reaches: a START or a give-up landing in

@@ -16,6 +16,8 @@ two-console match run here instead of only on glass.
 
 import types
 
+import pytest
+
 from runtime import players as moy_espnow, players as netplay, players as players_mod
 
 BROADCAST = moy_espnow.BROADCAST
@@ -875,6 +877,55 @@ def test_a_peer_that_says_goodbye_leaves_the_survivor_playing_solo():
     assert [e[1] for e in seen] == [None], "the survivor re-ran the cart solo"
     assert b.mac not in a.peers, "and forgot the console that left"
     assert a.active
+
+
+def _pads_at_launch(seen):
+    """A launch that records what the re-run cart's _init reads: the
+    session it adopts, players(), and whether the local kid's held button
+    reaches player 0."""
+    def launch(ws, title):
+        r = ws.input.players
+        seen.append((ws.netplay, r.count(), r.held("left", 0)))
+        return True
+    return launch
+
+
+def _matched_pads(seen):
+    air, clock, a, b = _pair(_pads_at_launch(seen))
+    _see_each_other(a, b, clock)
+    wsa, wsb = _Ws(), _Ws()
+    a.offer(wsa, "Brick Siege")
+    b.poll(wsb)
+    _run(a, b, wsa, wsb, 6)
+    assert wsa.input.players.count() == 2
+    seen[:] = []
+    return air, clock, a, b, wsa, wsb
+
+
+@pytest.mark.parametrize("death", ["give_up", "bye"])
+def test_the_survivor_of_a_match_gets_its_own_pad_back(death):
+    """THE MATCH THAT NEVER ENDED (owner, T-Deck <-> CoreS3, 2026-11-27). The
+    link ended the match in C and the console dropped its view of it without
+    letting go of the view's two player slots, so the "solo" re-run fielded
+    two tanks, and a registered slot 0 that nothing fed any more stood in
+    for the local kid: every tank frozen, in that cart and every cart after
+    it, until the console restarted."""
+    seen = []
+    air, clock, a, b, wsa, wsb = _matched_pads(seen)
+    wsa.input.down = {"left"}
+    if death == "give_up":
+        air.deaf = True
+        for _ in range(netplay.GIVE_UP + 8):
+            wsa.netplay.advance(0)
+        assert wsa.netplay.dead
+        clock.advance(moy_espnow.BEACON_MS + 1)      # the beacon tick looks
+        a.poll(wsa)
+    else:
+        a._dispatch(wsa, b.mac, bytes(bytearray([netplay.PROTO, netplay.T_BYE])))
+    assert a.session is None and wsa.netplay is None
+    assert seen == [(None, 1, True)], \
+        "the re-run is one player, and its pad is the local kid's"
+    assert wsa.input.players.count() == 1
 
 
 def test_a_stranger_can_neither_play_nor_end_nor_talk_into_a_match():
