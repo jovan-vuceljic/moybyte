@@ -94,6 +94,13 @@ def _ticks():
     return time.ticks_ms() if hasattr(time, "ticks_ms") else int(time.time() * 1000)
 
 
+def unix_now(t=time):
+    """`moybyte.clock()`: Unix seconds, as runtime/system/wallclock.py's
+    `now` answers on a console, where a board's `time.time()` counts from
+    2000."""
+    return int(t.time()) + (946684800 if t.gmtime(0)[0] == 2000 else 0)
+
+
 def _ticks_diff(a, b):
     return time.ticks_diff(a, b) if hasattr(time, "ticks_diff") else a - b
 
@@ -436,7 +443,7 @@ class Services:
         console answers it (runtime/system/moybyte.py); ValueError for one
         this board does not serve."""
         if name == "moybyte.clock":
-            return time.time() if not (args and args[0]) else None
+            return unix_now() if not (args and args[0]) else None
         if name == "moybyte.name":
             from zero_host import board_name
             return board_name()

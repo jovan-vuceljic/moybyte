@@ -13,6 +13,7 @@ import json
 import os
 import shutil
 import sys
+import time
 
 import pytest
 
@@ -88,9 +89,25 @@ def test_its_console_calls_are_the_board_s(carts):
     pid = host.running["moymesh"].pid
     pub = host.call(pid, "moybyte.key_make", ["node"])
     assert len(pub) == 64 and host.call(pid, "moybyte.key_public", ["node"]) == pub
-    assert isinstance(host.call(pid, "moybyte.clock", [0]), (int, float))
+    assert abs(host.call(pid, "moybyte.clock", [0]) - time.time()) <= 2
     with pytest.raises(ValueError):
         host.call(pid, "moybyte.notify", ["x"])
+
+
+def test_its_clock_is_unix_seconds_where_time_counts_from_2000():
+    """A board's `time.time()` counts from 2000; the service's
+    `moybyte.clock()` is Unix seconds, as a console's, so a record a service
+    stamps reads on the page's clock."""
+    class Board:
+        @staticmethod
+        def time():
+            return 849078670
+
+        @staticmethod
+        def gmtime(t):
+            return (2000, 1, 1, 0, 0, 0, 5, 1)
+    assert zero_svc.unix_now(Board) == 849078670 + 946684800
+    assert abs(zero_svc.unix_now() - time.time()) <= 2
 
 
 def test_the_page_starts_no_service_of_an_app_its_board_runs():
