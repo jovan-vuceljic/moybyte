@@ -1176,9 +1176,12 @@ soft_reset_exit:
     moy_loop_board_vm_stop();
     moy_kernel_rest();
     moy_kernel_kstop_line("before");
-    // MOY: a soft reset ends the services on tasks of their own, whose rows
-    // no record carries to the next VM; a stop keeps them (processes.md §5).
-    if (s_stop == MOY_STOP_NONE) {
+    // MOY: a run's stop keeps the services on tasks of their own, which the
+    // console after it takes back from the resume record the stopped console
+    // wrote (processes.md §5). A soft reset ends them, and so does a kstop
+    // stop: no console wrote a record of them, so none would take them back.
+    bool keep = s_stop == MOY_STOP_RUN;
+    if (!keep) {
         if (moy_wasm_services_end != NULL) {
             moy_wasm_services_end();
         }
@@ -1188,7 +1191,7 @@ soft_reset_exit:
     }
     moy_play_vm_stop();
     if (moycore_svc_vm_stop != NULL) {
-        moycore_svc_vm_stop(s_stop != MOY_STOP_NONE);
+        moycore_svc_vm_stop(keep);
     }
     moy_glass_vm_stop();
     moy_text_vm_stop();
