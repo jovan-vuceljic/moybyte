@@ -796,9 +796,11 @@ Every one of these was learned by hanging or bricking a board.
   them.** `moy_lcd.init()` parks them high *before* the bus exists, which is what
   the fork's `tdeck_board.init_board_pins` does; it is reconfiguring them
   afterwards that corrupts the shared bus and silent-hangs the next flush.
-- **80 MHz SPI is requested, not delivered.** None of MOSI(41)/SCK(40)/MISO(38)
-  are the S3's IOMUX-native FSPI pins, so everything routes through the GPIO
-  matrix, which caps a write-only LCD at ~40 MHz. The board's wiring is the wall.
+- **The panel's 80 MHz goes through the GPIO matrix, unclamped.** None of
+  MOSI(41)/SCK(40)/MISO(38) are the S3's IOMUX-native FSPI pins, so every
+  signal routes through the matrix; a write-only bus has no read timing for its
+  delay to break, and nothing clamps the clock. A panel that cannot take it
+  shows black, as the CoreS3's ILI9342C did (2026-11-27, `native/moy_lcd`).
 - **The keyboard has two modes, and every surface reads the matrix.** It is
   a separate ESP32-C3 at I2C 0x55 (its firmware is in
   `firmware/lilygo_t_deck_plus_reference/examples/Keyboard_ESP32C3`, an

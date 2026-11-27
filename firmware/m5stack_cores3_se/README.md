@@ -23,7 +23,7 @@ operations, the light), [M5Unified](https://github.com/m5stack/M5Unified)
 | part | wiring | source |
 |---|---|---|
 | ESP32-S3 (QFN56), 16 MB flash, 8 MB quad PSRAM | GPIO 26–32 flash/PSRAM, 19/20 USB | the chip's report; `sdkconfig.board` |
-| ILI9342C panel, 320x240 | SPI2: SCK 36, MOSI 37, MISO 35 is also D/C, CS 3; 40 MHz; MADCTL 0x08 (BGR), inverted | M5GFX `Panel_ILI9342`, board detection |
+| ILI9342C panel, 320x240 | SPI2: SCK 36, MOSI 37, MISO 35 is also D/C, CS 3; 40 MHz (80 MHz was tried and the panel showed black, so 40 MHz stays: owner, 2026-11-27); MADCTL 0x08 (BGR), inverted | M5GFX `Panel_ILI9342`, board detection |
 | panel reset | AW9523 P1 bit 1, pulsed low 10 ms at bring-up | M5GFX `pmic_ops` |
 | backlight | AXP2101 DLDO1: reg 0x90 bit 7 on, reg 0x99 the voltage, codes 20..28 | M5GFX `Light_M5StackCoreS3` |
 | microSD | SPI2, CS 4; its MISO is the panel's D/C pad, turned to the card's input for a card session (`native/moy_lcd`, M5GFX's `Panel_M5StackCoreS3::cs_control`) | M5Unified, M5GFX |

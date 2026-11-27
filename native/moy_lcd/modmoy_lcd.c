@@ -224,11 +224,11 @@ static int s_bl_step;               // 0 off, 1..16
 static int64_t s_bl_off_us;         // when the pin last went low for off
 static portMUX_TYPE s_bl_mux = portMUX_INITIALIZER_UNLOCKED;
 
-// 80 MHz is requested, not delivered: none of MOSI/SCK/MISO are the S3's
-// IOMUX-native FSPI pins, so every signal routes through the GPIO matrix, which
-// caps a write-only LCD at ~40 MHz. esp_lcd's divider clamps to what it can do.
-// Kept at the fork's requested value so the two builds are comparable; drop to
-// 62500000 then 40000000 if the panel tears or garbles.
+// The write clock, 80 MHz unless the board names its own. The S3's SPI master
+// delivers it through the GPIO matrix (no pin here is IOMUX-native FSPI; a
+// write-only bus has no read timing for the matrix's delay to break), and
+// nothing clamps it: a panel that cannot take it shows black. The CoreS3's
+// ILI9342C is such a panel and names 40 MHz (its README).
 #ifndef MOY_LCD_PCLK_HZ
 #define MOY_LCD_PCLK_HZ      (80 * 1000 * 1000)
 #endif
