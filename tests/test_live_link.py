@@ -545,9 +545,13 @@ def test_the_probe_says_the_board_relays_its_radio_and_its_address(two_pages):
 
 def test_the_socket_says_the_board_s_address_and_echoes(two_pages):
     ha, hb, pa, pb, air = two_pages
-    _settle([pa])
     mac = ctypes.create_string_buffer(6)
-    pa.lib.moy_link_mac(mac)
+    for _ in range(200):                # the board's hello carries it; under load it is late
+        pa.pump()
+        pa.lib.moy_link_mac(mac)
+        if mac.raw != bytes(6):
+            break
+        time.sleep(0.005)
     assert mac.raw == MAC_A, "the page's address on the air is its board's"
     assert pa.lib.moy_link_channel(0) == -1, "pinned: a Zero never tunes"
     pa.send(b"zq-a channel this board does not serve")
