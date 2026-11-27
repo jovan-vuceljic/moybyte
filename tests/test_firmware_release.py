@@ -13,6 +13,7 @@ would, serve them the way a release does, fetch them back, and build the site
 from the result. What is asserted at the end is the manifest the BROWSER reads.
 """
 
+import glob
 import importlib.util
 import json
 import os
@@ -330,6 +331,48 @@ def test_each_board_gets_its_own_manifest_and_payload(tmp_path):
         assert (out / publish.manifest_name(board)).exists()
         assert manifest["filename"] == "%s-%s" % (board, publish.OTA_IMAGES[board])
     assert got["tdeck"]["sha256"] != got["p4"]["sha256"]
+
+
+def _matrix_rows():
+    """{matrix board: its firmware dir}, the build job's include rows."""
+    wf = open(os.path.join(ROOT, ".github", "workflows", "firmware-build.yml"),
+              encoding="utf-8").read()
+    return dict(re.findall(r"^\s+- board: (\S+)\n\s+dir: (\S+)", wf, re.M))
+
+
+def _app_slots(board_dir):
+    """The app partitions' subtypes of the table a board's sdkconfig names."""
+    sdk, = glob.glob(os.path.join(ROOT, board_dir, "boards", "*", "sdkconfig.board"))
+    name = re.search(r'^CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="([^"]+)"',
+                     open(sdk, encoding="utf-8").read(), re.M).group(1)
+    rows = []
+    with open(os.path.join(os.path.dirname(sdk), os.path.basename(name))) as f:
+        for line in f:
+            row = [c.strip() for c in line.split("#", 1)[0].split(",")]
+            if len(row) >= 3 and row[0]:
+                rows.append((row[1], row[2]))
+    return {sub for kind, sub in rows if kind == "app"}, ("data", "ota") in rows
+
+
+def test_every_board_ci_builds_publishes_by_its_partition_table():
+    """A board CI builds and the publisher does not name publishes nothing (a
+    warning in a log nobody reads): the CoreS3 SE and the Elecrow P4 built
+    green for weeks with no manifest, image or add-on on the release. So each
+    matrix row is in OTA_IMAGES or NO_OTA, and which one is its partition
+    table's answer: otadata and two OTA slots take a payload, anything else
+    cannot. The payload is the app image build.sh writes beside the merged
+    one board.toml's `[flash] image` names."""
+    from tools import board_config
+    rows = _matrix_rows()
+    assert rows and set(rows) == set(publish.OTA_IMAGES) | set(publish.NO_OTA)
+    assert not set(publish.OTA_IMAGES) & set(publish.NO_OTA)
+    for board, board_dir in rows.items():
+        slots, otadata = _app_slots(board_dir)
+        dual = otadata and {"ota_0", "ota_1"} <= slots
+        assert dual == (board in publish.OTA_IMAGES), (board, sorted(slots))
+        image = str(board_config.load(os.path.join(ROOT, board_dir))["flash"]["image"])
+        app = (publish.OTA_IMAGES if dual else publish.NO_OTA)[board]
+        assert app == os.path.basename(image)[:-len(".bin")] + "_app.bin", board
 
 
 def test_the_device_looks_where_ci_publishes():

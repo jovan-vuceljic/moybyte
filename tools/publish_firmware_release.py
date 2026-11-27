@@ -139,6 +139,8 @@ OTA_IMAGES = {
     # The Guition P4 (2026-09-06): OTA-shaped from its first flash like the
     # Waveshare.
     "guition_p4": "moybyte_guition_p4_app.bin",
+    "elecrow_p4": "moybyte_elecrow_p4_app.bin",
+    "cores3": "moybyte_cores3_app.bin",
 }
 # Boards whose partition table has ONE app slot, so no OTA payload can install
 # on them: their build is no miss in OTA_IMAGES, and the release publishes

@@ -198,7 +198,9 @@ def palette():
 #   tdeck    esptool --chip esp32s3 write_flash 0x0 <full-dio image>
 #   p4       esptool --chip esp32p4 write_flash 0x2000 moybyte_p4.bin
 #   guition_p4  esptool --chip esp32p4 write_flash 0x2000 moybyte_guition_p4.bin
+#   elecrow_p4  esptool --chip esp32p4 write_flash 0x2000 moybyte_elecrow_p4.bin
 #   guition  esptool --chip esp32s3 write_flash 0x0 moybyte_guition_s3.bin
+#   cores3   esptool --chip esp32s3 write_flash 0x0 moybyte_cores3.bin
 #   zero     esptool --chip esp32s3 write_flash 0x0 moybyte_zero.bin
 #
 # Every one writes a MERGED image (bootloader + partition table + app) whose header
@@ -293,6 +295,28 @@ BOARDS = [
                 "WiFi doesn't work on this board yet.",
     },
     {
+        # The Elecrow CrowPanel Advance 10.1" (SKU DHE04310D): the Waveshare's
+        # tier on a 16 MB flash, flashed through its CH340K UART bridge, which
+        # esptool's default reset drives in and out.
+        "id": "elecrow_p4",
+        "label": "Elecrow CrowPanel Advance 10.1&Prime; P4",
+        "chip": "ESP32-P4",
+        "images": ("moybyte_elecrow_p4.bin",),
+        "offset": 0x2000,
+        "baud": 921600,
+        "done": "Done &mdash; the board is rebooting into this build.",
+        "prep": "Plug into the board&rsquo;s UART USB-C port. It resets into "
+                "the loader and back on its own.",
+        "install": INSTALL_CONSOLE,
+        "manual": "Skip the reset &mdash; I have put the board in download mode "
+                  "myself (hold <b>BOOT</b>, tap <b>RESET</b>, release BOOT). "
+                  "Try this if connecting fails.",
+        "cli": "make firmware-flash-elecrow-p4 PORT=/dev/ttyUSB0",
+        "beta": "Consoles can't link over the radio on this board yet, and the "
+                "browser console needs a TF card: the internal storage is too "
+                "small for it.",
+    },
+    {
         # The Guition JC3248W535 (#202, ported 2026-08-18): the third board,
         # with its own CI matrix row, so the release publisher (which reads
         # THIS table) has an image to hand the card.
@@ -310,6 +334,26 @@ BOARDS = [
                   "mode myself (hold <b>BOOT</b>, tap <b>RST</b>, release "
                   "BOOT). Try this if connecting fails.",
         "cli": "make firmware-flash-guition-s3 PORT=/dev/ttyACM1",
+    },
+    {
+        # The M5Stack CoreS3 SE with the Faces Gamepad3: the T-Deck's tier,
+        # flashed over the S3's own USB-Serial/JTAG (`[flash] before =
+        # "usb_reset"`).
+        "id": "cores3",
+        "label": "M5Stack CoreS3 SE",
+        "chip": "ESP32-S3",
+        "images": ("moybyte_cores3.bin",),
+        "offset": 0x0,
+        "baud": 460800,
+        "done": "Done &mdash; the board is rebooting into this build.",
+        "prep": "Plug into the board&rsquo;s USB-C port. It resets into the "
+                "loader and back on its own.",
+        "install": INSTALL_CONSOLE,
+        "manual": "Skip the reset &mdash; I have put the board in download mode "
+                  "myself (hold the <b>reset</b> button beside the USB port for "
+                  "about 3&nbsp;s, until the green LED lights). Try this if "
+                  "connecting fails.",
+        "cli": "make firmware-flash-cores3 PORT=/dev/ttyACM0",
     },
     {
         # The Zero (Seeed XIAO ESP32-S3, #41): a build target since 2026-08-29.
@@ -537,8 +581,14 @@ TARGETS = [
     ("Guition JC8012P4A1C", "ESP32-P4",
      "10.1&Prime; 1280&times;800 touch screen, the same desktop as the "
      "Waveshare."),
+    ("Elecrow CrowPanel Advance 10.1&Prime;", "ESP32-P4",
+     "10.1&Prime; 1024&times;600 touch screen, the same desktop as the "
+     "Waveshare."),
     ("Guition JC3248W535", "ESP32-S3",
      "3.5&Prime; 480&times;320 touch screen."),
+    ("M5Stack CoreS3 SE", "ESP32-S3",
+     "2&Prime; 320&times;240 touch screen with a gamepad, the T-Deck's "
+     "console."),
     ("Seeed XIAO ESP32-S3", "ESP32-S3",
      "No screen: it stores carts and serves the browser console over WiFi."),
     ("Browser", "WebAssembly",
@@ -733,7 +783,7 @@ def font_face(url=None):
 
 # The at-a-glance list beside the hero. Dots are role colours (ok / wip / warn).
 STATUS = [
-    ("ok", "Six boards", "ESP32-S3, ESP32-P4 and ESP32-C3"),
+    ("ok", "Eight boards", "ESP32-S3, ESP32-P4 and ESP32-C3"),
     ("ok", "Editors", "on the device itself"),
     ("ok", "OTA updates", "stable and beta"),
     ("ok", "In the browser", "nothing to install"),

@@ -229,7 +229,9 @@ def test_a_reset_that_will_not_take_has_a_way_out():
             assert board["manual"] is None, "nothing to skip on %s" % board["id"]
         else:
             assert board["manual"], "%s can strand a user" % board["id"]
-            assert "BOOT" in board["manual"] or "trackball" in board["manual"]
+            # ...naming the control that does it by hand (BOOT, the T-Deck's
+            # trackball, the CoreS3's held reset button), in bold.
+            assert re.search(r"<b>[^<]+</b>", board["manual"]), board["id"]
     js = open(os.path.join(ROOT, "site", "flash.js"), encoding="utf-8").read()
     assert '.manual input' in js                   # the card's checkbox
     assert 'manual ? "no_reset" : b.reset' in js
@@ -416,14 +418,7 @@ def test_the_fetcher_and_the_workflow_agree_on_artifact_names():
     # flash, which is a missing feature. This set is the second kind, and it is
     # compared EXACTLY -- so an entry has to be deleted the day its card lands
     # (this test says so), and a board that silently loses its card is caught.
-    no_site_card = {
-        # The Elecrow P4 builds in CI from its first port; its website card
-        # waits for the board to be proven on glass and for the release
-        # pipeline's names (OTA_IMAGES, fetch_ci_firmware.BOARDS, site/build.py).
-        "elecrow_p4": "port in bring-up, no published image yet",
-        # The CoreS3 SE likewise, from its port (2026-11-26).
-        "cores3": "port in bring-up, no published image yet",
-    }
+    no_site_card = {}
     assert set(fetch.BOARDS) - set(rows) == set(), (
         "the site offers a board CI does not build: %s"
         % sorted(set(fetch.BOARDS) - set(rows)))
