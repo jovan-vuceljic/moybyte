@@ -384,8 +384,12 @@ uint32_t moy_play_last(void);          // the last run launched, live or ended
 #define MOY_PLAY_STUCK_MAX_MS 10000u
 #define MOY_PLAY_WATCH_POLL_MS 100u
 // The watcher's poll: ends the live tick when it is past its budget; true
-// when this poll fired.
-bool moy_play_watch(uint32_t now_ms);
+// when this poll fired. It reads the clock under the lock the tick's start
+// is written under, so a tick begun while it waited is never older than now.
+bool moy_play_watch(void);
+// Whether a tick begun at `since` is past `budget` at `now_ms`: wrap-safe,
+// and a `now_ms` before `since` is never past it.
+bool moy_play_watch_over(uint32_t now_ms, uint32_t since, uint32_t budget);
 // The budget the next launch's ticks run under, in ms; 0 restores the slots'
 // rule. The tests' lever.
 void moy_play_watch_budget(uint32_t ms);

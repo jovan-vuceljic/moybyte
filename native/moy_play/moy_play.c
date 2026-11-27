@@ -68,7 +68,7 @@ static void watch_unlock(void) {
 static esp_timer_handle_t s_watch_timer;
 static void watch_cb(void *arg) {
     (void)arg;
-    moy_play_watch(moycore_run_now_ms());
+    moy_play_watch();
 }
 // Made once, before the VM's first area on a board (moy_play_reserve).
 static void watch_make(void) {
@@ -101,7 +101,7 @@ static void *watch_main(void *arg) {
     for (;;) {
         nanosleep(&poll, NULL);
         if (W.on) {
-            moy_play_watch(moycore_run_now_ms());
+            moy_play_watch();
         }
     }
     return NULL;
@@ -128,10 +128,18 @@ static void watch_run(bool on) {
 }
 #endif
 
-bool moy_play_watch(uint32_t now_ms) {
+bool moy_play_watch_over(uint32_t now_ms, uint32_t since, uint32_t budget) {
+    return (int32_t)(now_ms - since) >= (int32_t)budget;
+}
+
+bool moy_play_watch(void) {
     bool fire = false;
     watch_lock();
-    if (W.since != 0u && !W.fired && now_ms - W.since >= W.budget) {
+    // The clock is read under the lock, as the tick's start is: read before
+    // it, a tick begun while the poll waited for the lock started after
+    // `now`, and the unsigned difference wrapped past every budget.
+    uint32_t now_ms = moycore_run_now_ms();
+    if (W.since != 0u && !W.fired && moy_play_watch_over(now_ms, W.since, W.budget)) {
         W.fired = fire = true;
         moycore_stuck(W.what != NULL ? W.what : "stuck");
     }
@@ -156,8 +164,8 @@ static uint32_t watch_budget(const moy_tick_t *t) {
 }
 
 static void watch_begin(uint32_t budget, const char *what) {
-    uint32_t now = moycore_run_now_ms();
     watch_lock();
+    uint32_t now = moycore_run_now_ms();
     W.budget = budget;
     W.what = what;
     W.fired = false;

@@ -166,6 +166,27 @@ def test_a_compiled_loop_that_calls_an_import_is_terminated_there(tmp_path, watc
     assert watch.info()[14] is True
 
 
+def test_a_tick_begun_after_the_poll_read_its_clock_is_not_past_its_budget():
+    """A FALSE STUCK (T-Deck, a Lua match, 2026-11-27): the watcher read its
+    clock, waited for the lock while the run's task began the next tick, and
+    `now - since` came out negative, which as an unsigned number is past
+    every budget. The poll reads the clock under the lock now, and the
+    comparison is wrap-safe besides."""
+    import ctypes
+    from runtime import moy_play
+    _need_lua()
+    d, _ = moy_play._play()
+    over = d.moy_play_watch_over
+    over.argtypes = [ctypes.c_uint32] * 3
+    over.restype = ctypes.c_bool
+    assert not over(1000, 1001, 4000), "a clock read before the tick began"
+    assert not over(1000, 1000, 4000)
+    assert not over(4999, 1000, 4000)
+    assert over(5000, 1000, 4000)
+    assert over(3000, 0xFFFFF000, 4000) and not over(0x10, 0xFFFFFFF0, 4000), \
+        "across the clock's wrap"
+
+
 def test_the_stuck_words_and_the_budget_rule_are_the_tables():
     from runtime import chrome_ops
     assert chrome_ops.say_title(chrome_ops.SAY_STUCK) == "Your game got stuck."
