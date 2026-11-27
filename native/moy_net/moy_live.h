@@ -113,7 +113,16 @@ typedef struct {
     uint32_t hints;                     // hint messages sent (THE HINTS, moy_live.c)
     uint32_t reqs;                      // requests the page sent whole (THE REQUESTS)
     uint32_t msgs_up, msgs_down;        // apps' messages each way (THE APPS' MESSAGES)
+    // how each socket ended, by MOY_LIVE_END_*
+    uint32_t ends[5];
 } moy_live_stats_t;
+
+// How a page's socket ended: the page closed it (a close frame, its end of
+// the connection), it said nothing for MOY_LIVE_IDLE_MS, a frame to it
+// found no room for MOY_LIVE_SEND_MS (or failed), its session ended or
+// another page took it, or anything else (a bad seal, a frame too big).
+enum { MOY_LIVE_END_PAGE, MOY_LIVE_END_IDLE, MOY_LIVE_END_SEND, MOY_LIVE_END_CUT,
+       MOY_LIVE_END_ERR };
 
 void moy_live_stats(moy_live_stats_t *out);
 // The device channel's counts into its fields of *out (moy_live_dev.c).

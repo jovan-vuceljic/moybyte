@@ -404,10 +404,13 @@ int main(int argc, char **argv) {
             lv_last = lv;
             printf("LIVE sessions=%u busy=%u up=%u down=%u air_out=%u air_in=%u refused=%u "
                    "echoes=%u live=%u radio=%u devs=%u dev_calls=%u dev_writes=%u "
-                   "dev_pushes=%u hints=%u reqs=%u msgs_up=%u msgs_down=%u\n", lv.sessions,
+                   "dev_pushes=%u hints=%u reqs=%u msgs_up=%u msgs_down=%u "
+                   "ends=%u,%u,%u,%u,%u\n", lv.sessions,
                    lv.busy, lv.up, lv.down, lv.air_out, lv.air_in, lv.refused, lv.echoes,
                    lv.live, lv.radio, lv.devs, lv.dev_calls, lv.dev_writes, lv.dev_pushes,
-                   lv.hints, lv.reqs, lv.msgs_up, lv.msgs_down);
+                   lv.hints, lv.reqs, lv.msgs_up, lv.msgs_down, lv.ends[MOY_LIVE_END_PAGE],
+                   lv.ends[MOY_LIVE_END_IDLE], lv.ends[MOY_LIVE_END_SEND],
+                   lv.ends[MOY_LIVE_END_CUT], lv.ends[MOY_LIVE_END_ERR]);
             fflush(stdout);
         }
 #endif

@@ -254,6 +254,8 @@ typedef struct {
     uint32_t rq_want;                   // ...its length when whole
     size_t pre;                         // bytes the webhost read past the sign-in, in `in`
     moy_live_req_t *handed;             // ...and the one waiting for the webhost
+    int sent_bad;                       // a frame to the page failed (MOY_LIVE_END_SEND)
+    int page_closed;                    // the page's close frame came (MOY_LIVE_END_PAGE)
     moy_live_stats_t stats;
 } live_t;
 
@@ -327,6 +329,7 @@ static int room(int ws) {
 // holds: 0, or -1 when the socket failed.
 static int send_locked(int ws, uint8_t *d, size_t n) {
     if (room(ws) < 0) {
+        L->sent_bad = 1;
         return -1;
     }
     if (L->seal.on) {
@@ -338,7 +341,11 @@ static int send_locked(int ws, uint8_t *d, size_t n) {
     }
     L->stats.down++;
     L->said = moy_net_ms();
-    return moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, (char *)d - MOY_WS_HEAD);
+    if (moy_ws_out(ws, MOY_WS_BINARY, (const char *)d, n, (char *)d - MOY_WS_HEAD) < 0) {
+        L->sent_bad = 1;
+        return -1;
+    }
+    return 0;
 }
 
 // The plaintext at L->b->out + MOY_WS_HEAD, `n` bytes, sealed and sent: 0, or
@@ -576,6 +583,7 @@ static int frames_in(int ws, size_t *n) {
     int k;
     while ((k = moy_ws_next(L->b->in, *n, &at, IN_CAP, &f)) > 0) {
         if (f.op == MOY_WS_CLOSE) {
+            L->page_closed = 1;
             moy_ws_close(ws, 1000, "");
             return -1;
         }
@@ -722,32 +730,38 @@ static int hints(int ws) {
     return say(ws, n);
 }
 
-// One page's socket, to its end.
-static void pump(int ws) {
+// Why a pass ended where `why` is its own guess: a frame to the page that
+// failed on the way, or the page's close frame, outranks it.
+static int ended(int why) {
+    return L->sent_bad ? MOY_LIVE_END_SEND : L->page_closed ? MOY_LIVE_END_PAGE : why;
+}
+
+// One page's socket, to its end: why it ended (MOY_LIVE_END_*).
+static int pump(int ws) {
     size_t n = L->pre;
     int devs = 0;                       // the device channel's rows open
     if (state(ws, 0) < 0) {
-        return;
+        return ended(MOY_LIVE_END_ERR);
     }
     hints_start();
     if (moy_live_svc_start != NULL) {
         moy_live_svc_start();
     }
     if (n > 0 && frames_in(ws, &n) < 0) {
-        return;
+        return ended(MOY_LIVE_END_ERR);
     }
     for (;;) {
         if (L->cut) {
             moy_ws_close(ws, L->cut == 2 ? 4001 : 1008, L->cut == 2 ? "taken" : "revoked");
-            return;
+            return MOY_LIVE_END_CUT;
         }
         uint32_t now = moy_net_ms();
         if (now - L->heard > MOY_LIVE_IDLE_MS) {
             moy_ws_close(ws, 1001, "idle");
-            return;
+            return MOY_LIVE_END_IDLE;
         }
         if (now - L->said >= MOY_LIVE_BEAT_MS && beat(ws) < 0) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
         fd_set r;
         FD_ZERO(&r);
@@ -761,35 +775,35 @@ static void pump(int ws) {
         struct timeval tv = {0, (long)wait * 1000L};
         int k = select((tfd > ws ? tfd : ws) + 1, &r, NULL, NULL, &tv);
         if (k < 0 && errno != EINTR) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
         if (k > 0 && FD_ISSET(ws, &r)) {
             ssize_t m = recv(ws, L->b->in + n, IN_CAP - n, 0);
             if (m <= 0) {
-                return;
+                return ended(MOY_LIVE_END_PAGE);
             }
             L->heard = moy_net_ms();
             n += (size_t)m;
             if (frames_in(ws, &n) < 0) {
-                return;
+                return ended(MOY_LIVE_END_ERR);
             }
         }
         if (k > 0 && tfd >= 0 && FD_ISSET(tfd, &r) && moy_live_term_pump() < 0) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
         if (L->radio && heard(ws) < 0) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
         if (DEV_HAS(moy_live_dev_pump) && (devs = moy_live_dev_pump()) < 0) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
         int apps = moy_live_svc_pump != NULL ? moy_live_svc_pump() : 0;
         if (apps < 0) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
         devs += apps;
         if (hints(ws) < 0) {
-            return;
+            return ended(MOY_LIVE_END_ERR);
         }
     }
 }
@@ -801,7 +815,7 @@ static void serve(int ws) {
     struct timeval snd = {MOY_LIVE_SEND_MS / 1000, (MOY_LIVE_SEND_MS % 1000) * 1000};
     setsockopt(ws, SOL_SOCKET, SO_RCVTIMEO, &none, sizeof none);
     setsockopt(ws, SOL_SOCKET, SO_SNDTIMEO, &snd, sizeof snd);
-    pump(ws);
+    L->stats.ends[pump(ws)]++;
     radio_down();
     rq_drop();
     moy_net_free(moy_live_req_take());
@@ -867,6 +881,7 @@ int moy_web_live(int fd, const struct moy_wa_seal *seal, const uint8_t *pre, siz
         memset(&L->seal, 0, sizeof L->seal);
     }
     L->up_i = L->down_i = 0;
+    L->sent_bad = L->page_closed = 0;
     L->gen++;
     L->cut = 0;
     L->heard = L->said = moy_net_ms();
