@@ -4,7 +4,7 @@ A plan for the testing framework, for the work after the next release. It
 says what each board check becomes, how one suite runs on every board, how
 performance becomes a test, and the order of the work. Measured numbers are
 in the appendices, each table saying when and where it was taken; the body
-points at them.
+points at them. The phases' progress is #351.
 
 ## 1. The owner's direction (2026-11-27)
 
