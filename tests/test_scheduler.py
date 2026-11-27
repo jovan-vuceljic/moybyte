@@ -759,3 +759,64 @@ def test_the_console_s_name_is_the_one_its_settings_give_it(sched):
     assert moybyte.name() == board
     Console.system["name"] = "Kuhinja"
     assert moybyte.name() == "Kuhinja" == S._CALLS["moybyte.name"]()
+
+
+# -- a reset over services on tasks of their own -----------------------------------
+
+class _TaskLua:
+    """moycore's svc_* names as a board's: each service on a task of its own,
+    which ends `polls_to_end` polls after its stop (None: never)."""
+
+    def __init__(self, polls_to_end):
+        self.polls_to_end = polls_to_end
+        self.stopped, self.reaped, self.info = [], [], 0
+
+    def svc_tasks(self):
+        return True
+
+    def svc_stop(self, h):
+        self.stopped.append(h)
+
+    def svc_info(self, h):
+        self.info += 1
+        done = (h in self.stopped and self.polls_to_end is not None
+                and self.info > self.polls_to_end)
+        return (4 if done else 2, 137 if done else 0, 0, 0, 0, "", 0, 0)
+
+    def svc_reap(self, h):
+        self.reaped.append(h)
+
+
+def _task_service(s):
+    pid = _app("t.mesh")
+    p = P.Proc(pid, S.SERVICE, "t.mesh")
+    p.state, p.native = S.BACKGROUND, 257
+    s.procs[pid] = p
+    return p
+
+
+def test_a_reset_ends_a_lua_service_on_a_task_of_its_own(sched, monkeypatch):
+    """A T-Deck's task watchdog (2026-11-27): the scheduler's reset forgot
+    Moy Mesh's service, which ran on a task of its own, without ending it,
+    and the task went on with no poll to end it until it starved the VM's
+    core. The reset asks each such service to stop and polls it to its end,
+    which is an asked end: nothing restarts it."""
+    from runtime import sched_lua
+    lua = _TaskLua(polls_to_end=3)
+    monkeypatch.setattr(sched_lua, "runtime", lambda: lua)
+    p = _task_service(sched)
+    sched.reset()
+    assert lua.stopped == [257] and lua.reaped == [257], "asked to stop and reaped"
+    assert p.state == S.EXITED and p.native == 0 and p.code == 137
+    assert not sched.pending, "an asked end restarts nothing"
+
+
+def test_a_reset_does_not_wait_forever_on_a_service_that_never_ends(sched, monkeypatch):
+    from runtime import sched_lua
+    lua = _TaskLua(polls_to_end=None)
+    monkeypatch.setattr(sched_lua, "runtime", lambda: lua)
+    monkeypatch.setattr(sched_lua, "SVC_STOP_WAIT_MS", 50)
+    _task_service(sched)
+    t0 = time.monotonic()
+    sched.reset()
+    assert lua.stopped == [257] and time.monotonic() - t0 < 2.0
