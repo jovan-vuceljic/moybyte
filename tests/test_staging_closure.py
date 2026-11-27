@@ -107,7 +107,8 @@ NATIVE = {
     # every board, the Zero's too (its board.toml says why). moy_elf, the
     # native tier, stages on every console and not on the Zero. moy_usbdisk,
     # USB mass storage, is the T-Deck's and the Waveshare P4's alone (each
-    # other board.toml says why it denies it).
+    # other board.toml says why it denies it). moy_leds, the `leds` device API, stages on every
+    # board, the Zero's too; a board with no bar reports none (its hooks are weak).
     #
     # The same shared usermods, plus this board's own panel backend -- and
     # NONE of the fork's lvgl/lcd_bus family, which is the point of the port.
@@ -118,7 +119,7 @@ NATIVE = {
                        "moycore", "moy_web", "moy_flush", "moy_lcd", "moy_prof",
                        "moy_wasm", "moy_elf", "moy_serial", "moy_png", "moy_index", "moy_store",
                        "moy_spine", "moy_kernel", "moy_play", "moy_glass", "moy_input",
-                       "moy_net", "moy_app", "moy_ui", "moy_uitree", "moy_media", "moy_sh", "moy_ssh", "moy_tty",
+                       "moy_net", "moy_app", "moy_ui", "moy_uitree", "moy_media", "moy_sh", "moy_ssh", "moy_tty", "moy_leds",
                        "moy_usbdisk"},
     # The P4 has no banded flush to feed -- DPI scans PSRAM continuously -- so
     # it denies moy_flush; moy_audio drives its ES8311 (#82). moy_sd brings its TF card up on
@@ -131,7 +132,7 @@ NATIVE = {
            "moy_ppa", "moy_c6", "moy_usb", "moy_prof", "moy_wasm", "moy_elf",
            "moy_serial", "moy_png", "moy_index", "moy_store", "moy_spine", "moy_kernel", "moy_play",
            "moy_sd", "moy_glass", "moy_input", "moy_net", "moy_app", "moy_ui", "moy_uitree", "moy_media",
-           "moy_sh", "moy_ssh", "moy_tty", "moy_usbdisk"},
+           "moy_sh", "moy_ssh", "moy_tty", "moy_leds", "moy_usbdisk"},
     # The Guition P4 (2026-09-06): the Waveshare's set less moy_usbdisk, because the
     # P4 modules are the SILICON tier (native/p4, a second board.toml
     # source) since the day this board became their second consumer -- it
@@ -141,7 +142,7 @@ NATIVE = {
                    "moy_dsi", "moy_ppa", "moy_c6", "moy_usb", "moy_prof",
                    "moy_wasm", "moy_elf", "moy_serial", "moy_png", "moy_index", "moy_store",
                    "moy_spine", "moy_kernel", "moy_play", "moy_sd", "moy_glass", "moy_input",
-                   "moy_net", "moy_app", "moy_ui", "moy_uitree", "moy_media", "moy_sh", "moy_ssh", "moy_tty"},
+                   "moy_net", "moy_app", "moy_ui", "moy_uitree", "moy_media", "moy_sh", "moy_ssh", "moy_tty", "moy_leds"},
     # The Guition denies moy_audio for now (stage 5 of its bring-up, see its
     # board.toml), and with it moy_media; moy_sd opens its TF card on SPI3; moy_axs is its board-authored QSPI panel backend,
     # and moy_flush is the engine under it.
@@ -149,7 +150,7 @@ NATIVE = {
                    "moy_flush", "moy_axs", "moy_prof", "moy_wasm", "moy_elf", "moy_serial",
                    "moy_png", "moy_index", "moy_store", "moy_spine", "moy_kernel", "moy_play",
                    "moy_sd", "moy_glass", "moy_input", "moy_net", "moy_app", "moy_ui", "moy_uitree",
-                   "moy_sh", "moy_ssh", "moy_tty"},
+                   "moy_sh", "moy_ssh", "moy_tty", "moy_leds"},
     # The Zero is HEADLESS (#41): no panel, no touch, no frame loop, no carts
     # running on it. Besides the store, the kernel's entry (a serial-only
     # floor), moy_net, the links its webhost serves, and the terminal over SSH
@@ -159,7 +160,7 @@ NATIVE = {
     # drift behind the board serving it. Every other one is denied in its
     # board.toml, each with the hardware or the workload that is missing.
     "zero": {"moy_web", "moy_store", "moy_spine", "moy_net", "moy_kernel",
-             "moy_sh", "moy_tty", "moy_ssh"},
+             "moy_sh", "moy_tty", "moy_ssh", "moy_leds"},
     "web": {"moy_gfx", "moy_lua", "moy_audio", "moycore", "moy_png", "js",
             "jsffi", "moy_index", "moy_store", "moy_spine", "moy_glass",
             "moy_input", "moy_net", "moy_kernel", "moy_play", "moy_app", "moy_ui",
