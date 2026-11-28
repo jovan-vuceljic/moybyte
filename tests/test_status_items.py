@@ -359,6 +359,23 @@ def test_a_page_section_draws_in_its_slot_and_its_taps_run_as_its_process(tmp_pa
     assert moy_log.current() != 42, "the shell's again after"
 
 
+def test_a_page_section_s_changed_hook_runs_as_its_process(tmp_path):
+    """`item.changed()` with the card open runs the page's `changed` hook,
+    as Music's card has for its volume and track, as the item's process."""
+    P, it = _page_item()
+    ws = build_ws(tmp_path)
+    ws.widget_tap("battery")
+    for _ in range(2):
+        ws.frame(1 / 30)
+    del P.RAN[:]
+    it.changed()
+    ws.popover_touch()          # the tap that changed it draws the card again
+    for _ in range(2):
+        ws.frame(1 / 30)
+    assert P.RAN == [("changed", 42)]
+    assert moy_log.current() != 42, "the shell's again after"
+
+
 def test_the_control_center_s_focus_enters_a_page_section_and_leaves_it(tmp_path):
     """Down from Wi-Fi lands on the section's top stop, Enter acts there as
     its process, and up from its top stop goes back to Wi-Fi: the slot never

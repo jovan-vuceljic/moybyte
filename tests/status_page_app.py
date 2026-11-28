@@ -24,7 +24,12 @@ def ping():
     RAN.append(("ping", moy_log.current()))
 
 
+def changed():
+    RAN.append(("changed", moy_log.current()))
+
+
 ui.hook("dot_at", dot_at, takes="pointer")
+ui.hook("changed", changed)
 ui.action("ping", "Ping", ping)
 
 

@@ -299,8 +299,14 @@ class _Section:
         h = self.engine.actions.get("changed")
         if h is not None and h.hook:
             import uitree
-            _ITEMS.run_as(self.it, self.engine.run, h.fn, action="changed")
+            _ITEMS.run_as(self.it, self._run_changed, h.fn)
             uitree.commit(self.engine)
+
+    def _run_changed(self, fn):
+        """The `changed` hook `fn` run by the page's engine. `run_as` passes
+        no keywords on (it is on the paint path, where a `**kw` allocates a
+        dict a call), so the action's name is given here."""
+        self.engine.run(fn, action="changed")
 
     def end_stop(self, top):
         """The id of its topmost (`top`) or bottommost stop, None for none."""
